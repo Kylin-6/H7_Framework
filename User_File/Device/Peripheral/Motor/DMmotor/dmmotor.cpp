@@ -1,6 +1,7 @@
 #include "dmmotor.h"
+#include "alg_basic.h"
 
-#include <cstring>
+#include <string.h>
 
 static constexpr uint32_t DM_SPEED_MODE_ID_OFFSET = 0x200U;
 static constexpr uint32_t DM_POSITION_SPEED_MODE_ID_OFFSET = 0x100U;
@@ -15,41 +16,13 @@ static constexpr float DM_KP_MAX = 500.0f;
 static constexpr float DM_KD_MIN = 0.0f;
 static constexpr float DM_KD_MAX = 5.0f;
 
-float Class_DMMotor::Clamp(float value, float min, float max)
-{
-    if (value < min)
-    {
-        return min;
-    }
-    if (value > max)
-    {
-        return max;
-    }
-    return value;
-}
-
-uint16_t Class_DMMotor::FloatToUint(float value, float min, float max, uint8_t bits)
-{
-    value = Clamp(value, min, max);
-    return static_cast<uint16_t>((value - min) *
-                                 static_cast<float>((1UL << bits) - 1UL) /
-                                 (max - min));
-}
-
-float Class_DMMotor::UintToFloat(uint16_t value, float min, float max, uint8_t bits)
-{
-    return static_cast<float>(value) * (max - min) /
-               static_cast<float>((1UL << bits) - 1UL) +
-           min;
-}
-
 void Class_DMMotor::FeedbackCallback(FDCAN_HandleTypeDef *callback_hfdcan,
                                      uint32_t id,
                                      uint8_t *data,
                                      uint32_t len,
                                      void *context)
 {
-    auto *motor = static_cast<Class_DMMotor *>(context);
+    Class_DMMotor *motor = (Class_DMMotor *)context;
     if (motor == nullptr || data == nullptr || len < 8U ||
         motor->hfdcan != callback_hfdcan || motor->master_id != id ||
         (data[0] & 0x0FU) != motor->can_id)
@@ -59,8 +32,8 @@ void Class_DMMotor::FeedbackCallback(FDCAN_HandleTypeDef *callback_hfdcan,
 
     motor->state = (data[0] >> 4) & 0x0FU;
     const float decoded_position =
-        UintToFloat(static_cast<uint16_t>((data[1] << 8) | data[2]),
-                    -motor->position_max, motor->position_max, 16U);
+        Basic_Math_Int_To_Float((data[1] << 8) | data[2], 0, 0xFFFF,
+                                -motor->position_max, motor->position_max);
     const float direction = motor->reverse ? -1.0f : 1.0f;
 
     if (!motor->feedback_initialized)
@@ -81,15 +54,15 @@ void Class_DMMotor::FeedbackCallback(FDCAN_HandleTypeDef *callback_hfdcan,
     motor->position = direction * decoded_position;
     motor->total_position = direction *
                             (decoded_position +
-                             static_cast<float>(motor->total_round) * 2.0f * motor->position_max);
+                             motor->total_round * 2.0f * motor->position_max);
     motor->velocity = direction *
-                      UintToFloat(static_cast<uint16_t>((data[3] << 4) | (data[4] >> 4)),
-                                  -motor->velocity_max, motor->velocity_max, 12U);
+                      Basic_Math_Int_To_Float((data[3] << 4) | (data[4] >> 4), 0, 0xFFF,
+                                              -motor->velocity_max, motor->velocity_max);
     motor->torque = direction *
-                    UintToFloat(static_cast<uint16_t>(((data[4] & 0x0FU) << 8) | data[5]),
-                                -motor->torque_max, motor->torque_max, 12U);
-    motor->mos_temperature = static_cast<float>(data[6]);
-    motor->rotor_temperature = static_cast<float>(data[7]);
+                    Basic_Math_Int_To_Float(((data[4] & 0x0FU) << 8) | data[5], 0, 0xFFF,
+                                            -motor->torque_max, motor->torque_max);
+    motor->mos_temperature = data[6];
+    motor->rotor_temperature = data[7];
 }
 
 void Class_DMMotor::SendModeCommand(uint8_t command)
@@ -98,7 +71,7 @@ void Class_DMMotor::SendModeCommand(uint8_t command)
     message.hfdcan = hfdcan;
     message.id = ControlId();
     message.len = 8U;
-    std::memset(message.data, 0xFF, 7U);
+    memset(message.data, 0xFF, 7U);
     message.data[7] = command;
     CAN_Tx_Submit(&message);
 }
@@ -174,7 +147,7 @@ void Class_DMMotor::SetZeroPosition()
 
 void Class_DMMotor::SetMode(Enum_DMMotor_Mode new_mode)
 {
-    const uint32_t mode_value = static_cast<uint32_t>(new_mode);
+    const uint32_t mode_value = (uint32_t)new_mode;
     Struct_CAN_Tx_Msg message{};
     message.hfdcan = hfdcan;
     message.id = DM_PARAMETER_ID;
@@ -183,7 +156,7 @@ void Class_DMMotor::SetMode(Enum_DMMotor_Mode new_mode)
     message.data[1] = 0U;
     message.data[2] = 0x55U;
     message.data[3] = 0x0AU;
-    std::memcpy(&message.data[4], &mode_value, sizeof(mode_value));
+    memcpy(&message.data[4], &mode_value, sizeof(mode_value));
     CAN_Tx_Submit(&message);
     mode = new_mode;
 }
@@ -200,29 +173,32 @@ void Class_DMMotor::SetMIT(float position_rad,
                            float torque_nm)
 {
     const float direction = reverse ? -1.0f : 1.0f;
-    const uint16_t position = FloatToUint(direction * position_rad,
-                                          -position_max, position_max, 16U);
-    const uint16_t velocity = FloatToUint(direction * velocity_rad_s,
-                                          -velocity_max, velocity_max, 12U);
-    const uint16_t proportional = FloatToUint(kp, DM_KP_MIN, DM_KP_MAX, 12U);
-    const uint16_t derivative = FloatToUint(kd, DM_KD_MIN, DM_KD_MAX, 12U);
-    const uint16_t torque = FloatToUint(direction * torque_nm,
-                                        -torque_max, torque_max, 12U);
+    const uint16_t position = (uint16_t)Basic_Math_Float_To_Int(
+        Basic_Math_Constrain(direction * position_rad, -position_max, position_max),
+        -position_max, position_max, 0, 0xFFFF);
+    const uint16_t velocity = (uint16_t)Basic_Math_Float_To_Int(
+        Basic_Math_Constrain(direction * velocity_rad_s, -velocity_max, velocity_max),
+        -velocity_max, velocity_max, 0, 0xFFF);
+    const uint16_t proportional = (uint16_t)Basic_Math_Float_To_Int(
+        Basic_Math_Constrain(kp, DM_KP_MIN, DM_KP_MAX), DM_KP_MIN, DM_KP_MAX, 0, 0xFFF);
+    const uint16_t derivative = (uint16_t)Basic_Math_Float_To_Int(
+        Basic_Math_Constrain(kd, DM_KD_MIN, DM_KD_MAX), DM_KD_MIN, DM_KD_MAX, 0, 0xFFF);
+    const uint16_t torque = (uint16_t)Basic_Math_Float_To_Int(
+        Basic_Math_Constrain(direction * torque_nm, -torque_max, torque_max),
+        -torque_max, torque_max, 0, 0xFFF);
 
     Struct_CAN_Tx_Msg message{};
     message.hfdcan = hfdcan;
     message.id = can_id;
     message.len = 8U;
-    message.data[0] = static_cast<uint8_t>(position >> 8);
-    message.data[1] = static_cast<uint8_t>(position);
-    message.data[2] = static_cast<uint8_t>(velocity >> 4);
-    message.data[3] = static_cast<uint8_t>(((velocity & 0x0FU) << 4) |
-                                           (proportional >> 8));
-    message.data[4] = static_cast<uint8_t>(proportional);
-    message.data[5] = static_cast<uint8_t>(derivative >> 4);
-    message.data[6] = static_cast<uint8_t>(((derivative & 0x0FU) << 4) |
-                                           (torque >> 8));
-    message.data[7] = static_cast<uint8_t>(torque);
+    message.data[0] = (uint8_t)(position >> 8);
+    message.data[1] = (uint8_t)position;
+    message.data[2] = (uint8_t)(velocity >> 4);
+    message.data[3] = (uint8_t)(((velocity & 0x0FU) << 4) | (proportional >> 8));
+    message.data[4] = (uint8_t)proportional;
+    message.data[5] = (uint8_t)(derivative >> 4);
+    message.data[6] = (uint8_t)(((derivative & 0x0FU) << 4) | (torque >> 8));
+    message.data[7] = (uint8_t)torque;
     Publish(message);
 }
 
@@ -236,8 +212,8 @@ void Class_DMMotor::SetPositionSpeed(float position_rad, float velocity_rad_s)
     message.hfdcan = hfdcan;
     message.id = DM_POSITION_SPEED_MODE_ID_OFFSET + can_id;
     message.len = 8U;
-    std::memcpy(&message.data[0], &position_rad, sizeof(position_rad));
-    std::memcpy(&message.data[4], &velocity_rad_s, sizeof(velocity_rad_s));
+    memcpy(&message.data[0], &position_rad, sizeof(position_rad));
+    memcpy(&message.data[4], &velocity_rad_s, sizeof(velocity_rad_s));
     Publish(message);
 }
 
@@ -252,7 +228,7 @@ void Class_DMMotor::SetSpeed(float speed_rad_s)
     message.hfdcan = hfdcan;
     message.id = DM_SPEED_MODE_ID_OFFSET + can_id;
     message.len = sizeof(speed_rad_s);
-    std::memcpy(message.data, &speed_rad_s, sizeof(speed_rad_s));
+    memcpy(message.data, &speed_rad_s, sizeof(speed_rad_s));
     Publish(message);
 }
 
@@ -262,20 +238,20 @@ void Class_DMMotor::SetForcePosition(float position_rad,
 {
     const float direction = reverse ? -1.0f : 1.0f;
     position_rad *= direction;
-    const uint16_t velocity_limit = static_cast<uint16_t>(
-        Clamp(velocity_limit_rad_s, 0.0f, 100.0f) * 100.0f);
-    const uint16_t current_limit = static_cast<uint16_t>(
-        Clamp(current_limit_ratio, 0.0f, 1.0f) * 10000.0f);
+    const uint16_t velocity_limit = (uint16_t)(
+        Basic_Math_Constrain(velocity_limit_rad_s, 0.0f, 100.0f) * 100.0f);
+    const uint16_t current_limit = (uint16_t)(
+        Basic_Math_Constrain(current_limit_ratio, 0.0f, 1.0f) * 10000.0f);
 
     Struct_CAN_Tx_Msg message{};
     message.hfdcan = hfdcan;
     message.id = DM_FORCE_POSITION_MODE_ID_OFFSET + can_id;
     message.len = 8U;
-    std::memcpy(&message.data[0], &position_rad, sizeof(position_rad));
-    message.data[4] = static_cast<uint8_t>(velocity_limit);
-    message.data[5] = static_cast<uint8_t>(velocity_limit >> 8);
-    message.data[6] = static_cast<uint8_t>(current_limit);
-    message.data[7] = static_cast<uint8_t>(current_limit >> 8);
+    memcpy(&message.data[0], &position_rad, sizeof(position_rad));
+    message.data[4] = (uint8_t)velocity_limit;
+    message.data[5] = (uint8_t)(velocity_limit >> 8);
+    message.data[6] = (uint8_t)current_limit;
+    message.data[7] = (uint8_t)(current_limit >> 8);
     Publish(message);
 }
 

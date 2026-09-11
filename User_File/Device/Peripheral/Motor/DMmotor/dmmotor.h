@@ -55,9 +55,6 @@ private:
                                  uint8_t *data,
                                  uint32_t len,
                                  void *context);
-    static float UintToFloat(uint16_t value, float min, float max, uint8_t bits);
-    static uint16_t FloatToUint(float value, float min, float max, uint8_t bits);
-    static float Clamp(float value, float min, float max);
     void SendModeCommand(uint8_t command);
     void Publish(const Struct_CAN_Tx_Msg &message);
     uint32_t ControlId() const;
