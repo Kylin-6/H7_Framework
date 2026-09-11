@@ -1,5 +1,6 @@
 #include "dmmotor.h"
 #include "alg_basic.h"
+#include "sys_timestamp.h"
 
 #include <string.h>
 
@@ -7,6 +8,7 @@ static constexpr uint32_t DM_SPEED_MODE_ID_OFFSET = 0x200U;
 static constexpr uint32_t DM_POSITION_SPEED_MODE_ID_OFFSET = 0x100U;
 static constexpr uint32_t DM_FORCE_POSITION_MODE_ID_OFFSET = 0x300U;
 static constexpr uint32_t DM_PARAMETER_ID = 0x7FFU;
+static constexpr uint64_t DM_MODE_TIMEOUT_US = 250000;
 static constexpr uint8_t DM_CMD_ENABLE = 0xFCU;
 static constexpr uint8_t DM_CMD_DISABLE = 0xFDU;
 static constexpr uint8_t DM_CMD_ZERO_POSITION = 0xFEU;
@@ -28,6 +30,12 @@ void Class_DMMotor::FeedbackCallback(FDCAN_HandleTypeDef *callback_hfdcan,
         (data[0] & 0x0FU) != motor->can_id)
     {
         return;
+    }
+
+    if (motor->mode_pending &&
+        SYS_Timestamp.Get_Now_Microsecond() - motor->mode_request_timestamp_us >= DM_MODE_TIMEOUT_US)
+    {
+        motor->mode_pending = false;
     }
 
     if (motor->requested_mode != 0 && len == 8 &&
@@ -185,8 +193,17 @@ void Class_DMMotor::SetMode(Enum_DMMotor_Mode new_mode)
     memcpy(&message.data[4], &mode_value, sizeof(mode_value));
     const uint32_t primask = __get_PRIMASK();
     __disable_irq();
+    const uint64_t now_us = SYS_Timestamp.Get_Now_Microsecond();
+    if (mode_pending && now_us - mode_request_timestamp_us >= DM_MODE_TIMEOUT_US)
+    {
+        mode_pending = false;
+    }
     if ((!mode_pending || requested_mode == mode_value) && CAN_Tx_Submit(&message))
     {
+        if (!mode_pending)
+        {
+            mode_request_timestamp_us = now_us;
+        }
         requested_mode = mode_value;
         mode_pending = true;
     }
