@@ -30,6 +30,24 @@ void Class_DMMotor::FeedbackCallback(FDCAN_HandleTypeDef *callback_hfdcan,
         return;
     }
 
+    if (motor->requested_mode != 0 && len == 8 &&
+        data[0] == motor->can_id && data[1] == 0 &&
+        data[2] == 0x55 && data[3] == 0x0A)
+    {
+        uint32_t returned_mode;
+        memcpy(&returned_mode, &data[4], sizeof(returned_mode));
+        if (returned_mode >= 1 && returned_mode <= 4)
+        {
+            if (motor->mode_pending && returned_mode == motor->requested_mode)
+            {
+                motor->mode = (Enum_DMMotor_Mode)returned_mode;
+                __DMB();
+                motor->mode_pending = false;
+            }
+            return;
+        }
+    }
+
     motor->state = (data[0] >> 4) & 0x0FU;
     const float decoded_position =
         Basic_Math_Int_To_Float((data[1] << 8) | data[2], 0, 0xFFFF,
@@ -151,6 +169,11 @@ void Class_DMMotor::SetZeroPosition()
 void Class_DMMotor::SetMode(Enum_DMMotor_Mode new_mode)
 {
     const uint32_t mode_value = (uint32_t)new_mode;
+    if (mode_value < 1 || mode_value > 4)
+    {
+        return;
+    }
+
     Struct_CAN_Tx_Msg message{};
     message.hfdcan = hfdcan;
     message.id = DM_PARAMETER_ID;
@@ -160,8 +183,18 @@ void Class_DMMotor::SetMode(Enum_DMMotor_Mode new_mode)
     message.data[2] = 0x55U;
     message.data[3] = 0x0AU;
     memcpy(&message.data[4], &mode_value, sizeof(mode_value));
-    CAN_Tx_Submit(&message);
-    mode = new_mode;
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    if ((!mode_pending || requested_mode == mode_value) && CAN_Tx_Submit(&message))
+    {
+        requested_mode = mode_value;
+        mode_pending = true;
+    }
+    __DMB();
+    if (primask == 0)
+    {
+        __enable_irq();
+    }
 }
 
 void Class_DMMotor::Publish(const Struct_CAN_Tx_Msg &message)

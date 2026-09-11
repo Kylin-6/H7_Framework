@@ -62,7 +62,9 @@ private:
     FDCAN_HandleTypeDef *hfdcan = nullptr;
     uint8_t can_id = 0U;
     uint16_t master_id = 0U;
-    Enum_DMMotor_Mode mode = Enum_DMMotor_Mode::MIT;
+    volatile Enum_DMMotor_Mode mode = Enum_DMMotor_Mode::MIT;
+    volatile uint32_t requested_mode = 0;
+    volatile bool mode_pending = false;
     bool reverse = false;
     float position_max = 12.5f;
     float velocity_max = 30.0f;
