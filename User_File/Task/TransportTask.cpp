@@ -25,16 +25,11 @@
 
 extern "C" void Transport_Task(void *argument)
 {
-    float euler[3] = {0};
-
     MX_USB_DEVICE_Init();
-    EricTool_USB.Set_Data(3, (int) &euler[0], (int) &euler[1], (int) &euler[2]);
+    EricTool_USB.Set_Data(3, (int) &Debug_IMU_Data.Euler_Yaw_rad, (int) &Debug_IMU_Data.Euler_Pitch_rad, (int) &Debug_IMU_Data.Euler_Roll_rad);
     for (;;)
     {
-        if (Transport_Read_IMU_Euler(euler))
-        {
-            EricTool_USB.TIM_1ms_Write_PeriodElapsedCallback();
-        }
+        EricTool_USB.TIM_1ms_Write_PeriodElapsedCallback();
         osDelay(1);
     }
 }
