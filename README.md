@@ -17,6 +17,7 @@ STM32H723ZG 板级支持包工程，面向 RoboMaster/机器人控制场景。�
 | TransportTask | 骨架完成 | 当前只初始化 USB Device 并周期让出 CPU，尚无协议和数据收发 |
 | CAN/FDCAN BSP | 已实现 | `bsp_can` v2 双通道发送架构：周期通道（`CAN_Tx_Perform` + `BSP_CAN_SendPer`）+ 异步队列（`CAN_Tx_Submit` + `BSP_CAN_SendAsync`），`CanTxTask` 1ms 周期执行。已修复 FDCAN2 Message RAM 重叠（`MessageRAMOffset` 0→853，三路均匀三等分 0/853/1706）、`BSP_CAN_SendMsg` 缺 `len==0` 保护、`CanTxTask` 的 `vTaskDelayUntil` 周期写法（`xLastWakeTime` 移出循环）。待确认：FDCAN2 `AutoRetransmission=DISABLE` 与 FDCAN1/3 不一致 |
 | UART BSP | 已实现（未接入设备） | `bsp_uart` 双缓冲 DMA 接收：`HAL_UARTEx_ReceiveToIdle_DMA` + IDLE 中断 + `Rx_Buffer_0/1` 交替收不定长帧。接管 7 路有 RX DMA 的口（USART1/2/3、UART5、USART6、UART7、USART10）；UART4/8/9 因 DMA stream 占满不接管；UART5 无 TX DMA 时发送自动回退阻塞。管理对象入 `.dma_buffer`。回调用 `UART_Init(huart, cb)` 绑定，可传 `nullptr` 退化轮询。尚未在 `Init.cpp` 接入具体设备 |
+| 达妙电机 | 驱动已接入 | `Class_DMMotor` 提供 MIT、位置-速度、速度和力位混控接口，实际可用模式取决于电机固件；已通过构建和主机协议回归测试，尚未完成实机验证。详见 [使用说明](User_File/Device/Peripheral/Motor/DMmotor/dmmotor.md) |
 
 最近一次本地构建结果：
 
@@ -39,7 +40,7 @@ SystemView/                   SEGGER SystemView 与 RTT 支持
 USB_DEVICE/                   STM32 USB Device CDC 相关代码
 User_Config/                  工具与补丁配置，包含 FreeRTOS 与链接脚本补丁
  User_File/Device/Onboard/      板载器件封装（BMI088、WS2812、Buzzer 等）
- User_File/Device/Peripheral/  外接器件（QD4310 电机、EricTool 等）
+ User_File/Device/Peripheral/  外接器件（QD4310、达妙电机、EricTool 等）
  User_File/Middleware/BSP/     外设 BSP 抽象层
  User_File/System/             系统服务，如初始化、回调、时间戳
  User_File/Middleware/Algorithm/算法组件，如矩阵、PID、EKF、四元数等
@@ -403,6 +404,18 @@ BMI088 总控已实现：
 
 这些模块大多是可复用中间件，当前直接参与主链路的是矩阵、四元数、PID 和 EKF。
 
+### 达妙电机驱动
+
+`User_File/Device/Peripheral/Motor/DMmotor/` 提供 `Class_DMMotor`，通过现有 CAN BSP 发送控制帧并接收位置、速度、力矩和温度反馈。
+
+- 每个实例通过 `Init()` 独立配置 CAN 总线、发送 ID、反馈 ID、方向和 PMAX/VMAX/TMAX，可为 J4310、H6215 分别配置映射范围；这些范围必须与各自电机中的参数一致。
+- 编解码和限幅复用 `alg_basic`，初始化时拒绝非正数、NaN 和无穷大的映射范围。
+- 模式切换在命令成功入队后等待匹配回包，收到确认才更新软件模式，并将已识别的模式参数回包与普通反馈分开处理。
+- 超时使用 `SYS_Timestamp.Get_Now_Microsecond()`，达到 250 ms 后在下一次 `SetMode()` 或有效接收回调中清除等待标志；重复请求同一模式不会延长原来的等待期限。
+- 当前 `Control_Task.cpp` 尚未接入达妙电机控制。位置-速度模式的反向速度限幅问题仍待修复；H6215 的动态切换回包兼容性需按固件实测确认。
+
+初始化示例、模式接口、并用不同型号及已知限制见 [DM 电机驱动说明](User_File/Device/Peripheral/Motor/DMmotor/dmmotor.md)。
+
 ## 未实现与待完成内容
 
 ### TransportTask 仍是骨架
@@ -668,7 +681,6 @@ VS Code 工作区设置保留 `cmake.cmakePath = cube-cmake`，并显式绑定 `
 | 模块 | 模板路径 | 说明 |
 | --- | --- | --- |
 | DJI 电机 | `2_Device/Motor/Motor_DJI/dvc_motor_dji` | C610/C620/M3508/M2006，CAN 总线控制，机器人核心执行器 |
-| 达妙电机 | `2_Device/Motor/Motor_DM/dvc_motor_dm` | DM 系列电机，CAN 总线控制 |
 
 ### 🟡 中优先级
 
@@ -684,3 +696,7 @@ VS Code 工作区设置保留 `cmake.cmakePath = cube-cmake`，并显式绑定 `
 | --- | --- | --- |
 | 看门狗 WDG | `1_Middleware/Driver/WDG/drv_wdg` | 独立看门狗，防止程序死锁 |
 | Serialplot | `2_Device/Plotter/Serialplot/dvc_serialplot` | 另一种上位机调试工具 |
+
+## 致谢
+
+感谢 [Kylin-6](https://github.com/Kylin-6) 在 [PR #4：加上达妙电机支持](https://github.com/MermaidFAR/H7_BSP/pull/4) 中贡献达妙电机驱动及初版使用说明，为本工程接入达妙电机提供了基础。
