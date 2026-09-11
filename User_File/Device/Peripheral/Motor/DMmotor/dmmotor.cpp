@@ -90,6 +90,13 @@ bool Class_DMMotor::Init(FDCAN_HandleTypeDef *motor_hfdcan,
         return false;
     }
 
+    if (Basic_Math_Is_Invalid_Float(motor_position_max) || motor_position_max <= 0.0f ||
+        Basic_Math_Is_Invalid_Float(motor_velocity_max) || motor_velocity_max <= 0.0f ||
+        Basic_Math_Is_Invalid_Float(motor_torque_max) || motor_torque_max <= 0.0f)
+    {
+        return false;
+    }
+
     hfdcan = motor_hfdcan;
     can_id = motor_can_id;
     master_id = motor_master_id;
@@ -98,10 +105,6 @@ bool Class_DMMotor::Init(FDCAN_HandleTypeDef *motor_hfdcan,
     position_max = motor_position_max;
     velocity_max = motor_velocity_max;
     torque_max = motor_torque_max;
-    if (position_max <= 0.0f || velocity_max <= 0.0f || torque_max <= 0.0f)
-    {
-        return false;
-    }
     return BSP_CAN_RegisterCallback(master_id, hfdcan, FeedbackCallback, this);
 }
 
