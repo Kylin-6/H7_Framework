@@ -1,3 +1,10 @@
+/**
+ * @file dmmotor.cpp
+ * @brief 达妙电机控制帧编码、反馈解析与模式切换。
+ * @author Kylin-6
+ * @note 原始驱动由 Kylin-6 在 PR #4 贡献，后续适配由 zzm 维护。
+ */
+
 #include "dmmotor.h"
 #include "alg_basic.h"
 #include "sys_timestamp.h"
@@ -56,7 +63,7 @@ void Class_DMMotor::FeedbackCallback(FDCAN_HandleTypeDef *callback_hfdcan,
         }
     }
 
-    motor->state = (data[0] >> 4) & 0x0FU;
+    motor->feedback.state = (data[0] >> 4) & 0x0FU;
     const float decoded_position =
         Basic_Math_Int_To_Float((data[1] << 8) | data[2], 0, 0xFFFF,
                                 -motor->position_max, motor->position_max);
@@ -77,18 +84,18 @@ void Class_DMMotor::FeedbackCallback(FDCAN_HandleTypeDef *callback_hfdcan,
     }
 
     motor->last_position = decoded_position;
-    motor->position = direction * decoded_position;
-    motor->total_position = direction *
+    motor->feedback.position = direction * decoded_position;
+    motor->feedback.total_position = direction *
                             (decoded_position +
                              motor->total_round * 2.0f * motor->position_max);
-    motor->velocity = direction *
+    motor->feedback.velocity = direction *
                       Basic_Math_Int_To_Float((data[3] << 4) | (data[4] >> 4), 0, 0xFFF,
                                               -motor->velocity_max, motor->velocity_max);
-    motor->torque = direction *
+    motor->feedback.torque = direction *
                     Basic_Math_Int_To_Float(((data[4] & 0x0FU) << 8) | data[5], 0, 0xFFF,
                                             -motor->torque_max, motor->torque_max);
-    motor->mos_temperature = data[6];
-    motor->rotor_temperature = data[7];
+    motor->feedback.mos_temperature = data[6];
+    motor->feedback.rotor_temperature = data[7];
 }
 
 void Class_DMMotor::SendModeCommand(uint8_t command)
@@ -170,7 +177,7 @@ void Class_DMMotor::SetZeroPosition()
     feedback_initialized = false;
     last_position = 0.0f;
     total_round = 0;
-    total_position = 0.0f;
+    feedback.total_position = 0.0f;
     SendModeCommand(DM_CMD_ZERO_POSITION);
 }
 

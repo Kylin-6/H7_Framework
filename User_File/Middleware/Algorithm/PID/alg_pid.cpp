@@ -55,6 +55,21 @@ void Class_PID::Init(const float &__K_P, const float &__K_I, const float &__K_D,
     D_First = __D_First;
 }
 
+float Class_PID::Get_Target() const
+{
+    return Target;
+}
+
+float Class_PID::Get_Now() const
+{
+    return Now;
+}
+
+float Class_PID::Get_Error() const
+{
+    return Pre_Error;
+}
+
 /**
  * @brief PID调整值, 计算周期与D_T相同
  *

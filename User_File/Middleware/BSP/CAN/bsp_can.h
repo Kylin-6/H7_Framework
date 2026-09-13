@@ -56,7 +56,7 @@ typedef struct
 } Struct_CAN_Tx_Msg;
 
 /**
- * @brief 初始化三条 FDCAN 总线、插入队列和周期发送槽。
+ * @brief 初始化三条 FDCAN 总线、插入队列和周期发送槽，清除待重试插入消息。
  * @note 应在 RTOS 内核初始化完成后、创建 CAN 发送任务前调用一次。
  */
 void BSP_CAN_ConfigInit(void);
@@ -97,7 +97,11 @@ bool CAN_Tx_Perform(const Struct_CAN_Tx_Msg *tx_msg);
 
 /**
  * @brief 按先进先出顺序处理插入发送队列。
- * @note 通常由 CAN 发送任务周期调用。
+ * @details FIFO 满或 HAL 写入失败时保留当前帧并立即返回，
+ *          下次调用先重试该帧，成功后才继续处理后续消息。
+ * @note 只能由同一个 CAN 发送任务周期调用，不支持并发或重入。
+ * @note 三条总线共享队列；队首失败会阻止所有后续插入消息越过，
+ *       包括其他总线的消息。BSP_CAN_SendPer 可继续独立处理周期缓冲。
  */
 void BSP_CAN_SendAsync(void);
 
