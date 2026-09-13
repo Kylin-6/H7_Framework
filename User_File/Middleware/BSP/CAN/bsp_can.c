@@ -65,6 +65,8 @@ static Struct_CAN_Tx_Slot Can_TxSlots[CAN_TX_SLOT_COUNT];
 static uint16_t Can_TxRoundRobin;
 
 static osMessageQueueId_t Can_TxQueue;
+static Struct_CAN_Tx_Msg Can_TxPendingMessage;
+static uint8_t Can_TxPending;
 
 /* Private function declarations ---------------------------------------------*/
 
@@ -164,13 +166,16 @@ static void BSP_CAN_ConfigBus(FDCAN_HandleTypeDef *hfdcan)
 
 /**
  * @brief 初始化 CAN BSP 使用的软件资源并启动三条 FDCAN 总线。
- * @details 清空周期发送槽，复位轮询位置，并在首次调用时创建插入发送队列。
+ * @details 清空周期发送槽和待重试插入消息，复位轮询位置，
+ *          并在首次调用时创建插入发送队列。
  * @note 消息队列创建失败时调用 Error_Handler。
  */
 void BSP_CAN_ConfigInit(void)
 {
     memset(Can_TxSlots, 0, sizeof(Can_TxSlots));
     Can_TxRoundRobin = 0;
+    memset(&Can_TxPendingMessage, 0, sizeof(Can_TxPendingMessage));
+    Can_TxPending = 0;
 
     if (Can_TxQueue == NULL)
     {
@@ -416,20 +421,36 @@ static bool BSP_CAN_SendMsg(const Struct_CAN_Tx_Msg *message)
 }
 
 /**
- * @brief 按先进先出顺序处理当前插入发送队列中的全部消息。
- * @details 每次先从软件队列取出一帧，再尝试写入对应总线的硬件发送 FIFO。
- * @note 当前实现不会把写入失败的消息重新放回软件队列。
+ * @brief 按先进先出顺序将插入消息写入硬件发送 FIFO。
+ * @details 发送任务持有一帧待发送消息，只有 HAL 接受后才取下一帧。
+ *          FIFO 满或 HAL 写入失败时保留该帧并结束本轮，下次调用优先重试。
+ * @note 只能由同一个 CAN 发送任务调用，不支持并发或重入。
+ * @note 三条总线共享队列；队首发送失败时，后续插入消息均等待下一轮，
+ *       包括其他总线的消息，以保持全局入队顺序。周期缓冲仍可独立处理。
  */
 void BSP_CAN_SendAsync(void)
 {
-    Struct_CAN_Tx_Msg message;
-
-    while (osMessageQueueGet(Can_TxQueue,
-                             &message,
-                             NULL,
-                             0) == osOK)
+    while (1)
     {
-        BSP_CAN_SendMsg(&message);
+        if (Can_TxPending == 0)
+        {
+            if (osMessageQueueGet(Can_TxQueue,
+                                  &Can_TxPendingMessage,
+                                  NULL,
+                                  0) != osOK)
+            {
+                return;
+            }
+            Can_TxPending = 1;
+        }
+
+        if (!BSP_CAN_SendMsg(&Can_TxPendingMessage))
+        {
+            return;
+        }
+
+        /* 硬件已接收当前帧，才允许释放暂存并处理下一帧。 */
+        Can_TxPending = 0;
     }
 }
 
