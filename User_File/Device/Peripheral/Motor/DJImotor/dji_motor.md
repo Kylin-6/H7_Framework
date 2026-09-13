@@ -3,6 +3,39 @@
 `Class_DJIMotor` 支持 M2006/C610、M3508/C620 和 GM6020，使用项目当前的
 FDCAN 回调注册和周期发送接口，不使用动态内存。
 
+原始驱动由 [Kylin-6](https://github.com/Kylin-6) 在
+[PR #5](https://github.com/MermaidFAR/H7_BSP/pull/5) 贡献，后续适配由 zzm 维护。
+
+## 函数命名与文件组织
+
+保留 `Class_DJIMotor`、`Class_DJIMotor_Group` 和配置结构体；内部实现使用 C 风格的
+指针、显式类型转换和文件级静态函数。参考
+[麻神 MC02 BSP](https://github.com/yssickjgd/damiao_mc02_bsp) 的类型前缀、下划线命名、
+文件分区及协议与调度分层，继续使用本工程的 CAN 注册器、发送槽、PID 与系统时间服务。
+
+| 职责 | 函数名 |
+|---|---|
+| PID 参数初始化 | `PID_Init` |
+| 目标设置 | `SetRef` |
+| 外环选择 | `Set_Outer_Loop` |
+| 反馈源选择 | `Set_Feedback_Source` |
+| CAN 接收入口 | `CAN_RxCpltCallback` |
+| 反馈超时检查 | `Check_Feedback_Timeout` |
+| 清除本电机命令 | `Clear_Command` |
+
+`Init()` 接收配置结构体的只读引用，例如 `motor.Init(config)`；接口声明采用
+`Init(const Struct_DJIMotor_Init_Config &config)` 和 `SetRef(float ref)`，参数名简洁，
+普通参数名不增加双下划线前缀，普通成员函数在实现文件中定义，声明不加 `inline`。反馈指针按用途
+保留 `const`；普通标量直接传值。`constexpr` 用于有类型且受作用域约束的常量，
+`nullptr` 用于空指针，整数常量不加 `U` 后缀。
+
+头文件按 Exported 分区放公开类型和类声明，成员函数实现放在 `.cpp`；实现文件按 Includes、Private macros、
+Private types、Private variables、Private function declarations、Function prototypes 分区。
+文件头记录文件职责、原贡献者和本次维护信息，不复制参考库的作者或虚构历史。
+
+`Control()`、`Update()` 与 `Send()` 仍沿用下文约定：单电机及 Group 的无参数 `Control()`
+只计算；Group 的 `Control(ref...)` 计算后发布。本轮没有改变这些重载的行为。
+
 ## 协议配置
 
 | 设备 | ID | 反馈 ID | 控制 ID | 指令范围 |
@@ -21,26 +54,26 @@ GM6020 电流模式要求固件版本不低于 1.0.11.2，并通过 RoboMaster A
 
 ## 初始化
 
-```cpp
+```c
 Class_DJIMotor motor;
 
-Struct_DJIMotor_Init_Config config{
-    .hfdcan = &hfdcan1,
-    .can_id = 1,
-    .motor_type = Enum_DJIMotor_Type::GM6020,
-    .close_loop = DJI_MOTOR_CURRENT_LOOP | DJI_MOTOR_SPEED_LOOP,
-    .outer_loop = DJI_MOTOR_SPEED_LOOP,
-    .current_pid = {
-        .K_P = 0.5f, .Out_Max = 16000.0f, .D_T = 0.001f,
-    },
-    .speed_pid = {
-        .K_P = 10.0f, .Out_Max = 16000.0f, .D_T = 0.001f,
-    },
-    .control_mode = Enum_DJIMotor_Control_Mode::CURRENT,
-    .feedback_timeout_ms = 20,
-};
+Struct_DJIMotor_Init_Config config = {};
+config.hfdcan = &hfdcan1;
+config.can_id = 1;
+config.motor_type = Enum_DJIMotor_Type::GM6020;
+config.close_loop = DJI_MOTOR_CURRENT_LOOP | DJI_MOTOR_SPEED_LOOP;
+config.outer_loop = DJI_MOTOR_SPEED_LOOP;
+config.current_pid.K_P = 0.5f;
+config.current_pid.Out_Max = 16000.0f;
+config.current_pid.D_T = 0.001f;
+config.speed_pid.K_P = 10.0f;
+config.speed_pid.Out_Max = 16000.0f;
+config.speed_pid.D_T = 0.001f;
+config.control_mode = Enum_DJIMotor_Control_Mode::CURRENT;
+config.feedback_timeout_ms = 20;
 
-if (motor.Init(config)) {
+if (motor.Init(config))
+{
     motor.SetRef(90.0f);
 }
 ```
@@ -54,8 +87,13 @@ if (motor.Init(config)) {
 单个电机的 `Control()` 只计算 PID 并更新共享帧槽。普通业务应把同一物理控制帧中的
 电机组成 `Class_DJIMotor_Group`，由 Group 完成一次计算和一次非阻塞发布。
 
-`Disable()` 会立即清除对象所占共享槽。对象首次收到合法反馈前，以及超过
-`feedback_timeout_ms` 没有反馈后，`Control()` 都会保持该槽为零并清除 PID 积分。
+`Disable()` 清除本电机所占槽并立即发布整帧，保留其他电机槽的命令。Group 的
+`Disable()` 一次清除全部成员并只发布一次。返回值表示 BSP 周期槽是否接受本次零指令；
+失败时应重试失能或继续调用 Group 的 `Send()`，不能将调用返回等同于电机已经停转。
+
+对象首次收到合法反馈前，以及超过 `feedback_timeout_ms` 没有反馈后，`Control()`
+都会保持该槽为零并清除 PID 积分。超时判断复用
+`SYS_Timestamp.Get_Now_Microsecond()`，以 64 位整数微秒计算；使用前应初始化系统时间服务。
 
 ## 反馈量和单位
 
@@ -65,12 +103,14 @@ if (motor.Init(config)) {
 - `output_angle`、`output_total_angle`、`output_speed`：上述转子量除以减速比。
 - `current_raw`：协议返回的原始实际转矩电流值，不声明为安培。
 - `temperature`：M3508 和 GM6020 的电机温度；C610 对应字节为空，因此保持 0。
-- `online`、`last_feedback_tick`：watchdog 状态和最近反馈的 HAL 毫秒 tick。
+- `online`：最近一次接收或超时检查得到的在线状态。
+- `last_feedback_timestamp_us`：最近反馈的 64 位系统微秒时间戳；任务中读取时使用
+  `Get_Last_Feedback_Timestamp_Us()`，由接口保护 32 位 MCU 上的完整快照。
 
 反向配置作用于角度、速度以及控制输出的逻辑方向；`encoder` 和 `current_raw` 始终保留
 协议原始值。内部电流环会根据反向配置转换 `current_raw` 的符号。
 
-速度低通采用 `ROTOR_SPEED_LPF_ALPHA * old + (1-alpha) * measured`，当前 alpha
+速度低通采用 `DJI_MOTOR_ROTOR_SPEED_LPF_ALPHA * old + (1-alpha) * measured`，当前 alpha
 为 0.85，明确表示保留 85% 旧值。
 
 ## 冲突规则
@@ -82,33 +122,33 @@ if (motor.Init(config)) {
 
 `Class_DJIMotor_Group` 只保存 1~4 个已经初始化的电机指针，不复制对象、不分配动态
 内存，也不参与 PID。一个 Group 必须包含同一 `(FDCAN, TX ID)` 物理帧内的全部已注册
-电机，并独占该物理帧的发送权。跨物理帧、遗漏已有 slot、重复指针、空洞参数、未初始化
+电机，并独占该物理帧的常规控制发送权；单电机 `Disable()` 可主动发布清零后的整帧。
+跨物理帧、遗漏已有 slot、重复指针、空洞参数、未初始化
 电机，或第二个 Group 争用相同物理帧时，`Init()` 返回 `false`。Group 建立后也不允许再向
 该物理帧注册新电机。
 
 ### 四个 M3508 底盘
 
-```cpp
+```c
 Class_DJIMotor motor1;
 Class_DJIMotor motor2;
 Class_DJIMotor motor3;
 Class_DJIMotor motor4;
 Class_DJIMotor_Group chassis;
 
-Struct_DJIMotor_Init_Config config{
-    .hfdcan = &hfdcan1,
-    .can_id = 1,
-    .motor_type = Enum_DJIMotor_Type::M3508,
-    .close_loop = DJI_MOTOR_CURRENT_LOOP | DJI_MOTOR_SPEED_LOOP,
-    .outer_loop = DJI_MOTOR_SPEED_LOOP,
-    .current_pid = {
-        .K_P = 0.5f, .Out_Max = 16384.0f, .D_T = 0.001f,
-    },
-    .speed_pid = {
-        .K_P = 10.0f, .Out_Max = 16000.0f, .D_T = 0.001f,
-    },
-    .control_mode = Enum_DJIMotor_Control_Mode::CURRENT,
-};
+Struct_DJIMotor_Init_Config config = {};
+config.hfdcan = &hfdcan1;
+config.can_id = 1;
+config.motor_type = Enum_DJIMotor_Type::M3508;
+config.close_loop = DJI_MOTOR_CURRENT_LOOP | DJI_MOTOR_SPEED_LOOP;
+config.outer_loop = DJI_MOTOR_SPEED_LOOP;
+config.current_pid.K_P = 0.5f;
+config.current_pid.Out_Max = 16384.0f;
+config.current_pid.D_T = 0.001f;
+config.speed_pid.K_P = 10.0f;
+config.speed_pid.Out_Max = 16000.0f;
+config.speed_pid.D_T = 0.001f;
+config.control_mode = Enum_DJIMotor_Control_Mode::CURRENT;
 
 bool ok = motor1.Init(config);
 config.can_id = 2;
@@ -122,7 +162,7 @@ ok = ok && chassis.Init(&motor1, &motor2, &motor3, &motor4);
 
 控制周期：
 
-```cpp
+```c
 bool submitted = chassis.Control(v1, v2, v3, v4);
 ```
 
@@ -132,7 +172,7 @@ bool submitted = chassis.Control(v1, v2, v3, v4);
 
 高级用法仍可分开调用：
 
-```cpp
+```c
 chassis.Update(v1, v2, v3, v4); // SetRef + PID 计算，不发送
 bool submitted = chassis.Send();
 ```
@@ -143,23 +183,23 @@ bool submitted = chassis.Send();
 
 两个电机应配置为同一 FDCAN、同一控制模式，且 ID 均位于 1~4 或均位于 5~7：
 
-```cpp
+```c
 Class_DJIMotor yaw_motor;
 Class_DJIMotor pitch_motor;
 Class_DJIMotor_Group gimbal;
 
-Struct_DJIMotor_Init_Config gm_config{
-    .hfdcan = &hfdcan2,
-    .can_id = 1,
-    .motor_type = Enum_DJIMotor_Type::GM6020,
-    .close_loop = DJI_MOTOR_SPEED_LOOP,
-    .outer_loop = DJI_MOTOR_SPEED_LOOP,
-    .speed_pid = {
-        .K_P = 25.0f, .K_I = 2.0f,
-        .I_Out_Max = 10000.0f, .Out_Max = 24000.0f, .D_T = 0.001f,
-    },
-    .control_mode = Enum_DJIMotor_Control_Mode::VOLTAGE,
-};
+Struct_DJIMotor_Init_Config gm_config = {};
+gm_config.hfdcan = &hfdcan2;
+gm_config.can_id = 1;
+gm_config.motor_type = Enum_DJIMotor_Type::GM6020;
+gm_config.close_loop = DJI_MOTOR_SPEED_LOOP;
+gm_config.outer_loop = DJI_MOTOR_SPEED_LOOP;
+gm_config.speed_pid.K_P = 25.0f;
+gm_config.speed_pid.K_I = 2.0f;
+gm_config.speed_pid.I_Out_Max = 10000.0f;
+gm_config.speed_pid.Out_Max = 24000.0f;
+gm_config.speed_pid.D_T = 0.001f;
+gm_config.control_mode = Enum_DJIMotor_Control_Mode::VOLTAGE;
 
 bool ok = yaw_motor.Init(gm_config);
 gm_config.can_id = 2;
@@ -171,12 +211,12 @@ bool submitted = gimbal.Control(yaw_target, pitch_target);
 
 ### 500Hz 底盘与 1kHz 云台
 
-```cpp
+```c
 // 1kHz Gimbal Task
 gimbal.Control(yaw_ref, pitch_ref);       // 只发布云台的物理帧
 ```
 
-```cpp
+```c
 // 500Hz Chassis Task
 chassis.Control(v1, v2, v3, v4);         // 只发布底盘的物理帧
 ```
@@ -189,5 +229,5 @@ chassis.Control(v1, v2, v3, v4);         // 只发布底盘的物理帧
 在后续发送任务周期重试。因此 Group 的返回值能反映周期槽提交结果，不能同步反映稍后发生
 的硬件 FIFO 状态。
 
-Group 的 `Enable()` 和 `Disable()` 依次操作所有成员。Group 不拥有电机，因此成员电机
-对象的生命周期必须长于 Group；推荐都使用静态或全局对象。
+Group 的 `Enable()` 依次使能所有成员，`Disable()` 批量清零后一次发布。Group 不拥有
+电机，因此成员电机对象的生命周期必须长于 Group；推荐都使用静态或全局对象。

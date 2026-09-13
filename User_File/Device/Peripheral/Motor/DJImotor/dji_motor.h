@@ -1,21 +1,51 @@
-#ifndef DJI_MOTOR_H
-#define DJI_MOTOR_H
+/**
+ * @file dji_motor.h
+ * @author Kylin-6
+ * @brief DJI 电机控制与分组发送
+ * @date 2026-09-13
+ * @note zzm 维护与完善
+ */
+
+#ifndef __DJI_MOTOR_H
+#define __DJI_MOTOR_H
+
+/* Includes ------------------------------------------------------------------*/
 
 #include "alg_pid.h"
 #include "bsp_can.h"
 
 #include <stdint.h>
 
-enum class Enum_DJIMotor_Type : uint8_t { M2006, M3508, GM6020 };
-enum class Enum_DJIMotor_Control_Mode : uint8_t { CURRENT, VOLTAGE };
+/* Exported macros ------------------------------------------------------------*/
+
+/* Exported types -------------------------------------------------------------*/
+
+enum class Enum_DJIMotor_Type : uint8_t
+{
+    M2006,
+    M3508,
+    GM6020,
+};
+
+enum class Enum_DJIMotor_Control_Mode : uint8_t
+{
+    CURRENT,
+    VOLTAGE,
+};
+
 enum Enum_DJIMotor_Loop : uint8_t
 {
-    DJI_MOTOR_OPEN_LOOP = 0U,
-    DJI_MOTOR_CURRENT_LOOP = 1U << 0,
-    DJI_MOTOR_SPEED_LOOP = 1U << 1,
-    DJI_MOTOR_ANGLE_LOOP = 1U << 2,
+    DJI_MOTOR_OPEN_LOOP = 0,
+    DJI_MOTOR_CURRENT_LOOP = 1 << 0,
+    DJI_MOTOR_SPEED_LOOP = 1 << 1,
+    DJI_MOTOR_ANGLE_LOOP = 1 << 2,
 };
-enum class Enum_DJIMotor_Feedback : uint8_t { MOTOR, EXTERNAL };
+
+enum class Enum_DJIMotor_Feedback : uint8_t
+{
+    MOTOR,
+    EXTERNAL,
+};
 
 struct Struct_DJIMotor_Init_Config
 {
@@ -29,7 +59,7 @@ struct Struct_DJIMotor_Init_Config
     PID_InitTypeDef angle_pid;
     Enum_DJIMotor_Control_Mode control_mode = Enum_DJIMotor_Control_Mode::CURRENT;
     float gear_ratio = 0.0f;
-    uint32_t feedback_timeout_ms = 20U;
+    uint32_t feedback_timeout_ms = 20;
     bool reverse = false;
     Enum_DJIMotor_Feedback angle_feedback = Enum_DJIMotor_Feedback::MOTOR;
     Enum_DJIMotor_Feedback speed_feedback = Enum_DJIMotor_Feedback::MOTOR;
@@ -46,12 +76,13 @@ public:
     void SetRef(float ref);
     void Control();
     void Enable();
-    void Disable();
-    void SetOuterLoop(Enum_DJIMotor_Loop loop);
-    bool SetFeedback(Enum_DJIMotor_Loop loop, Enum_DJIMotor_Feedback source,
-                     const float *feedback = nullptr);
+    bool Disable();
+    void Set_Outer_Loop(Enum_DJIMotor_Loop loop);
+    bool Set_Feedback_Source(Enum_DJIMotor_Loop loop, Enum_DJIMotor_Feedback source,
+                             const float *feedback = nullptr);
+    uint64_t Get_Last_Feedback_Timestamp_Us() const;
 
-    uint16_t encoder = 0U;
+    uint16_t encoder = 0;
     float rotor_angle = 0.0f;
     float rotor_total_angle = 0.0f;
     float rotor_speed = 0.0f;
@@ -59,26 +90,27 @@ public:
     float output_total_angle = 0.0f;
     float output_speed = 0.0f;
     int16_t current_raw = 0;
-    uint8_t temperature = 0U;
-    volatile uint32_t last_feedback_tick = 0U;
+    uint8_t temperature = 0;
+    // 32 位 MCU 跨上下文读取时使用 Get_Last_Feedback_Timestamp_Us()。
+    volatile uint64_t last_feedback_timestamp_us = 0;
     volatile bool online = false;
 
     Class_PID current_pid;
     Class_PID speed_pid;
     Class_PID angle_pid;
 
-private:
+protected:
     friend class Class_DJIMotor_Group;
-    static void FeedbackCallback(FDCAN_HandleTypeDef *hfdcan, uint32_t id,
-                                 uint8_t *data, uint32_t len, void *context);
-    static void InitPid(Class_PID &pid, const PID_InitTypeDef &config);
-    bool ApplyWatchdog();
-    void ClearCommand();
+    static void CAN_RxCpltCallback(FDCAN_HandleTypeDef *hfdcan, uint32_t id,
+                                   uint8_t *data, uint32_t len, void *context);
+    static void PID_Init(Class_PID *pid, const PID_InitTypeDef *config);
+    bool Check_Feedback_Timeout();
+    void Clear_Command();
 
     FDCAN_HandleTypeDef *hfdcan = nullptr;
-    uint32_t rx_id = 0U;
-    uint8_t group = 0U;
-    uint8_t slot = 0U;
+    uint32_t rx_id = 0;
+    uint8_t group = 0;
+    uint8_t slot = 0;
     uint8_t close_loop = DJI_MOTOR_OPEN_LOOP;
     Enum_DJIMotor_Loop outer_loop = DJI_MOTOR_OPEN_LOOP;
     Enum_DJIMotor_Feedback angle_feedback = Enum_DJIMotor_Feedback::MOTOR;
@@ -90,13 +122,13 @@ private:
     float reference = 0.0f;
     float command_limit = 0.0f;
     float gear_ratio = 1.0f;
-    uint32_t feedback_timeout_ms = 20U;
+    uint64_t feedback_timeout_us = 20000;
     bool has_temperature = false;
     bool reverse = false;
     bool enabled = false;
     bool initialized = false;
     bool feedback_initialized = false;
-    uint16_t last_encoder = 0U;
+    uint16_t last_encoder = 0;
     int32_t total_round = 0;
 };
 
@@ -122,12 +154,12 @@ public:
     void Control();
     bool Send();
     void Enable();
-    void Disable();
+    bool Disable();
 
-private:
+protected:
     Class_DJIMotor *motors[4]{};
-    uint8_t motor_count = 0U;
-    uint8_t physical_group = 0U;
+    uint8_t motor_count = 0;
+    uint8_t physical_group = 0;
     bool initialized = false;
 };
 

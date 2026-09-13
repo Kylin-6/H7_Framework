@@ -1,3 +1,10 @@
+/**
+ * @file dmmotor.h
+ * @brief 达妙电机配置、控制接口与反馈数据。
+ * @author Kylin-6
+ * @note 原始驱动由 Kylin-6 在 PR #4 贡献，后续适配由 zzm 维护。
+ */
+
 #ifndef DMMOTOR_H
 #define DMMOTOR_H
 

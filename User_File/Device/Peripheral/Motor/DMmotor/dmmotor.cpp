@@ -1,3 +1,10 @@
+/**
+ * @file dmmotor.cpp
+ * @brief 达妙电机控制帧编码、反馈解析与模式切换。
+ * @author Kylin-6
+ * @note 原始驱动由 Kylin-6 在 PR #4 贡献，后续适配由 zzm 维护。
+ */
+
 #include "dmmotor.h"
 #include "alg_basic.h"
 #include "sys_timestamp.h"
