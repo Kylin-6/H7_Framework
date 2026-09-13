@@ -69,6 +69,29 @@ struct Struct_DJIMotor_Init_Config
     const float *speed_feedforward = nullptr;
 };
 
+struct Struct_DJIMotor_PID_Debug
+{
+    float kp = 0.0f;
+    float ki = 0.0f;
+    float kd = 0.0f;
+    float kf = 0.0f;
+    float integral_out_max = 0.0f;
+    float out_max = 0.0f;
+    float target = 0.0f;
+    float now = 0.0f;
+    float error = 0.0f; // 最近一次 PID 计算经过死区处理后的误差
+    float integral_error = 0.0f;
+    float out = 0.0f; // PID 自身输出，未包含后级环和电机协议限幅
+    bool active = false; // 本次控制是否执行该环；停止时为 false
+};
+
+struct Struct_DJIMotor_PID_Feedback
+{
+    Struct_DJIMotor_PID_Debug current;
+    Struct_DJIMotor_PID_Debug speed;
+    Struct_DJIMotor_PID_Debug angle;
+};
+
 struct Struct_DJIMotor_Feedback
 {
     uint16_t encoder = 0; // 协议原始编码器值，0~8191
@@ -80,6 +103,7 @@ struct Struct_DJIMotor_Feedback
     float output_speed = 0.0f; // 输出侧速度，deg/s
     int16_t current_raw = 0; // 协议原始电流值，不是 A
     uint8_t temperature = 0; // 温度，摄氏度；M2006 不提供
+    Struct_DJIMotor_PID_Feedback pid;
 };
 
 class Class_DJIMotor
@@ -111,6 +135,8 @@ protected:
     static void PID_Init(Class_PID *pid, const PID_InitTypeDef *config);
     bool Check_Feedback_Timeout();
     void Clear_Command();
+    void Apply_PID_Debug_Gains();
+    void Update_PID_Debug();
 
     FDCAN_HandleTypeDef *hfdcan = nullptr;
     uint32_t rx_id = 0;
@@ -124,6 +150,7 @@ protected:
     const float *external_speed = nullptr;
     const float *current_feedforward = nullptr;
     const float *speed_feedforward = nullptr;
+    float pid_debug_gains[3][3]{}; // current/speed/angle 上次同步的 kp/ki/kd
     float reference = 0.0f;
     float command_limit = 0.0f;
     float gear_ratio = 1.0f;

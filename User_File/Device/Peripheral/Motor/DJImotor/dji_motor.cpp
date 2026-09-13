@@ -230,6 +230,16 @@ bool Class_DJIMotor::Init(const Struct_DJIMotor_Init_Config &config)
     PID_Init(&current_pid, &config.current_pid);
     PID_Init(&speed_pid, &config.speed_pid);
     PID_Init(&angle_pid, &config.angle_pid);
+    feedback.pid = {};
+    for (uint8_t i = 0; i < 3; ++i)
+    {
+        for (uint8_t j = 0; j < 3; ++j)
+        {
+            pid_debug_gains[i][j] = 0.0f;
+        }
+    }
+    Apply_PID_Debug_Gains();
+    Update_PID_Debug();
 
     if (!BSP_CAN_RegisterCallback(resolved_rx_id, config.hfdcan, CAN_RxCpltCallback, this))
     {
@@ -251,6 +261,48 @@ bool Class_DJIMotor::Init(const Struct_DJIMotor_Init_Config &config)
     enabled = true;
     initialized = true;
     return true;
+}
+
+void Class_DJIMotor::Apply_PID_Debug_Gains()
+{
+    Class_PID *pids[3] = {&current_pid, &speed_pid, &angle_pid};
+    Struct_DJIMotor_PID_Debug *debug[3] = {&feedback.pid.current, &feedback.pid.speed, &feedback.pid.angle};
+    for (uint8_t i = 0; i < 3; ++i)
+    {
+        // 只有调试入口发生修改时才写回，保留原 PID setter 的调参方式。
+        if (debug[i]->kp != pid_debug_gains[i][0] && !Basic_Math_Is_Invalid_Float(debug[i]->kp))
+        {
+            pids[i]->Set_K_P(debug[i]->kp);
+        }
+        if (debug[i]->ki != pid_debug_gains[i][1] && !Basic_Math_Is_Invalid_Float(debug[i]->ki))
+        {
+            pids[i]->Set_K_I(debug[i]->ki);
+        }
+        if (debug[i]->kd != pid_debug_gains[i][2] && !Basic_Math_Is_Invalid_Float(debug[i]->kd))
+        {
+            pids[i]->Set_K_D(debug[i]->kd);
+        }
+        debug[i]->kp = pid_debug_gains[i][0] = pids[i]->Get_K_P();
+        debug[i]->ki = pid_debug_gains[i][1] = pids[i]->Get_K_I();
+        debug[i]->kd = pid_debug_gains[i][2] = pids[i]->Get_K_D();
+    }
+}
+
+void Class_DJIMotor::Update_PID_Debug()
+{
+    Class_PID *pids[3] = {&current_pid, &speed_pid, &angle_pid};
+    Struct_DJIMotor_PID_Debug *debug[3] = {&feedback.pid.current, &feedback.pid.speed, &feedback.pid.angle};
+    for (uint8_t i = 0; i < 3; ++i)
+    {
+        debug[i]->kf = pids[i]->Get_K_F();
+        debug[i]->integral_out_max = pids[i]->Get_I_Out_Max();
+        debug[i]->out_max = pids[i]->Get_Out_Max();
+        debug[i]->target = pids[i]->Get_Target();
+        debug[i]->now = pids[i]->Get_Now();
+        debug[i]->error = pids[i]->Get_Error();
+        debug[i]->integral_error = pids[i]->Get_Integral_Error();
+        debug[i]->out = pids[i]->Get_Out();
+    }
 }
 
 void Class_DJIMotor::SetRef(float ref)
@@ -339,6 +391,9 @@ void Class_DJIMotor::CAN_RxCpltCallback(FDCAN_HandleTypeDef *hfdcan,
 
 void Class_DJIMotor::Clear_Command()
 {
+    feedback.pid.current.active = false;
+    feedback.pid.speed.active = false;
+    feedback.pid.angle.active = false;
     if (!initialized)
     {
         return;
@@ -372,11 +427,20 @@ bool Class_DJIMotor::Check_Feedback_Timeout()
     current_pid.Set_Integral_Error(0.0f);
     speed_pid.Set_Integral_Error(0.0f);
     angle_pid.Set_Integral_Error(0.0f);
+    Update_PID_Debug();
     return false;
 }
 
 void Class_DJIMotor::Control()
 {
+    if (!initialized)
+    {
+        return;
+    }
+    Apply_PID_Debug_Gains();
+    feedback.pid.current.active = false;
+    feedback.pid.speed.active = false;
+    feedback.pid.angle.active = false;
     if (!Check_Feedback_Timeout())
     {
         return;
@@ -389,6 +453,7 @@ void Class_DJIMotor::Control()
         angle_pid.Set_Now(angle_feedback == Enum_DJIMotor_Feedback::EXTERNAL
                               ? *external_angle : feedback.output_total_angle);
         angle_pid.TIM_Calculate_PeriodElapsedCallback();
+        feedback.pid.angle.active = true;
         output = angle_pid.Get_Out();
     }
     if ((close_loop & DJI_MOTOR_SPEED_LOOP) != 0 &&
@@ -402,6 +467,7 @@ void Class_DJIMotor::Control()
         speed_pid.Set_Now(speed_feedback == Enum_DJIMotor_Feedback::EXTERNAL
                               ? *external_speed : feedback.output_speed);
         speed_pid.TIM_Calculate_PeriodElapsedCallback();
+        feedback.pid.speed.active = true;
         output = speed_pid.Get_Out();
     }
     if (current_feedforward != nullptr)
@@ -414,6 +480,7 @@ void Class_DJIMotor::Control()
         current_pid.Set_Target(output);
         current_pid.Set_Now(logical_current);
         current_pid.TIM_Calculate_PeriodElapsedCallback();
+        feedback.pid.current.active = true;
         output = current_pid.Get_Out();
     }
     if (reverse)
@@ -427,6 +494,7 @@ void Class_DJIMotor::Control()
     Struct_DJIMotor_Tx_Group *sender = &DJI_Motor_Tx_Groups[group];
     sender->message.data[2 * slot] = (uint8_t)((raw >> 8) & 0xFF);
     sender->message.data[2 * slot + 1] = (uint8_t)(raw & 0xFF);
+    Update_PID_Debug();
 }
 
 bool Class_DJIMotor::Disable()

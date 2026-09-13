@@ -237,5 +237,25 @@ Group 的 `Enable()` 依次使能所有成员，`Disable()` 批量清零后一�
 
 ## PID 调试
 
-保留 `motor.current_pid`、`motor.speed_pid`、`motor.angle_pid` 三个实际 PID 对象，
-可在调试器中展开查看参数与运行数据。反馈结构体不提供跨中断的一致快照保证。
+在调试器中展开 `motor.feedback.pid.current`、`speed`、`angle`，分别查看电流、速度和角度环。
+原有 `motor.current_pid`、`motor.speed_pid`、`motor.angle_pid` 仍负责计算。
+
+```c
+motor.feedback.pid.speed.kp = 2.0f;
+motor.feedback.pid.speed.ki = 0.1f;
+motor.feedback.pid.speed.kd = 0.0f;
+// 下一次 motor.Control() 或电机组 Control()/Update() 时应用。
+```
+
+- `kp/ki/kd`：可调入口，初始化时从配置载入，下一次 `Control()` 开始时写入实际 PID。
+  没有改调试入口时，原 PID setter 的修改会同步回来；两处同时修改同一增益时，调试入口优先。
+  NaN/Inf 不写入 PID，调试字段恢复为实际值；修改增益不重置积分和历史状态。
+- `kf/integral_out_max/out_max`：实际 PID 的前馈增益和限幅观察值。
+- `target/now/error`：实际 PID 的目标、反馈和最近一次计算经过死区处理后的误差。
+- `integral_error/out`：积分状态和 PID 自身输出；`out` 尚未包含后级环和最终电机指令限幅。
+- `active`：最近一次控制是否执行该环；关闭、掉线或本轮跳过时为 false。
+  未执行的环保留最近一次计算值，因此不能把此时的 `out` 当作当前发给电机的指令。
+
+除 `kp/ki/kd` 外均为观察字段，修改不会用于控制，并在下次刷新覆盖。停止时调用 `Control()`
+也能应用增益，但不会因此使能电机；只调用 `Send()` 不应用新增益。调试快照不保证跨中断或
+跨控制周期读取的一致性，需要一次改齐多个增益时应暂停目标后修改，再恢复运行。
