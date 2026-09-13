@@ -12,6 +12,7 @@ struct MotorGroup
 {
     Struct_CAN_Tx_Msg message{};
     Class_DJIMotor *slot_owner[4]{};
+    Class_DJIMotor_Group *send_owner = nullptr;
     bool initialized = false;
 };
 
@@ -131,7 +132,9 @@ bool Class_DJIMotor::Init(const Struct_DJIMotor_Init_Config &config)
     const int group_index = FindGroup(config.hfdcan, tx_id);
     const int registration_index = FindFreeRegistration(config.hfdcan, resolved_rx_id);
     if (group_index < 0 || registration_index < 0 ||
-        (groups[group_index].initialized && groups[group_index].slot_owner[resolved_slot] != nullptr))
+        (groups[group_index].initialized &&
+         (groups[group_index].slot_owner[resolved_slot] != nullptr ||
+          groups[group_index].send_owner != nullptr)))
         return false;
     hfdcan = config.hfdcan;
     rx_id = resolved_rx_id;
@@ -321,10 +324,11 @@ bool Class_DJIMotor_Group::Init(Class_DJIMotor *motor1,
                                 Class_DJIMotor *motor4)
 {
     Class_DJIMotor *new_motors[4] = {motor1, motor2, motor3, motor4};
-    if (motor1 == nullptr) return false;
+    if (initialized || motor1 == nullptr) return false;
 
     uint8_t count = 0U;
     bool found_null = false;
+    const uint8_t target_group = motor1->group;
     for (uint8_t i = 0U; i < 4U; ++i)
     {
         if (new_motors[i] == nullptr)
@@ -333,19 +337,34 @@ bool Class_DJIMotor_Group::Init(Class_DJIMotor *motor1,
             continue;
         }
         if (found_null) return false;
-        if (!new_motors[i]->initialized) return false;
+        if (!new_motors[i]->initialized || new_motors[i]->group != target_group) return false;
         for (uint8_t j = 0U; j < i; ++j)
             if (new_motors[j] == new_motors[i]) return false;
         ++count;
     }
 
+    MotorGroup &sender = groups[target_group];
+    if (sender.send_owner != nullptr) return false;
+    for (uint8_t slot = 0U; slot < 4U; ++slot)
+    {
+        if (sender.slot_owner[slot] == nullptr) continue;
+        bool included = false;
+        for (uint8_t i = 0U; i < count; ++i)
+            if (new_motors[i] == sender.slot_owner[slot]) included = true;
+        if (!included) return false;
+    }
+
     for (uint8_t i = 0U; i < 4U; ++i) motors[i] = new_motors[i];
     motor_count = count;
+    physical_group = target_group;
+    sender.send_owner = this;
+    initialized = true;
     return true;
 }
 
 void Class_DJIMotor_Group::SetRef(float ref1, float ref2, float ref3, float ref4)
 {
+    if (!initialized) return;
     const float refs[4] = {ref1, ref2, ref3, ref4};
     for (uint8_t i = 0U; i < motor_count; ++i) motors[i]->SetRef(refs[i]);
 }
@@ -358,29 +377,39 @@ void Class_DJIMotor_Group::Update(float ref1, float ref2, float ref3, float ref4
 
 void Class_DJIMotor_Group::Control()
 {
+    if (!initialized) return;
     for (uint8_t i = 0U; i < motor_count; ++i) motors[i]->Control();
+}
+
+bool Class_DJIMotor_Group::Control(float ref1, float ref2, float ref3, float ref4)
+{
+    if (!initialized) return false;
+    SetRef(ref1, ref2, ref3, ref4);
+    Control();
+    bool ready = true;
+    for (uint8_t i = 0U; i < motor_count; ++i)
+        if (!motors[i]->online || !motors[i]->enabled) ready = false;
+    return Send() && ready;
+}
+
+bool Class_DJIMotor_Group::Send()
+{
+    if (!initialized) return false;
+    MotorGroup &sender = groups[physical_group];
+    for (uint8_t slot = 0U; slot < 4U; ++slot)
+        if (sender.slot_owner[slot] != nullptr)
+            sender.slot_owner[slot]->ApplyWatchdog();
+    return CAN_Tx_Perform(&sender.message);
 }
 
 void Class_DJIMotor_Group::Enable()
 {
+    if (!initialized) return;
     for (uint8_t i = 0U; i < motor_count; ++i) motors[i]->Enable();
 }
 
 void Class_DJIMotor_Group::Disable()
 {
+    if (!initialized) return;
     for (uint8_t i = 0U; i < motor_count; ++i) motors[i]->Disable();
-}
-
-bool DJIMotor_SendAll()
-{
-    bool success = true;
-    for (uint8_t i = 0U; i < MAX_MOTOR_GROUPS; ++i)
-    {
-        if (!groups[i].initialized) continue;
-        for (uint8_t slot = 0U; slot < 4U; ++slot)
-            if (groups[i].slot_owner[slot] != nullptr)
-                groups[i].slot_owner[slot]->ApplyWatchdog();
-        if (!CAN_Tx_Perform(&groups[i].message)) success = false;
-    }
-    return success;
 }

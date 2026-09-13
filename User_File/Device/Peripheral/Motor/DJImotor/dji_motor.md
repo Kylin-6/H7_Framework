@@ -49,20 +49,10 @@ if (motor.Init(config)) {
 36、M3508 为官方标称约 19、GM6020 为 1。若实际机构或精度要求不同，应显式填写
 实测或设计减速比。
 
-## 控制周期
+## 控制与发送
 
-所有电机完成计算后只调用一次统一发送函数：
-
-```cpp
-motor_a.Control();
-motor_b.Control();
-motor_c.Control();
-DJIMotor_SendAll();
-```
-
-`Control()` 只计算 PID 并更新对应共享帧槽，不触发 CAN 发布；`DJIMotor_SendAll()`
-将每个已注册的控制组发布一次。项目的 `Can_Tx_Task` 随后通过 `BSP_CAN_SendPer()`
-完成硬件发送。
+单个电机的 `Control()` 只计算 PID 并更新共享帧槽。普通业务应把同一物理控制帧中的
+电机组成 `Class_DJIMotor_Group`，由 Group 完成一次计算和一次非阻塞发布。
 
 `Disable()` 会立即清除对象所占共享槽。对象首次收到合法反馈前，以及超过
 `feedback_timeout_ms` 没有反馈后，`Control()` 都会保持该槽为零并清除 PID 积分。
@@ -91,8 +81,10 @@ DJIMotor_SendAll();
 ## 多电机 Group
 
 `Class_DJIMotor_Group` 只保存 1~4 个已经初始化的电机指针，不复制对象、不分配动态
-内存，也不参与 PID、CAN 分组或发送。传入空洞、重复指针或尚未初始化的电机时，
-`Init()` 返回 `false`。
+内存，也不参与 PID。一个 Group 必须包含同一 `(FDCAN, TX ID)` 物理帧内的全部已注册
+电机，并独占该物理帧的发送权。跨物理帧、遗漏已有 slot、重复指针、空洞参数、未初始化
+电机，或第二个 Group 争用相同物理帧时，`Init()` 返回 `false`。Group 建立后也不允许再向
+该物理帧注册新电机。
 
 ### 四个 M3508 底盘
 
@@ -131,22 +123,71 @@ ok = ok && chassis.Init(&motor1, &motor2, &motor3, &motor4);
 控制周期：
 
 ```cpp
-chassis.Update(v1, v2, v3, v4);
-DJIMotor_SendAll();
+bool submitted = chassis.Control(v1, v2, v3, v4);
 ```
 
-`Update()` 等价于依次调用 `SetRef()` 和 `Control()`，内部不会调用
-`DJIMotor_SendAll()`。需要分开设置目标与执行计算时，原有两个接口仍可使用。
+`Control(ref...)` 依次设置目标、计算四台电机并只发布一次 CAN1/0x200 帧。
+返回 `false` 表示 Group 未初始化、至少一台电机未使能或掉线，或者发布到 BSP 周期槽失败；
+即使个别电机掉线，其 slot 仍会清零，其他在线电机的帧仍会发布。
 
-### 底盘和云台同时存在
+高级用法仍可分开调用：
 
 ```cpp
-chassis.Update(v1, v2, v3, v4);
-gimbal.Update(yaw_ref, pitch_ref);
-
-// 整个控制周期只调用一次，发送所有被更新的 DJI CAN 分组。
-DJIMotor_SendAll();
+chassis.Update(v1, v2, v3, v4); // SetRef + PID 计算，不发送
+bool submitted = chassis.Send();
 ```
+
+也可以使用 `SetRef()`、无参数 `Control()`、`Send()` 分三步执行。
+
+### 两个 GM6020 云台电机
+
+两个电机应配置为同一 FDCAN、同一控制模式，且 ID 均位于 1~4 或均位于 5~7：
+
+```cpp
+Class_DJIMotor yaw_motor;
+Class_DJIMotor pitch_motor;
+Class_DJIMotor_Group gimbal;
+
+Struct_DJIMotor_Init_Config gm_config{
+    .hfdcan = &hfdcan2,
+    .can_id = 1,
+    .motor_type = Enum_DJIMotor_Type::GM6020,
+    .close_loop = DJI_MOTOR_SPEED_LOOP,
+    .outer_loop = DJI_MOTOR_SPEED_LOOP,
+    .speed_pid = {
+        .K_P = 25.0f, .K_I = 2.0f,
+        .I_Out_Max = 10000.0f, .Out_Max = 24000.0f, .D_T = 0.001f,
+    },
+    .control_mode = Enum_DJIMotor_Control_Mode::VOLTAGE,
+};
+
+bool ok = yaw_motor.Init(gm_config);
+gm_config.can_id = 2;
+ok = pitch_motor.Init(gm_config) && ok;
+ok = ok && gimbal.Init(&yaw_motor, &pitch_motor);
+
+bool submitted = gimbal.Control(yaw_target, pitch_target);
+```
+
+### 500Hz 底盘与 1kHz 云台
+
+```cpp
+// 1kHz Gimbal Task
+gimbal.Control(yaw_ref, pitch_ref);       // 只发布云台的物理帧
+```
+
+```cpp
+// 500Hz Chassis Task
+chassis.Control(v1, v2, v3, v4);         // 只发布底盘的物理帧
+```
+
+两个 Group 的 `Init()` 已保证它们不可能拥有同一 `(FDCAN, TX ID)`，因此不同任务不会
+重复发布同一物理帧，也不会夹带另一个模块的旧 slot。
+
+`Send()` 使用非阻塞的 `CAN_Tx_Perform()` 更新 BSP 周期槽并立即返回。实际 HAL FDCAN
+提交由 `Can_Tx_Task` 执行；硬件 Tx FIFO 满时 BSP 不等待、不 busy-wait，并保留未确认版本，
+在后续发送任务周期重试。因此 Group 的返回值能反映周期槽提交结果，不能同步反映稍后发生
+的硬件 FIFO 状态。
 
 Group 的 `Enable()` 和 `Disable()` 依次操作所有成员。Group 不拥有电机，因此成员电机
 对象的生命周期必须长于 Group；推荐都使用静态或全局对象。

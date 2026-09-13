@@ -68,7 +68,6 @@ public:
     Class_PID angle_pid;
 
 private:
-    friend bool DJIMotor_SendAll();
     friend class Class_DJIMotor_Group;
     static void FeedbackCallback(FDCAN_HandleTypeDef *hfdcan, uint32_t id,
                                  uint8_t *data, uint32_t len, void *context);
@@ -116,15 +115,20 @@ public:
                 float ref2 = 0.0f,
                 float ref3 = 0.0f,
                 float ref4 = 0.0f);
+    bool Control(float ref1,
+                 float ref2 = 0.0f,
+                 float ref3 = 0.0f,
+                 float ref4 = 0.0f);
     void Control();
+    bool Send();
     void Enable();
     void Disable();
 
 private:
     Class_DJIMotor *motors[4]{};
     uint8_t motor_count = 0U;
+    uint8_t physical_group = 0U;
+    bool initialized = false;
 };
-
-bool DJIMotor_SendAll();
 
 #endif
