@@ -69,6 +69,19 @@ struct Struct_DJIMotor_Init_Config
     const float *speed_feedforward = nullptr;
 };
 
+struct Struct_DJIMotor_Feedback
+{
+    uint16_t encoder = 0; // 协议原始编码器值，0~8191
+    float rotor_angle = 0.0f; // 转子侧单圈角度，deg，含方向配置
+    float rotor_total_angle = 0.0f; // 转子侧累计角度，deg
+    float rotor_speed = 0.0f; // 转子侧滤波速度，deg/s
+    float output_angle = 0.0f; // 输出侧单圈对应角度，deg
+    float output_total_angle = 0.0f; // 输出侧累计角度，deg
+    float output_speed = 0.0f; // 输出侧速度，deg/s
+    int16_t current_raw = 0; // 协议原始电流值，不是 A
+    uint8_t temperature = 0; // 温度，摄氏度；M2006 不提供
+};
+
 class Class_DJIMotor
 {
 public:
@@ -82,15 +95,7 @@ public:
                              const float *feedback = nullptr);
     uint64_t Get_Last_Feedback_Timestamp_Us() const;
 
-    uint16_t encoder = 0;
-    float rotor_angle = 0.0f;
-    float rotor_total_angle = 0.0f;
-    float rotor_speed = 0.0f;
-    float output_angle = 0.0f;
-    float output_total_angle = 0.0f;
-    float output_speed = 0.0f;
-    int16_t current_raw = 0;
-    uint8_t temperature = 0;
+    Struct_DJIMotor_Feedback feedback;
     // 32 位 MCU 跨上下文读取时使用 Get_Last_Feedback_Timestamp_Us()。
     volatile uint64_t last_feedback_timestamp_us = 0;
     volatile bool online = false;

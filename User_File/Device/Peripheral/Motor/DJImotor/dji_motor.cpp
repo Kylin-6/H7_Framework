@@ -316,20 +316,20 @@ void Class_DJIMotor::CAN_RxCpltCallback(FDCAN_HandleTypeDef *hfdcan,
 
     float direction = motor->reverse ? -1.0f : 1.0f;
     int16_t rpm = (int16_t)(((uint16_t)data[2] << 8) | data[3]);
-    motor->encoder = new_encoder;
-    motor->rotor_angle = direction * new_encoder * DJI_MOTOR_ENCODER_TO_DEGREE;
-    motor->rotor_total_angle = direction *
+    motor->feedback.encoder = new_encoder;
+    motor->feedback.rotor_angle = direction * new_encoder * DJI_MOTOR_ENCODER_TO_DEGREE;
+    motor->feedback.rotor_total_angle = direction *
         (motor->total_round * 360.0f + new_encoder * DJI_MOTOR_ENCODER_TO_DEGREE);
     float measured_speed = direction * rpm * DJI_MOTOR_RPM_TO_DEGREE_PER_SECOND;
-    motor->rotor_speed = DJI_MOTOR_ROTOR_SPEED_LPF_ALPHA * motor->rotor_speed +
+    motor->feedback.rotor_speed = DJI_MOTOR_ROTOR_SPEED_LPF_ALPHA * motor->feedback.rotor_speed +
         (1.0f - DJI_MOTOR_ROTOR_SPEED_LPF_ALPHA) * measured_speed;
-    motor->output_angle = motor->rotor_angle / motor->gear_ratio;
-    motor->output_total_angle = motor->rotor_total_angle / motor->gear_ratio;
-    motor->output_speed = motor->rotor_speed / motor->gear_ratio;
-    motor->current_raw = (int16_t)(((uint16_t)data[4] << 8) | data[5]);
+    motor->feedback.output_angle = motor->feedback.rotor_angle / motor->gear_ratio;
+    motor->feedback.output_total_angle = motor->feedback.rotor_total_angle / motor->gear_ratio;
+    motor->feedback.output_speed = motor->feedback.rotor_speed / motor->gear_ratio;
+    motor->feedback.current_raw = (int16_t)(((uint16_t)data[4] << 8) | data[5]);
     if (motor->has_temperature)
     {
-        motor->temperature = data[6];
+        motor->feedback.temperature = data[6];
     }
     uint32_t interrupt_state = DJI_Motor_Enter_Critical();
     motor->last_feedback_timestamp_us = SYS_Timestamp.Get_Now_Microsecond();
@@ -387,7 +387,7 @@ void Class_DJIMotor::Control()
     {
         angle_pid.Set_Target(output);
         angle_pid.Set_Now(angle_feedback == Enum_DJIMotor_Feedback::EXTERNAL
-                              ? *external_angle : output_total_angle);
+                              ? *external_angle : feedback.output_total_angle);
         angle_pid.TIM_Calculate_PeriodElapsedCallback();
         output = angle_pid.Get_Out();
     }
@@ -400,7 +400,7 @@ void Class_DJIMotor::Control()
         }
         speed_pid.Set_Target(output);
         speed_pid.Set_Now(speed_feedback == Enum_DJIMotor_Feedback::EXTERNAL
-                              ? *external_speed : output_speed);
+                              ? *external_speed : feedback.output_speed);
         speed_pid.TIM_Calculate_PeriodElapsedCallback();
         output = speed_pid.Get_Out();
     }
@@ -410,7 +410,7 @@ void Class_DJIMotor::Control()
     }
     if ((close_loop & DJI_MOTOR_CURRENT_LOOP) != 0)
     {
-        float logical_current = reverse ? -current_raw : current_raw;
+        float logical_current = reverse ? -feedback.current_raw : feedback.current_raw;
         current_pid.Set_Target(output);
         current_pid.Set_Now(logical_current);
         current_pid.TIM_Calculate_PeriodElapsedCallback();

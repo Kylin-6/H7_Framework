@@ -20,6 +20,17 @@ enum class Enum_DMMotor_Mode : uint8_t
     FORCE_POSITION = 4U,
 };
 
+struct Struct_DMMotor_Feedback
+{
+    uint8_t state = 0; // 协议状态码
+    float position = 0.0f; // 位置，rad，含方向配置
+    float total_position = 0.0f; // 累计位置，rad
+    float velocity = 0.0f; // 速度，rad/s
+    float torque = 0.0f; // 转矩，N*m
+    float mos_temperature = 0.0f; // MOS 温度，摄氏度
+    float rotor_temperature = 0.0f; // 转子温度，摄氏度
+};
+
 class Class_DMMotor
 {
 public:
@@ -48,13 +59,7 @@ public:
                           float current_limit_ratio);
     void SetTorque(float torque_nm);
 
-    uint8_t state = 0U;
-    float position = 0.0f;
-    float total_position = 0.0f;
-    float velocity = 0.0f;
-    float torque = 0.0f;
-    float mos_temperature = 0.0f;
-    float rotor_temperature = 0.0f;
+    Struct_DMMotor_Feedback feedback;
 
 private:
     static void FeedbackCallback(FDCAN_HandleTypeDef *hfdcan,

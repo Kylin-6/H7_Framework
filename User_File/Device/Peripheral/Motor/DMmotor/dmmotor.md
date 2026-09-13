@@ -132,19 +132,24 @@ motor.SetMode(Enum_DMMotor_Mode::POSITION_SPEED);
 
 ## 反馈
 
-收到 Master ID 对应的反馈后，可从实例直接读取：
+收到 Master ID 对应的反馈后，统一从 `Struct_DMMotor_Feedback feedback` 读取，
+调试器展开 `motor.feedback` 即可集中查看：
 
 ```c
-motor.state;
-motor.position;
-motor.total_position;
-motor.velocity;
-motor.torque;
-motor.mos_temperature;
-motor.rotor_temperature;
+motor.feedback.state;
+motor.feedback.position;
+motor.feedback.total_position;
+motor.feedback.velocity;
+motor.feedback.torque;
+motor.feedback.mos_temperature;
+motor.feedback.rotor_temperature;
 ```
 
+位置单位为 rad，速度为 rad/s，转矩为 N*m，温度为摄氏度；`state` 保留协议状态码。
 反馈包含电机 ID 校验，并支持多圈位置累计和方向反转。
+
+MIT 的 `kp`、`kd` 是发给电机内部控制器的控制参数，不属于反馈；当前驱动没有本地 PID 对象。
+结构体仅用于数据组织，不提供跨中断的一致快照保证。
 
 ## 接入示例
 

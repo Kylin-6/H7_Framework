@@ -97,18 +97,21 @@ if (motor.Init(config))
 
 ## 反馈量和单位
 
-- `encoder`：协议原始 13 位转子编码器值，范围 0~8191。
-- `rotor_angle`、`rotor_total_angle`：转子侧角度，单位 °。
-- `rotor_speed`：转子侧滤波速度，单位 °/s。
-- `output_angle`、`output_total_angle`、`output_speed`：上述转子量除以减速比。
-- `current_raw`：协议返回的原始实际转矩电流值，不声明为安培。
-- `temperature`：M3508 和 GM6020 的电机温度；C610 对应字节为空，因此保持 0。
+反馈集中在 `Struct_DJIMotor_Feedback feedback` 中，例如 `motor.feedback.output_speed`。
+原有 `motor.output_speed` 等访问需要增加 `.feedback`。
+
+- `feedback.encoder`：协议原始 13 位转子编码器值，范围 0~8191。
+- `feedback.rotor_angle`、`feedback.rotor_total_angle`：转子侧角度，单位 °。
+- `feedback.rotor_speed`：转子侧滤波速度，单位 °/s。
+- `feedback.output_angle`、`feedback.output_total_angle`、`feedback.output_speed`：上述转子量除以减速比。
+- `feedback.current_raw`：协议返回的原始实际转矩电流值，不声明为安培。
+- `feedback.temperature`：M3508 和 GM6020 的电机温度；C610 对应字节为空，因此保持 0。
 - `online`：最近一次接收或超时检查得到的在线状态。
 - `last_feedback_timestamp_us`：最近反馈的 64 位系统微秒时间戳；任务中读取时使用
   `Get_Last_Feedback_Timestamp_Us()`，由接口保护 32 位 MCU 上的完整快照。
 
-反向配置作用于角度、速度以及控制输出的逻辑方向；`encoder` 和 `current_raw` 始终保留
-协议原始值。内部电流环会根据反向配置转换 `current_raw` 的符号。
+反向配置作用于角度、速度以及控制输出的逻辑方向；`feedback.encoder` 和 `feedback.current_raw` 始终保留
+协议原始值。内部电流环会根据反向配置转换 `feedback.current_raw` 的符号。
 
 速度低通采用 `DJI_MOTOR_ROTOR_SPEED_LPF_ALPHA * old + (1-alpha) * measured`，当前 alpha
 为 0.85，明确表示保留 85% 旧值。
@@ -231,3 +234,8 @@ chassis.Control(v1, v2, v3, v4);         // 只发布底盘的物理帧
 
 Group 的 `Enable()` 依次使能所有成员，`Disable()` 批量清零后一次发布。Group 不拥有
 电机，因此成员电机对象的生命周期必须长于 Group；推荐都使用静态或全局对象。
+
+## PID 调试
+
+保留 `motor.current_pid`、`motor.speed_pid`、`motor.angle_pid` 三个实际 PID 对象，
+可在调试器中展开查看参数与运行数据。反馈结构体不提供跨中断的一致快照保证。
