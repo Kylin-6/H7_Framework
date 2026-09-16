@@ -14,6 +14,7 @@
 #include "user_task.h"
 #include "bsp_bmi088.h"
 #include "sys_debug.h"
+#include "sys_imu.h"
 
 /* Private macros ------------------------------------------------------------*/
 
@@ -47,6 +48,7 @@ extern "C" void BMI088_Task(void *argument) {
         BSP_BMI088.Calculate();
       } while (BSP_BMI088.BMI088_Gyro.Get_Queue_Depth() != 0U);
 
+      System_IMU_Publish_State();
       Sys_Debug_IMU_Update();
     }
   }

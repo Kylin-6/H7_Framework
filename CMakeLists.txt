@@ -117,6 +117,8 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/User_File/System/callback/callback.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/System/Timestamp/sys_timestamp.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/System/IMU/sys_imu.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/User_File/System/MessageCenter/message_center.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/User_File/System/MessageCenter/dynamic_message_center.c
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Device/Onboard/Power/bsp_power.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Device/Onboard/BMI088/bsp_bmi088.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Device/Onboard/BMI088/Accel/bsp_bmi088_accel.cpp
@@ -152,7 +154,11 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Device/Peripheral/Motor/DJImotor/dji_motor.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Middleware/Algorithm/Pulse/alg_pulse.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Task/Control_Task.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/User_File/Application/application.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/User_File/Application/RobotCmd/RobotCmd.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Application/Gimbal/Gimbal.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/User_File/Application/Chassis/Chassis.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/User_File/Application/Shoot/Shoot.cpp
 
 )
 
@@ -177,6 +183,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
         User_File/System/callback
         User_File/System/Timestamp
         User_File/System/IMU
+        User_File/System/MessageCenter
         User_File/Device/Onboard/Power
         User_File/Device/Onboard/BMI088
         User_File/Device/Onboard/BMI088/Accel
@@ -198,16 +205,26 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
         User_File/Device/Peripheral/Motor/DMmotor
         User_File/Device/Peripheral/Motor/DJImotor
         User_File/Middleware/Algorithm/Pulse/
+        User_File/Application/
+        User_File/Application/RobotCmd/
         User_File/Application/Gimbal/
+        User_File/Application/Chassis/
+        User_File/Application/Shoot/
         User_File/Application/Communication/
         User_File/Application/Balance/
 )
+
+option(H7_APP_GIMBAL "Build the Gimbal hardware-control path" OFF)
+option(H7_APP_CHASSIS "Build the Chassis hardware-control path" OFF)
+option(H7_APP_SHOOT "Build the Shoot hardware-control path" OFF)
 
 # Add project symbols (macros)
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined symbols
     BALANCE=1
-    GIMBAL=0
+    GIMBAL=$<BOOL:${H7_APP_GIMBAL}>
+    CHASSIS=$<BOOL:${H7_APP_CHASSIS}>
+    SHOOT=$<BOOL:${H7_APP_SHOOT}>
 )
 
 # Remove wrong libob.a library dependency when using cpp files

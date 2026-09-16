@@ -1,14 +1,25 @@
+#include "Gimbal.h"
+#include "application_topics.h"
+#include "dynamic_message_center.h"
+#include "message_center.h"
+
+static INS_State Gimbal_INS_State;
+static bool Gimbal_INS_Valid = false;
+static GimbalCmd Gimbal_Command;
+static DynamicSubscriber_t *Gimbal_Command_Subscriber;
+static DynamicPublisher_t *Gimbal_Feedback_Publisher;
+static uint8_t Gimbal_Message_Divider;
+#if GIMBAL
+static GimbalMode Gimbal_Last_Mode = GimbalMode::DISABLED;
+#endif
+
 #if GIMBAL
 
-#include "Gimbal.h"
-#include "BSP_BMI088.h"
 #include "QD4310.h"
 #include "alg_pid.h"
 #include "cmsis_os2.h"
 #include "fdcan.h"
-#include "sys_timestamp.h"
 #include <cmath>
-#include <sys/_intsup.h>
 
 QDGimbal_t Gimbal;
 
@@ -28,7 +39,7 @@ float Gimbal_Clamp(float value, float minimum, float maximum)
 /**
  * @brief Yaw 轴速度内环参数。
  *
- * 输入目标为角速度，反馈来自 BMI088 Z 轴角速度，输出作为 QD4310 电流指令。
+ * 输入目标为角速度，反馈来自 INS 状态的 Z 轴角速度，输出作为 QD4310 电流指令。
  * 该环负责快速抑制速度误差；它的输出上限同时限制 Yaw 电机的最大控制电流。
  */
 PID_InitTypeDef Yaw_Speed_PID_Init = {
@@ -48,7 +59,7 @@ PID_InitTypeDef Yaw_Speed_PID_Init = {
 /**
  * @brief Yaw 轴角度外环参数。
  *
- * 输入目标为 Yaw 目标角度，反馈来自 BMI088 欧拉角；输出不是电流，而是交给
+ * 输入目标为 Yaw 目标角度，反馈来自 INS 状态的欧拉角；输出不是电流，而是交给
  * Yaw 速度内环的目标角速度。Kp=32.00 是当前已使用的参数，不在本次注释修改中调整。
  */
 PID_InitTypeDef Yaw_Angle_PID_Init = {
@@ -183,10 +194,11 @@ RESET:
     else if (Gimbal.Pitch_Motor.enabled && Gimbal.Yaw_Motor.enabled)
     {
         // 电机刚使能时锁住当前姿态，避免在第一帧视觉数据到达前跳向零点。
-        const float Yaw_Now = BSP_BMI088.Get_Euler_Angle().Data[0];
-        if (std::isfinite(Yaw_Now))
+        INS_State ins_state;
+        if (MessageCenter::INS_State_Topic.Read(ins_state) &&
+            std::isfinite(ins_state.yaw_rad))
         {
-            Gimbal.Target_Yaw_Angle = Yaw_Now;
+            Gimbal.Target_Yaw_Angle = ins_state.yaw_rad;
         }
         if (std::isfinite(Gimbal.Pitch_Motor.angle))
         {
@@ -236,16 +248,20 @@ void Gimbal_SetTargetSpeed(float yaw_speed, float pitch_speed)
  */
 void Gimbal_Loop(void)
 {
+    if (!Gimbal_INS_Valid)
+    {
+        return;
+    }
 
-    // Yaw 角度外环：使用 BMI088 的 Yaw 欧拉角，计算速度内环目标。
+    // Yaw 角度外环：使用 INS 状态的 Yaw 欧拉角，计算速度内环目标。
     Gimbal.Yaw_Angle_PID.Set_Target(Gimbal.Target_Yaw_Angle);
-    Gimbal.Yaw_Angle_PID.Set_Now(BSP_BMI088.Get_Euler_Angle().Data[0]);
+    Gimbal.Yaw_Angle_PID.Set_Now(Gimbal_INS_State.yaw_rad);
     Gimbal.Yaw_Angle_PID.TIM_Calculate_PeriodElapsedCallback();
     Gimbal.Target_Yaw_Speed = Gimbal.Yaw_Angle_PID.Get_Out();
 
-    // Yaw 速度内环使用 BMI088 Z 轴角速度反馈。
+    // Yaw 速度内环使用 INS 状态的机体系 Z 轴角速度反馈。
     Gimbal.Yaw_Speed_PID.Set_Target(Gimbal.Target_Yaw_Speed);
-    Gimbal.Yaw_Speed_PID.Set_Now(BSP_BMI088.Get_Gyro_Body().Data[2]);
+    Gimbal.Yaw_Speed_PID.Set_Now(Gimbal_INS_State.gyro_z_rad_s);
     Gimbal.Yaw_Speed_PID.TIM_Calculate_PeriodElapsedCallback();
 
     // Yaw 采用电流控制：速度 PID 输出直接作为电机电流指令。
@@ -261,3 +277,93 @@ void Gimbal_Loop(void)
 }
 
 #endif
+
+bool Gimbal_RegisterTopics(void)
+{
+    Gimbal_Command_Subscriber = DynamicSubscriber_Register(
+        APPLICATION_TOPIC_GIMBAL_CMD, sizeof(GimbalCmd));
+    Gimbal_Feedback_Publisher = DynamicPublisher_Register(
+        APPLICATION_TOPIC_GIMBAL_FEEDBACK, sizeof(GimbalFeedback));
+    Gimbal_Message_Divider = 9U;
+    return Gimbal_Command_Subscriber != nullptr &&
+           Gimbal_Feedback_Publisher != nullptr;
+}
+
+void Gimbal_Update(void)
+{
+    INS_State ins_state;
+    if (MessageCenter::INS_State_Topic.Read(ins_state))
+    {
+        Gimbal_INS_State = ins_state;
+        Gimbal_INS_Valid = true;
+    }
+
+    Gimbal_Message_Divider++;
+    if (Gimbal_Message_Divider >= 10U)
+    {
+        Gimbal_Message_Divider = 0U;
+        GimbalCmd command;
+        if (DynamicSubscriber_Read(Gimbal_Command_Subscriber, &command))
+        {
+            Gimbal_Command = command;
+#if GIMBAL
+            if (command.mode == GimbalMode::DISABLED)
+            {
+                if (Gimbal_Last_Mode != GimbalMode::DISABLED)
+                {
+                    QD4310_Disable(&Gimbal.Yaw_Motor);
+                    QD4310_Disable(&Gimbal.Pitch_Motor);
+                }
+            }
+            else
+            {
+                if (Gimbal_Last_Mode == GimbalMode::DISABLED)
+                {
+                    QD4310_Enable(&Gimbal.Yaw_Motor);
+                    QD4310_Enable(&Gimbal.Pitch_Motor);
+                }
+                if (command.mode == GimbalMode::IMU)
+                {
+                    Gimbal_SetTargetAngle(command.yaw_angle_rad,
+                                          command.pitch_angle_rad);
+                    Gimbal_SetTargetSpeed(command.yaw_speed_rad_s,
+                                          command.pitch_speed_rad_s);
+                }
+                else if (Gimbal_Last_Mode != GimbalMode::LOCK)
+                {
+                    if (Gimbal_INS_Valid)
+                    {
+                        Gimbal.Target_Yaw_Angle = Gimbal_INS_State.yaw_rad;
+                    }
+                    Gimbal.Target_Pitch_Angle = Gimbal_Clamp(
+                        Gimbal.Pitch_Motor.angle,
+                        GIMBAL_PITCH_MIN_ANGLE_RAD,
+                        GIMBAL_PITCH_MAX_ANGLE_RAD);
+                }
+            }
+            Gimbal_Last_Mode = command.mode;
+#endif
+        }
+    }
+
+#if GIMBAL
+    if (Gimbal_Command.mode != GimbalMode::DISABLED)
+    {
+        Gimbal_Loop();
+    }
+#endif
+
+    if (Gimbal_Message_Divider == 0U)
+    {
+        GimbalFeedback feedback{};
+        feedback.yaw_rad = Gimbal_INS_State.yaw_rad;
+        feedback.pitch_rad = Gimbal_INS_State.pitch_rad;
+        feedback.yaw_speed_rad_s = Gimbal_INS_State.gyro_z_rad_s;
+        feedback.pitch_speed_rad_s = Gimbal_INS_State.gyro_x_rad_s;
+        feedback.ins_valid = Gimbal_INS_Valid;
+#if GIMBAL
+        feedback.enabled = Gimbal.Yaw_Motor.enabled && Gimbal.Pitch_Motor.enabled;
+#endif
+        DynamicPublisher_Publish(Gimbal_Feedback_Publisher, &feedback);
+    }
+}

@@ -25,7 +25,9 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "application.h"
 #include "bsp_can.h"
+#include "dynamic_message_center.h"
 
 /* USER CODE END Includes */
 
@@ -137,6 +139,8 @@ return 0;
   */
 void MX_FREERTOS_Init(void) {
   /* USER CODE BEGIN Init */
+  configASSERT(DynamicMessageCenter_Init());
+  configASSERT(Application_RegisterTopics());
   BSP_CAN_ConfigInit();
 
   /* USER CODE END Init */
@@ -308,4 +312,3 @@ void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName)
   for (;;) {}
 }
 /* USER CODE END Application */
-

@@ -1,7 +1,7 @@
 /**
  * @file sys_imu.cpp
  * @author zzm
- * @brief IMU系统级参数配置
+ * @brief IMU系统级参数配置与状态发布
  * @version 1.0
  * @date 2026-08-12
  */
@@ -11,6 +11,7 @@
 #include "sys_imu.h"
 
 #include "bsp_bmi088.h"
+#include "message_center.h"
 
 /* Private macros ------------------------------------------------------------*/
 
@@ -73,4 +74,22 @@ void System_IMU_Configure()
     config.Parameter.Rest_Threshold_Accel = 0.5f;
 
     BSP_BMI088.Set_VQF_Config(config);
+}
+
+/**
+ * @brief 将BMI088/VQF的最新输出转换为与传感器无关的INS状态
+ */
+void System_IMU_Publish_State()
+{
+    const Class_Matrix_f32<3, 1> euler = BSP_BMI088.Get_Euler_Angle();
+    const Class_Matrix_f32<3, 1> gyro_body = BSP_BMI088.Get_Gyro_Body();
+    const INS_State ins_state = {
+        .yaw_rad = euler.Data[0],
+        .pitch_rad = euler.Data[1],
+        .roll_rad = euler.Data[2],
+        .gyro_x_rad_s = gyro_body.Data[0],
+        .gyro_y_rad_s = gyro_body.Data[1],
+        .gyro_z_rad_s = gyro_body.Data[2],
+    };
+    MessageCenter::INS_State_Topic.Publish(ins_state);
 }

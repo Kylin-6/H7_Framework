@@ -1,7 +1,12 @@
-#if GIMBAL
-
 #ifndef __GIMBAL_H
 #define __GIMBAL_H
+
+#include "message_types.h"
+
+bool Gimbal_RegisterTopics(void);
+void Gimbal_Update(void);
+
+#if GIMBAL
 
 #include "QD4310.h"
 #include "alg_pid.h"
