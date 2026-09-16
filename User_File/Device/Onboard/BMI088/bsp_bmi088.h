@@ -143,7 +143,7 @@ protected:
     uint32_t VQF_Reset_Counter = 0U;
     uint64_t VQF_Pre_Timestamp = 0U;
 
-    bool Init_Finished_Flag = false;
+    volatile bool Init_Finished_Flag = false;
     Struct_BMI088_Status Accel_Status;
     Struct_BMI088_Status Gyro_Status;
     Struct_BMI088_Status Temperature_Status;
@@ -202,10 +202,7 @@ inline Data_Type Class_BMI088::Get_Atomic_Copy(const Data_Type &__Data) const
     const uint32_t primask = __get_PRIMASK();
     __disable_irq();
     const Data_Type data = __Data;
-    if (primask == 0U)
-    {
-        __enable_irq();
-    }
+    __set_PRIMASK(primask);
     return data;
 }
 

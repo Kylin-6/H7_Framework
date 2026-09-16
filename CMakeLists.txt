@@ -117,6 +117,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/User_File/System/callback/callback.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/System/Timestamp/sys_timestamp.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/System/IMU/sys_imu.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/User_File/System/Daemon/daemon.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/System/MessageCenter/message_center.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/System/MessageCenter/dynamic_message_center.c
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Device/Onboard/Power/bsp_power.cpp
@@ -135,6 +136,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Task/InsTask.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Task/TransportTask.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Task/CanTxTask.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/User_File/Task/StatusTask.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/System/debug/sys_debug.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Middleware/BSP/CAN/bsp_can.c
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Middleware/BSP/UART/bsp_uart.cpp
@@ -183,6 +185,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
         User_File/System/callback
         User_File/System/Timestamp
         User_File/System/IMU
+        User_File/System/Daemon
         User_File/System/MessageCenter
         User_File/Device/Onboard/Power
         User_File/Device/Onboard/BMI088

@@ -77,6 +77,18 @@ const osThreadAttr_t CanTxTask_attributes = {
   .stack_size = 1024 * 4,
   .priority = (osPriority_t) osPriorityHigh,
 };
+/* Definitions for StatusTask */
+osThreadId_t StatusTaskHandle;
+static StaticTask_t StatusTaskControlBlock;
+static StackType_t StatusTaskBuffer[512];
+const osThreadAttr_t StatusTask_attributes = {
+  .name = "StatusTask",
+  .cb_mem = &StatusTaskControlBlock,
+  .cb_size = sizeof(StatusTaskControlBlock),
+  .stack_mem = StatusTaskBuffer,
+  .stack_size = sizeof(StatusTaskBuffer),
+  .priority = (osPriority_t) osPriorityLow,
+};
 /* Definitions for TIM_1ms_Task */
 osThreadId_t TIM_1ms_TaskHandle;
 const osThreadAttr_t TIM_1ms_Task_attributes = {
@@ -108,6 +120,7 @@ void Storage_Task(void *argument);
 void Transport_Task(void *argument);
 void Ins_Task(void *argument);
 void Can_Tx_Task(void *argument);
+void Status_Task(void *argument);
 void TIM1msTask(void *argument);
 void BMI088_Task(void *argument);
 void Control_Task(void *argument);
@@ -172,6 +185,9 @@ void MX_FREERTOS_Init(void) {
 
   /* creation of CanTxTask */
   CanTxTaskHandle = osThreadNew(Can_Tx_Task, NULL, &CanTxTask_attributes);
+
+  /* creation of StatusTask */
+  StatusTaskHandle = osThreadNew(Status_Task, NULL, &StatusTask_attributes);
 
   /* creation of TIM_1ms_Task */
   TIM_1ms_TaskHandle = osThreadNew(TIM1msTask, NULL, &TIM_1ms_Task_attributes);
@@ -246,6 +262,24 @@ __weak void Can_Tx_Task(void *argument)
     osDelay(1);
   }
   /* USER CODE END Can_Tx_Task */
+}
+
+/* USER CODE BEGIN Header_Status_Task */
+/**
+* @brief Function implementing the StatusTask thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_Status_Task */
+__weak void Status_Task(void *argument)
+{
+  /* USER CODE BEGIN Status_Task */
+  /* Infinite loop */
+  for(;;)
+  {
+    osDelay(1);
+  }
+  /* USER CODE END Status_Task */
 }
 
 /* USER CODE BEGIN Header_TIM1msTask */

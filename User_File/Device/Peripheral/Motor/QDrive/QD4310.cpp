@@ -79,18 +79,18 @@ static float QD4310_Clamp(float value, float min, float max) {
  * @brief  向电机发送控制命令
  * @param  motor 电机实例指针
  * @param  cmd   命令类型
- * @param  value 命令参数值 (int16_t)
+ * @param  raw_value 协议字段的原始 16 位位模式
  * @note   电流、速度、角度和低速命令更新周期槽, 其余动作命令进入插入队列
  */
-void QD4310_SendCommand(QD4310_t *motor, QD4310_Command_t cmd, int16_t value) {
-    Struct_CAN_Tx_Msg message = {0};
+static void QD4310_SendRawCommand(QD4310_t *motor, QD4310_Command_t cmd, uint16_t raw_value) {
+    Struct_CAN_Tx_Msg message{};
 
     message.hfdcan = motor->hfdcan;
     message.id = motor->id + 0x400;
     message.len = 3;
     message.data[0] = (uint8_t)cmd;
-    message.data[1] = (uint8_t)(value & 0xFF);
-    message.data[2] = (uint8_t)((value >> 8) & 0xFF);
+    message.data[1] = (uint8_t)(raw_value & 0xFFU);
+    message.data[2] = (uint8_t)(raw_value >> 8U);
 
     if (cmd == QD4310_CMD_CURRENT ||
         cmd == QD4310_CMD_SPEED ||
@@ -102,6 +102,14 @@ void QD4310_SendCommand(QD4310_t *motor, QD4310_Command_t cmd, int16_t value) {
     }
 
     CAN_Tx_Submit(&message);
+}
+
+/**
+ * @brief 发送有符号 int16_t 命令参数。
+ * @note 转为 uint16_t 后按原始位模式序列化，负数转换按标准模 2^16 定义。
+ */
+void QD4310_SendCommand(QD4310_t *motor, QD4310_Command_t cmd, int16_t value) {
+    QD4310_SendRawCommand(motor, cmd, (uint16_t)value);
 }
 
 /**
@@ -150,8 +158,9 @@ void QD4310_Disable(QD4310_t *motor) {
  */
 void QD4310_SetAngle(QD4310_t *motor, float angle) {
     angle = QD4310_Clamp(angle, 0.0f, QD4310_TWO_PI);
-    int16_t angle_value = (int16_t)(angle / QD4310_TWO_PI * UINT16_MAX);
-    QD4310_SendCommand(motor, QD4310_CMD_ANGLE, angle_value);
+    const uint16_t angle_value =
+        (uint16_t)(angle / QD4310_TWO_PI * (float)UINT16_MAX);
+    QD4310_SendRawCommand(motor, QD4310_CMD_ANGLE, angle_value);
 }
 
 /**

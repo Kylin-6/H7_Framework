@@ -96,6 +96,7 @@ void Class_DMMotor::FeedbackCallback(FDCAN_HandleTypeDef *callback_hfdcan,
                                             -motor->torque_max, motor->torque_max);
     motor->feedback.mos_temperature = data[6];
     motor->feedback.rotor_temperature = data[7];
+    motor->feedback_daemon.Feed();
 }
 
 void Class_DMMotor::SendModeCommand(uint8_t command)
@@ -138,7 +139,21 @@ bool Class_DMMotor::Init(FDCAN_HandleTypeDef *motor_hfdcan,
     position_max = motor_position_max;
     velocity_max = motor_velocity_max;
     torque_max = motor_torque_max;
-    return BSP_CAN_RegisterCallback(master_id, hfdcan, FeedbackCallback, this);
+    if (!BSP_CAN_RegisterCallback(master_id, hfdcan, FeedbackCallback, this))
+    {
+        return false;
+    }
+    return DaemonManager::Register(feedback_daemon);
+}
+
+bool Class_DMMotor::IsOnline() const
+{
+    return feedback_daemon.IsOnline();
+}
+
+const Daemon &Class_DMMotor::GetDaemon() const
+{
+    return feedback_daemon;
 }
 
 uint32_t Class_DMMotor::ControlId() const

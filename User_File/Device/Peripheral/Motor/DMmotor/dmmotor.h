@@ -9,6 +9,7 @@
 #define DMMOTOR_H
 
 #include "bsp_can.h"
+#include "daemon.h"
 
 #include <stdint.h>
 
@@ -59,6 +60,9 @@ public:
                           float current_limit_ratio);
     void SetTorque(float torque_nm);
 
+    bool IsOnline() const;
+    const Daemon &GetDaemon() const;
+
     Struct_DMMotor_Feedback feedback;
 
 private:
@@ -85,6 +89,7 @@ private:
     bool feedback_initialized = false;
     float last_position = 0.0f;
     int32_t total_round = 0;
+    Daemon feedback_daemon{100U};
 };
 
 #endif

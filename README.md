@@ -11,6 +11,7 @@
 | RTOS | ✅ 已接入 | FreeRTOS + CMSIS-RTOS V2；`heap_5` 按 48 KiB DTCMRAM + 16 KiB RAM_D1 双区配置 |
 | SystemView | ✅ 已接入 | SEGGER SystemView + RTT；`port_patched.c` 替换原始 FreeRTOS port |
 | 消息中心 | ✅ 已实现 | 双通道：静态 `Topic<T>`（INS 高频）+ 动态 Pub/Sub（应用命令/反馈）|
+| Daemon | ✅ 已实现 | 固定容量、无堆分配；`StatusTask` 每 10 ms 统一检查设备在线状态 |
 | BMI088 + VQF | ✅ 已形成主链路 | FIFO → SPI DMA → `BMI088_Task` → VQF 姿态解算 → 发布 `INS_State_Topic` |
 | 云台（Gimbal） | ✅ 已实现 | QD4310 双轴，Yaw 双环（角度 + 速度 PID），Pitch 内置位置环 |
 | 底盘（Chassis） | ✅ 骨架已实现 | 四舵轮 AGV 运动学，默认 `CHASSIS=0` |
@@ -25,9 +26,10 @@
 
 | 内存区域 | 使用量 | 总量 | 使用率 |
 |---|---:|---:|---:|
-| DTCMRAM | 105264 B | 128 KB | 80.31% |
-| RAM_D1 | 45664 B | 320 KB | 13.94% |
-| FLASH | 131668 B | 1024 KB | 12.56% |
+| DTCMRAM | 107224 B | 128 KB | 81.81% |
+| RAM_DMA | 17120 B | 64 KB | 26.12% |
+| RAM_D1 | 16384 B | 256 KB | 6.25% |
+| FLASH | 119792 B | 1024 KB | 11.42% |
 
 ---
 
@@ -52,6 +54,7 @@ H7_BSP/
 │   │   ├── Algorithm/             算法库（PID / EKF / VQF / 矩阵 / 四元数 / FSM 等）
 │   │   └── BSP/                   外设抽象（CAN / SPI / UART / ADC / USB / OSPI）
 │   ├── System/
+│   │   ├── Daemon/                设备在线检测（Feed + 超时检查）
 │   │   ├── MessageCenter/         消息中心（静态 Topic + 动态 Pub/Sub）
 │   │   ├── IMU/                   IMU 系统级参数配置与 INS 状态发布
 │   │   ├── Init/                  系统初始化入口
@@ -131,6 +134,7 @@ main()
 | `BMI088_Task` | `osPriorityHigh2` | 8 KB | FIFO 续传 + VQF 姿态解算 + 发布 INS 状态 |
 | `Control_Task` | `osPriorityHigh1` | 8 KB | 1 kHz 控制环：RobotCmd / Gimbal / Chassis / Shoot |
 | `Can_Tx_Task` | `osPriorityHigh` | 4 KB | 1 ms 周期：排空异步队列 + 发送周期槽 |
+| `StatusTask` | `osPriorityLow` | 2 KB（静态） | 每 10 ms 调用 `DaemonManager::CheckAll()` |
 | `TIM1msTask` | `osPriorityLow` | — | 静态回调表调度（1 / 10 / 50 / 128 ms 分频）|
 | `TransportTask` | `osPriorityNormal` | 8 KB | USB Device 初始化 + EricTool 遥测 |
 | `InsTask` | — | — | 预留，当前直接 `osThreadExit()` |
@@ -240,6 +244,20 @@ Topic 名称集中定义在 `User_File/Application/application_topics.h`，避�
 
 ---
 
+## Daemon 设备在线检测
+
+Daemon 只回答“设备是否在线”，不负责掉线后的停机、安全策略、日志或消息路由。
+
+- 设备收到并确认一帧合法反馈后直接调用 `Feed()`，不经过 Message Center。
+- `DaemonManager` 使用固定 32 项指针数组，无 `malloc/new`，设备初始化时注册。
+- `StatusTask` 以 10 ms 固定周期调用 `CheckAll()`；每个 Daemon 使用独立超时时间。
+- 新建 Daemon 在收到第一帧前为 Offline，并区分 `OfflineToOnline` 和 `OnlineToOffline` 一次性状态跃迁。
+- `Feed()` 与状态读取使用极短 PRIMASK 临界区，可安全跨 CAN ISR 和 StatusTask 使用。
+
+当前首批接入 `Class_DMMotor`，反馈超时为 100 ms。Remote/DBUS 尚未实现，因此没有创建占位接入；DJI 电机和 QD4310 保留现有在线状态机制，后续按设备逐步迁移。
+
+---
+
 ## 应用层
 
 应用层按 `RobotCmd → Gimbal / Chassis / Shoot` 边界组织，位于 `User_File/Application/`。
@@ -264,6 +282,7 @@ if (RobotCmd_GetGimbalFeedback(fb)) { ... }
 - Yaw：角度外环（`INS_State_Topic` 欧拉角反馈）→ 速度内环（IMU 体轴角速度反馈）→ QD4310 电流指令
 - Pitch：QD4310 内置位置环，软件只下发目标角度
 - 使能重试：最多等待 2 秒（100 次 × 20 ms），超时后保留错误状态并返回，不阻塞 Chassis / Shoot 初始化
+- 控制输出：只有命令非 `DISABLED` 且 Gimbal FSM 为 `READY` 时才执行控制环
 - 模式切换（`DISABLED / LOCK / IMU`）在收到新命令时执行
 
 当前 Yaw PID 参数（已系统辨识整定）：
@@ -391,7 +410,7 @@ motor.Init(config);
 
 ### 达妙电机（`Class_DMMotor`）
 
-MIT / 位置-速度 / 速度 / 力位混控，模式切换等待回包确认后才更新软件模式。详见 [达妙电机驱动说明](User_File/Device/Peripheral/Motor/DMmotor/dmmotor.md)。
+MIT / 位置-速度 / 速度 / 力位混控，模式切换等待回包确认后才更新软件模式；合法反馈直接 Feed Daemon，超过 100 ms 无反馈判定离线。详见 [达妙电机驱动说明](User_File/Device/Peripheral/Motor/DMmotor/dmmotor.md)。
 
 ### QD4310
 
@@ -532,6 +551,6 @@ Yaw 云台已完成双环辨识，数据和脚本存放在 `sysid/`：
 
 - [Kylin-6](https://github.com/Kylin-6)：贡献达妙电机驱动（PR #4）和 DJI 电机驱动（PR #5）
 - [Meta-Embedded-NG](https://github.com/Meta-Team/Meta-Embedded)（MIT）：应用层边界设计与四舵轮运动学参考
-- [basic_framework](https://github.com/NeoZng/basic_framework)（MIT）：动态消息中心注册模型参考
+- [basic_framework](https://github.com/NeoZng/basic_framework)（MIT）：动态消息中心和 Daemon 固定注册模型参考
 - SEGGER：SystemView + RTT 工具链
 - STMicroelectronics：HAL 驱动库与 AN4839 / AN4891 内存布局参考

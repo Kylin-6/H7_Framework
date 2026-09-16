@@ -350,7 +350,8 @@ void Gimbal_Update(void)
     }
 
 #if GIMBAL
-    if (Gimbal_Command.mode != GimbalMode::DISABLED)
+    if (Gimbal_Command.mode != GimbalMode::DISABLED &&
+        Gimbal.Gimbal_FSM.Get_Now_Status_Serial() == Gimbal_Status_READY)
     {
         Gimbal_Loop();
     }
