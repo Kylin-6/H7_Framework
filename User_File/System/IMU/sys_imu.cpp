@@ -77,7 +77,10 @@ void System_IMU_Configure()
 }
 
 /**
- * @brief 将BMI088/VQF的最新输出转换为与传感器无关的INS状态
+ * @brief 将 BMI088/VQF 最新输出转换为与传感器无关的 INS 状态。
+ * @details
+ * 此函数位于原有 FIFO、SPI DMA 和姿态解算链路之后，只负责整理并发布结果；
+ * Application 因而只依赖 INS_State，不直接依赖 BMI088 设备对象。
  */
 void System_IMU_Publish_State()
 {
@@ -91,5 +94,6 @@ void System_IMU_Publish_State()
         .gyro_y_rad_s = gyro_body.Data[1],
         .gyro_z_rad_s = gyro_body.Data[2],
     };
+    /* 高频姿态使用静态 Topic，避免动态队列进入 1 kHz 闭环路径。 */
     MessageCenter::INS_State_Topic.Publish(ins_state);
 }

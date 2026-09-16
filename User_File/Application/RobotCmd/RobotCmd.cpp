@@ -1,6 +1,9 @@
 /**
  * @file RobotCmd.cpp
- * @brief Command ownership and distribution adapted from Meta-Embedded-NG.
+ * @brief 机器人命令所有权与分发中心，参考 Meta-Embedded-NG 设计。
+ * @details
+ * RobotCmd 是各 Application 命令的唯一发布者，同时订阅各模块反馈。它只负责
+ * 命令组织与模块间通信，不直接访问电机、CAN 或 IMU 设备。
  */
 
 #include "RobotCmd.h"
@@ -22,6 +25,7 @@ static GimbalFeedback Gimbal_Feedback;
 static ChassisFeedback Chassis_Feedback;
 static ShootFeedback Shoot_Feedback;
 
+/* Dirty 标志避免没有变化时重复发布命令。 */
 static bool Gimbal_Command_Dirty;
 static bool Chassis_Command_Dirty;
 static bool Shoot_Command_Dirty;
@@ -32,6 +36,7 @@ static uint8_t RobotCmd_Feedback_Divider;
 
 bool RobotCmd_RegisterTopics(void)
 {
+    /* 命令由 RobotCmd 独占发布，应用模块分别持有对应 Subscriber。 */
     Gimbal_Command_Publisher = DynamicPublisher_Register(
         APPLICATION_TOPIC_GIMBAL_CMD, sizeof(GimbalCmd));
     Chassis_Command_Publisher = DynamicPublisher_Register(
@@ -39,6 +44,7 @@ bool RobotCmd_RegisterTopics(void)
     Shoot_Command_Publisher = DynamicPublisher_Register(
         APPLICATION_TOPIC_SHOOT_CMD, sizeof(ShootCmd));
 
+    /* 反馈方向相反：各应用发布，RobotCmd 为独立订阅者。 */
     Gimbal_Feedback_Subscriber = DynamicSubscriber_Register(
         APPLICATION_TOPIC_GIMBAL_FEEDBACK, sizeof(GimbalFeedback));
     Chassis_Feedback_Subscriber = DynamicSubscriber_Register(
@@ -59,8 +65,10 @@ void RobotCmd_Init(void)
     Gimbal_Command = {};
     Chassis_Command = {};
     Shoot_Command = {};
-    // Safe RM startup defaults: gimbal holds the pose captured by Gimbal_Init,
-    // while chassis and shooter remain zero-force/off.
+    /*
+     * RM 安全启动默认值：云台保持 Gimbal_Init 捕获的姿态；底盘保持零力矩，
+     * 发射机构保持关闭。
+     */
     Gimbal_Command.mode = GimbalMode::LOCK;
     Gimbal_Command_Dirty = true;
     Chassis_Command_Dirty = true;
@@ -73,6 +81,7 @@ void RobotCmd_Init(void)
 
 void RobotCmd_Update(void)
 {
+    /* 应用反馈以 100 Hz 拉取，首次未收到反馈时 Valid 保持 false。 */
     if (RobotCmd_Feedback_Divider == 0U)
     {
         GimbalFeedback gimbal_feedback;
@@ -97,6 +106,7 @@ void RobotCmd_Update(void)
     }
     RobotCmd_Feedback_Divider = (RobotCmd_Feedback_Divider + 1U) % 10U;
 
+    /* 只发布被上层更新过的目标；发布后清除 Dirty 标志。 */
     if (Gimbal_Command_Dirty)
     {
         DynamicPublisher_Publish(Gimbal_Command_Publisher, &Gimbal_Command);

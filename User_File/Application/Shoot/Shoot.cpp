@@ -1,9 +1,9 @@
 /**
  * @file Shoot.cpp
- * @brief Basic friction-wheel and loader application adapted from Meta-Embedded-NG.
+ * @brief 摩擦轮与拨弹盘应用，参考 Meta-Embedded-NG 移植。
  *
- * Heat and jam thresholds are intentionally not copied: they depend on the
- * actual mechanism and referee data that are not present in this project.
+ * 未直接移植热量限制和堵转阈值：这些参数依赖实车机构与裁判系统数据，当前
+ * 工程尚不具备可靠标定条件。
  */
 
 #include "Shoot.h"
@@ -74,6 +74,7 @@ static void Shoot_SetEnabled(bool enabled)
 
 static void Shoot_ApplyCommand(void)
 {
+    /* ShootMode 是总使能；关闭后摩擦轮和拨弹盘都停止主动输出。 */
     const bool enabled = Shoot_Command.shoot_mode == ShootMode::ON;
     Shoot_SetEnabled(enabled);
     if (!enabled)
@@ -96,6 +97,7 @@ static void Shoot_ApplyCommand(void)
     {
     case LoaderMode::SINGLE:
     case LoaderMode::TRIPLE:
+        /* 单发/三连发在模式切换沿锁存一次角度目标，避免每周期重复累加。 */
         if (Shoot_Command.loader_mode != Shoot_Last_Loader_Mode)
         {
             const float bullet_count =
@@ -153,6 +155,7 @@ static void Shoot_UpdateFeedback(void)
 
 bool Shoot_RegisterTopics(void)
 {
+    /* 发射机构订阅控制命令并发布速度、角度和在线状态反馈。 */
     Shoot_Command_Subscriber = DynamicSubscriber_Register(
         APPLICATION_TOPIC_SHOOT_CMD, sizeof(ShootCmd));
     Shoot_Feedback_Publisher = DynamicPublisher_Register(
@@ -212,6 +215,7 @@ bool Shoot_Init(void)
 
 void Shoot_Update(void)
 {
+    /* 每个控制周期读取最新命令；没有新消息时继续执行上一帧。 */
     ShootCmd command;
     if (DynamicSubscriber_Read(Shoot_Command_Subscriber, &command))
     {
@@ -226,6 +230,7 @@ void Shoot_Update(void)
     }
 #endif
 
+    /* 控制按 1 kHz 更新，应用层反馈降频到 100 Hz。 */
     Shoot_Feedback_Divider++;
     if (Shoot_Feedback_Divider >= 10U)
     {

@@ -1,22 +1,32 @@
+/**
+ * @file daemon.cpp
+ * @brief Daemon 在线检测与固定容量管理器实现。
+ * @details
+ * 固定注册表和“设备直接喂狗”思路参考 MIT 许可的 basic_framework 与
+ * Meta-Embedded-NG；本实现改用绝对时间戳、静态内存和单次状态跃迁。
+ */
+
 #include "daemon.h"
 
 #include "stm32h7xx.h"
 #include "sys_timestamp.h"
 
-// The fixed registry and direct device-feed model are informed by the
-// MIT-licensed basic_framework / Meta-Embedded-NG daemon modules. This version
-// uses no heap, absolute timestamps, and edge-triggered state transitions.
-
+/* 管理器只保存指针，Daemon 对象由具体 Device 静态持有。 */
 Daemon *DaemonManager::daemons_[DaemonManager::MAX_DAEMONS] = {};
 uint8_t DaemonManager::daemon_count_ = 0U;
 
 namespace
 {
+/** @brief 复用工程统一微秒时间源，并截取为可自然回绕的 uint32_t 毫秒时间。 */
 uint32_t DaemonNowMs()
 {
     return static_cast<uint32_t>(SYS_Timestamp_Get_Microsecond() / 1000ULL);
 }
 
+/**
+ * @brief 进入极短 PRIMASK 临界区。
+ * @return 进入前的 PRIMASK，退出时必须原样恢复，支持嵌套调用场景。
+ */
 uint32_t DaemonEnterCritical()
 {
     const uint32_t primask = __get_PRIMASK();
@@ -25,6 +35,7 @@ uint32_t DaemonEnterCritical()
     return primask;
 }
 
+/** @brief 恢复进入临界区前的中断状态。 */
 void DaemonExitCritical(uint32_t primask)
 {
     __DMB();
@@ -39,12 +50,14 @@ Daemon::Daemon(uint32_t timeout_ms)
 
 void Daemon::Feed()
 {
+    // 时间读取放在临界区外，临界区内只更新少量标量，缩短关中断时间。
     const uint32_t now_ms = DaemonNowMs();
     const uint32_t primask = DaemonEnterCritical();
 
     last_feed_ms_ = now_ms;
     if (!online_)
     {
+        // Feed 立即恢复在线状态；跃迁留给下一次 Check() 统一报告一次。
         online_ = true;
         online_transition_pending_ = true;
         last_transition_ = DaemonTransition::OfflineToOnline;
@@ -59,6 +72,7 @@ DaemonTransition Daemon::Check()
     const uint32_t primask = DaemonEnterCritical();
     DaemonTransition transition = DaemonTransition::None;
 
+    // 无符号减法天然支持 uint32_t 毫秒计数器回绕。
     if (online_ && (now_ms - last_feed_ms_) >= timeout_ms_)
     {
         online_ = false;
@@ -68,6 +82,7 @@ DaemonTransition Daemon::Check()
     }
     else if (online_transition_pending_)
     {
+        // 清除 pending，保证 OfflineToOnline 不会在每个检查周期重复出现。
         online_transition_pending_ = false;
         transition = DaemonTransition::OfflineToOnline;
     }
@@ -117,6 +132,7 @@ bool DaemonManager::Register(Daemon &daemon)
 
     for (uint8_t index = 0U; index < daemon_count_; ++index)
     {
+        // 初始化代码重复调用时保持幂等，不在数组中插入第二个相同指针。
         if (daemons_[index] == &daemon)
         {
             DaemonExitCritical(primask);
@@ -138,6 +154,7 @@ bool DaemonManager::Register(Daemon &daemon)
 
 void DaemonManager::CheckAll()
 {
+    // 注册表运行期只追加且不删除；临界区只读取计数，实际 Check 在区外执行。
     const uint32_t primask = DaemonEnterCritical();
     const uint8_t daemon_count = daemon_count_;
     DaemonExitCritical(primask);

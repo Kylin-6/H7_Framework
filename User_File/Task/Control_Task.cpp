@@ -1,3 +1,11 @@
+/**
+ * @file Control_Task.cpp
+ * @brief 应用层统一控制任务。
+ * @details
+ * Task 只提供 1 kHz 调度，不承载具体控制算法。RobotCmd 先更新命令，随后依次
+ * 调度云台、底盘和发射 Application，各模块直接控制自己拥有的 Device。
+ */
+
 #include "Chassis.h"
 #include "Gimbal.h"
 #include "RobotCmd.h"
@@ -19,7 +27,9 @@ extern "C" void Control_Task(void* argument)
 
     for (;;)
     {
+        /* 由 1 ms 定时回调唤醒；阻塞等待期间不占用 CPU。 */
         osThreadFlagsWait(0x0001, osFlagsWaitAny, osWaitForever);
+        /* 命令所有者先发布最新目标，再由各 Application 消费并执行。 */
         RobotCmd_Update();
         Gimbal_Update();
         Chassis_Update();

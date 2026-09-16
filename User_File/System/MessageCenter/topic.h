@@ -7,22 +7,23 @@
 
 extern "C" uint64_t SYS_Timestamp_Get_Microsecond(void);
 
+/** 静态 Topic 一次发布的完整快照，数据与元信息属于同一帧。 */
 template<typename T>
 struct TopicSnapshot
 {
-    T data{};
-    uint32_t sequence = 0U;
-    uint64_t timestamp_us = 0U;
-    bool valid = false;
+    T data{};                    ///< 消息数据
+    uint32_t sequence = 0U;      ///< 发布序号，每次 Publish 自增
+    uint64_t timestamp_us = 0U;  ///< 发布时刻，单位：us
+    bool valid = false;          ///< 是否至少发布过一次
 };
 
 /**
- * @brief Static, non-blocking latest-value topic.
- * @tparam T Small trivially-copyable message type.
+ * @brief 静态、非阻塞的 Latest-Value Topic。
+ * @tparam T 体积较小且可平凡复制的消息类型。
  *
- * Publish and Read are intended for task context. A short PRIMASK critical
- * section makes the data and metadata snapshot consistent across FreeRTOS
- * tasks without a mutex, queue, or dynamic allocation.
+ * Publish/Read 面向任务上下文。通过极短的 PRIMASK 临界区保证 FreeRTOS
+ * 任务间读取的数据与元信息一致，不使用互斥锁、队列或动态内存。
+ * 适用于 INS 等高频状态；应用层低频命令应使用动态 Message Center。
  */
 template<typename T>
 class Topic
@@ -31,12 +32,14 @@ class Topic
                   "Topic messages must be trivially copyable");
 
 public:
+    /** 发布一个新状态；旧状态直接被覆盖，不保存历史记录。 */
     void Publish(const T &data)
     {
         const uint64_t timestamp = SYS_Timestamp_Get_Microsecond();
         const uint32_t primask = __get_PRIMASK();
         __disable_irq();
 
+        /* 数据和元信息必须在同一临界区内更新，避免读到半帧数据。 */
         data_ = data;
         sequence_++;
         timestamp_ = timestamp;
@@ -51,6 +54,7 @@ public:
         const uint32_t primask = __get_PRIMASK();
         __disable_irq();
 
+        /* Topic 尚未首次发布时保持调用者的输出对象不变。 */
         const bool valid = valid_;
         if (valid)
         {
@@ -63,8 +67,9 @@ public:
     }
 
     /**
-     * @brief Read data and metadata from the same published frame.
-     * @return A consistent snapshot captured in one short critical section.
+     * @brief 一次性读取同一发布帧的数据、序号和时间戳。
+     * @return 在一个短临界区中取得的一致快照。
+     * @note 需要关联序号与时间戳时优先使用本接口，避免分开读取产生 TOCTOU。
      */
     TopicSnapshot<T> ReadWithMeta() const
     {
@@ -103,10 +108,10 @@ public:
     }
 
 private:
-    T data_{};
-    uint32_t sequence_ = 0U;
-    uint64_t timestamp_ = 0U;
-    bool valid_ = false;
+    T data_{};                   ///< 最近一次发布的数据
+    uint32_t sequence_ = 0U;     ///< 发布序号
+    uint64_t timestamp_ = 0U;    ///< 最近一次发布时间，单位：us
+    bool valid_ = false;         ///< 首次发布完成标志
 };
 
 #endif

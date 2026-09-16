@@ -1,11 +1,10 @@
 /**
  * @file Chassis.cpp
- * @brief Four-module AGV chassis adapted from Meta-Embedded-NG.
+ * @brief 基于四个舵轮模块的 AGV 底盘应用，参考 Meta-Embedded-NG 移植。
  *
- * The kinematics and steering shortest-path rule come from the MIT-licensed
- * Meta-Embedded-NG application/chassis implementation. Motor access is adapted
- * to this project's Class_DJIMotor API. Mechanical constants remain calibration
- * values and the module is disabled by default.
+ * 运动学与舵向最短路径规则来自 MIT 许可证下的 Meta-Embedded-NG
+ * application/chassis，实现已适配本工程 Class_DJIMotor 接口。机械参数仍是
+ * 待实车标定值，因此模块默认不参与固件构建。
  */
 
 #include "Chassis.h"
@@ -92,6 +91,7 @@ static void Chassis_SetEnabled(bool enabled)
 
 static void Chassis_CalculateTargets(float wheel_target[4], float steer_target[4])
 {
+    /* 将底盘坐标系速度分解为四个舵轮各自的平移速度向量。 */
     const float vx = Chassis_Command.velocity_x_m_s;
     const float vy = Chassis_Command.velocity_y_m_s;
     const float wz = Chassis_Command.angular_velocity_rad_s;
@@ -125,6 +125,7 @@ static void Chassis_CalculateTargets(float wheel_target[4], float steer_target[4
                              (180.0f / 3.14159265358979323846f) +
                              Chassis_Steer_Offset_Deg[index];
         float difference = Chassis_NormalizeAngle(target_angle - current_angle);
+        /* 舵向误差超过 90° 时反转轮速，缩短舵电机需要旋转的路径。 */
         if (difference > 90.0f)
         {
             difference -= 180.0f;
@@ -188,6 +189,7 @@ static void Chassis_UpdateFeedback(void)
 
 bool Chassis_RegisterTopics(void)
 {
+    /* 底盘订阅速度命令并以独立 Topic 发布状态反馈。 */
     Chassis_Command_Subscriber = DynamicSubscriber_Register(
         APPLICATION_TOPIC_CHASSIS_CMD, sizeof(ChassisCmd));
     Chassis_Feedback_Publisher = DynamicPublisher_Register(
@@ -246,6 +248,7 @@ bool Chassis_Init(void)
 
 void Chassis_Update(void)
 {
+    /* 每个控制周期都尝试接收新命令；无新数据时保留上一帧目标。 */
     ChassisCmd command;
     if (DynamicSubscriber_Read(Chassis_Command_Subscriber, &command))
     {
@@ -271,6 +274,7 @@ void Chassis_Update(void)
     }
 #endif
 
+    /* 电机控制按 1 kHz 执行，反馈消息按 100 Hz 发布。 */
     Chassis_Feedback_Divider++;
     if (Chassis_Feedback_Divider >= 10U)
     {

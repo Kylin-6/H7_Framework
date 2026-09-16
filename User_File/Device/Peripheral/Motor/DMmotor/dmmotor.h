@@ -15,10 +15,10 @@
 
 enum class Enum_DMMotor_Mode : uint8_t
 {
-    MIT = 1U,
-    POSITION_SPEED = 2U,
-    SPEED = 3U,
-    FORCE_POSITION = 4U,
+    MIT = 1U,            ///< MIT 五参数控制
+    POSITION_SPEED = 2U, ///< 位置-速度控制
+    SPEED = 3U,          ///< 速度控制
+    FORCE_POSITION = 4U, ///< 力位混合控制
 };
 
 struct Struct_DMMotor_Feedback
@@ -35,6 +35,7 @@ struct Struct_DMMotor_Feedback
 class Class_DMMotor
 {
 public:
+    /** 初始化 CAN 参数、反馈回调，并把在线守护器注册到 DaemonManager。 */
     bool Init(FDCAN_HandleTypeDef *hfdcan,
               uint8_t can_id,
               uint16_t master_id,
@@ -60,7 +61,9 @@ public:
                           float current_limit_ratio);
     void SetTorque(float torque_nm);
 
+    /** 最近 100 ms 内收到过合法反馈时返回 true。 */
     bool IsOnline() const;
+    /** 提供只读守护器状态，供诊断层读取离线时间和状态跃迁。 */
     const Daemon &GetDaemon() const;
 
     Struct_DMMotor_Feedback feedback;
@@ -89,7 +92,7 @@ private:
     bool feedback_initialized = false;
     float last_position = 0.0f;
     int32_t total_round = 0;
-    Daemon feedback_daemon{100U};
+    Daemon feedback_daemon{100U}; ///< 反馈超时门限 100 ms；只由合法反馈喂狗
 };
 
 #endif

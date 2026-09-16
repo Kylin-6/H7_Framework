@@ -1,11 +1,11 @@
 /**
  * @file dynamic_message_center.c
- * @brief Low-rate dynamic publish/subscribe channel for application messages.
+ * @brief 面向应用层低频消息的动态发布/订阅通道。
  *
- * @details The registration model is adapted from the MIT-licensed
- * basic_framework and Meta-Embedded-NG message centers. This implementation
- * uses the project FreeRTOS heap_5 allocator, rejects runtime registration,
- * and keeps one latest-value queue per subscriber.
+ * @details 注册模型参考 MIT 许可证下的 basic_framework 与
+ * Meta-Embedded-NG Message Center。本实现统一使用工程已有的 FreeRTOS
+ * heap_5；只允许调度器启动前注册；每个订阅者使用一个长度为 1 的队列，
+ * 因而只保留尚未读取的最新消息。
  */
 
 #include "dynamic_message_center.h"
@@ -19,22 +19,23 @@
 
 struct DynamicSubscriber
 {
-    QueueHandle_t queue;
-    struct DynamicSubscriber *next;
+    QueueHandle_t queue;             ///< 当前订阅者独享的 Latest-Value 队列
+    struct DynamicSubscriber *next;  ///< 同一 Topic 下的下一个订阅者
 };
 
 struct DynamicPublisher
 {
-    char topic_name[DYNAMIC_MESSAGE_CENTER_MAX_TOPIC_NAME_LENGTH + 1U];
-    uint16_t message_size;
-    bool publisher_registered;
-    struct DynamicSubscriber *first_subscriber;
-    struct DynamicPublisher *next;
+    char topic_name[DYNAMIC_MESSAGE_CENTER_MAX_TOPIC_NAME_LENGTH + 1U]; ///< Topic 名称
+    uint16_t message_size;                 ///< 消息结构体大小，单位：字节
+    bool publisher_registered;             ///< 是否已有唯一 Publisher
+    struct DynamicSubscriber *first_subscriber; ///< 订阅者单链表表头
+    struct DynamicPublisher *next;         ///< 下一个 Topic
 };
 
 static DynamicPublisher_t *Dynamic_Topic_List = NULL;
 static bool Dynamic_Message_Center_Initialized = false;
 
+/** 注册和初始化只能发生在线程调度开始前，运行期链表保持只读。 */
 static bool DynamicMessageCenter_InitializationContextIsValid(void)
 {
     return (__get_IPSR() == 0U) &&
@@ -56,6 +57,7 @@ static bool DynamicMessageCenter_ValidateTopicName(const char *topic_name,
         return false;
     }
 
+    /* 有界扫描，防止未终止字符串越过 Topic 名称上限。 */
     size_t length = 0U;
     while (length <= DYNAMIC_MESSAGE_CENTER_MAX_TOPIC_NAME_LENGTH &&
            topic_name[length] != '\0')
@@ -134,8 +136,7 @@ static void DynamicMessageCenter_InsertTopic(DynamicPublisher_t *topic)
 
 bool DynamicMessageCenter_Init(void)
 {
-    // Idempotence is valid only inside the original pre-scheduler window.
-    // A repeated call from a task or ISR is misuse and must remain observable.
+    /* 幂等只在最初的启动窗口内成立；任务或中断内重复调用仍视为误用。 */
     if (!DynamicMessageCenter_InitializationContextIsValid())
     {
         return false;
@@ -166,6 +167,7 @@ DynamicPublisher_t *DynamicPublisher_Register(const char *topic_name,
         DynamicMessageCenter_FindTopic(topic_name, name_length);
     if (topic != NULL)
     {
+        /* 同名 Topic 的尺寸必须一致，且只允许一个 Publisher。 */
         if (topic->message_size != message_size || topic->publisher_registered)
         {
             return NULL;
@@ -206,6 +208,7 @@ DynamicSubscriber_t *DynamicSubscriber_Register(const char *topic_name,
 
     if (new_topic)
     {
+        /* 允许 Subscriber 先于 Publisher 注册，先创建 Topic 占位节点。 */
         topic = DynamicMessageCenter_CreateTopic(topic_name, name_length,
                                                  message_size);
         if (topic == NULL)
@@ -225,6 +228,7 @@ DynamicSubscriber_t *DynamicSubscriber_Register(const char *topic_name,
         return NULL;
     }
 
+    /* 队列长度固定为 1，Publish 时覆盖旧值而不是堆积历史消息。 */
     subscriber->queue = xQueueCreate(1U, message_size);
     if (subscriber->queue == NULL)
     {
@@ -258,6 +262,7 @@ uint32_t DynamicPublisher_Publish(DynamicPublisher_t *publisher,
     DynamicSubscriber_t *subscriber = publisher->first_subscriber;
     while (subscriber != NULL)
     {
+        /* 各订阅者拥有独立副本，任一订阅者读取都不会影响其他订阅者。 */
         if (xQueueOverwrite(subscriber->queue, data) == pdPASS)
         {
             publish_count++;
@@ -275,5 +280,6 @@ bool DynamicSubscriber_Read(DynamicSubscriber_t *subscriber, void *data)
         return false;
     }
 
+    /* 等待时间为 0：控制任务不会因等待应用消息而阻塞。 */
     return xQueueReceive(subscriber->queue, data, 0U) == pdPASS;
 }

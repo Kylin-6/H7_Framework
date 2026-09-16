@@ -152,6 +152,10 @@ return 0;
   */
 void MX_FREERTOS_Init(void) {
   /* USER CODE BEGIN Init */
+  /*
+   * 动态消息中心只允许在内核初始化后、调度器启动前注册。任一端点失败都
+   * 立即断言，避免控制任务运行后才表现为“电机无响应”的静默故障。
+   */
   const bool message_center_ok = DynamicMessageCenter_Init();
   configASSERT(message_center_ok);
   const bool topics_ok = Application_RegisterTopics();

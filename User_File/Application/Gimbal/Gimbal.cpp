@@ -288,6 +288,7 @@ void Gimbal_Loop(void)
 
 bool Gimbal_RegisterTopics(void)
 {
+    /* 云台消费控制命令并发布自身反馈；端点只在系统启动阶段注册一次。 */
     Gimbal_Command_Subscriber = DynamicSubscriber_Register(
         APPLICATION_TOPIC_GIMBAL_CMD, sizeof(GimbalCmd));
     Gimbal_Feedback_Publisher = DynamicPublisher_Register(
@@ -299,6 +300,7 @@ bool Gimbal_RegisterTopics(void)
 
 void Gimbal_Update(void)
 {
+    /* 高频姿态走静态 Topic，云台无需感知底层具体使用哪一种 IMU。 */
     INS_State ins_state;
     if (MessageCenter::INS_State_Topic.Read(ins_state))
     {
@@ -306,6 +308,7 @@ void Gimbal_Update(void)
         Gimbal_INS_Valid = true;
     }
 
+    /* 动态通道为非阻塞 Latest-Value：没有新命令时继续沿用上一帧。 */
     GimbalCmd command;
     if (DynamicSubscriber_Read(Gimbal_Command_Subscriber, &command))
     {
@@ -350,6 +353,7 @@ void Gimbal_Update(void)
     }
 
 #if GIMBAL
+    /* 只有初始化完成且两轴就绪时才允许输出，故障状态不得继续下发控制量。 */
     if (Gimbal_Command.mode != GimbalMode::DISABLED &&
         Gimbal.Gimbal_FSM.Get_Now_Status_Serial() == Gimbal_Status_READY)
     {
@@ -357,6 +361,7 @@ void Gimbal_Update(void)
     }
 #endif
 
+    /* 控制保持 1 kHz，反馈降频到 100 Hz，减少应用消息队列操作。 */
     Gimbal_Message_Divider++;
     if (Gimbal_Message_Divider >= 10U)
     {

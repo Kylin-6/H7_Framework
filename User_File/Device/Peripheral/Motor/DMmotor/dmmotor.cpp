@@ -96,6 +96,7 @@ void Class_DMMotor::FeedbackCallback(FDCAN_HandleTypeDef *callback_hfdcan,
                                             -motor->torque_max, motor->torque_max);
     motor->feedback.mos_temperature = data[6];
     motor->feedback.rotor_temperature = data[7];
+    /* 只有完整通过 ID、长度和节点校验的反馈帧才能刷新在线状态。 */
     motor->feedback_daemon.Feed();
 }
 
@@ -143,6 +144,7 @@ bool Class_DMMotor::Init(FDCAN_HandleTypeDef *motor_hfdcan,
     {
         return false;
     }
+    /* 对象为静态生命周期，可安全交由固定容量管理器长期保存地址。 */
     return DaemonManager::Register(feedback_daemon);
 }
 
