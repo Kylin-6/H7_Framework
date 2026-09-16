@@ -7,6 +7,15 @@
 
 extern "C" uint64_t SYS_Timestamp_Get_Microsecond(void);
 
+template<typename T>
+struct TopicSnapshot
+{
+    T data{};
+    uint32_t sequence = 0U;
+    uint64_t timestamp_us = 0U;
+    bool valid = false;
+};
+
 /**
  * @brief Static, non-blocking latest-value topic.
  * @tparam T Small trivially-copyable message type.
@@ -51,6 +60,26 @@ public:
 
         __set_PRIMASK(primask);
         return valid;
+    }
+
+    /**
+     * @brief Read data and metadata from the same published frame.
+     * @return A consistent snapshot captured in one short critical section.
+     */
+    TopicSnapshot<T> ReadWithMeta() const
+    {
+        TopicSnapshot<T> snapshot;
+        const uint32_t primask = __get_PRIMASK();
+        __disable_irq();
+
+        snapshot.data = data_;
+        snapshot.sequence = sequence_;
+        snapshot.timestamp_us = timestamp_;
+        snapshot.valid = valid_;
+        __DMB();
+
+        __set_PRIMASK(primask);
+        return snapshot;
     }
 
     uint32_t Sequence() const

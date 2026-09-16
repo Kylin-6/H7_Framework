@@ -91,10 +91,10 @@ const osThreadAttr_t BMI088Task_attributes = {
   .stack_size = 2048 * 4,
   .priority = (osPriority_t) osPriorityLow,
 };
-/* Definitions for GimbalTask */
-osThreadId_t GimbalTaskHandle;
-const osThreadAttr_t GimbalTask_attributes = {
-  .name = "GimbalTask",
+/* Definitions for ControlTask */
+osThreadId_t ControlTaskHandle;
+const osThreadAttr_t ControlTask_attributes = {
+  .name = "ControlTask",
   .stack_size = 2048 * 4,
   .priority = (osPriority_t) osPriorityLow,
 };
@@ -139,8 +139,10 @@ return 0;
   */
 void MX_FREERTOS_Init(void) {
   /* USER CODE BEGIN Init */
-  configASSERT(DynamicMessageCenter_Init());
-  configASSERT(Application_RegisterTopics());
+  const bool message_center_ok = DynamicMessageCenter_Init();
+  configASSERT(message_center_ok);
+  const bool topics_ok = Application_RegisterTopics();
+  configASSERT(topics_ok);
   BSP_CAN_ConfigInit();
 
   /* USER CODE END Init */
@@ -177,8 +179,8 @@ void MX_FREERTOS_Init(void) {
   /* creation of BMI088Task */
   BMI088TaskHandle = osThreadNew(BMI088_Task, NULL, &BMI088Task_attributes);
 
-  /* creation of GimbalTask */
-  GimbalTaskHandle = osThreadNew(Control_Task, NULL, &GimbalTask_attributes);
+  /* creation of ControlTask */
+  ControlTaskHandle = osThreadNew(Control_Task, NULL, &ControlTask_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   StorageTaskHandle = osThreadNew(Storage_Task, NULL, &StorageTask_attributes);

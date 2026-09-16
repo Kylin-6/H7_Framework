@@ -10,6 +10,8 @@ INS、闭环反馈和其他高频状态；当前 INS -> Gimbal 链路必须使�
 
 优点是内存和执行时间确定、没有堆与队列开销。缺点是 Topic 必须在编译期定义，
 也不提供“是否有未读新消息”的每订阅者状态；需要判断更新时应比较 `Sequence()`。
+需要同时使用数据、序号和时间戳时，应调用 `ReadWithMeta()` 获取同一发布帧的
+`TopicSnapshot<T>`，不要分别调用 `Read()`、`Sequence()` 和 `Timestamp()` 拼接快照。
 
 ## 动态低频 Pub/Sub
 

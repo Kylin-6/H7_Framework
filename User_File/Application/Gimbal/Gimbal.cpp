@@ -120,8 +120,8 @@ PID_InitTypeDef Pitch_Angle_PID_Init = {
  * @brief 初始化云台状态机、两台 QD4310 电机和已启用的 PID。
  *
  * Yaw 电机连接 FDCAN2，Pitch 电机连接 FDCAN1。初始化末尾会每 20 ms 检查一次
- * 两台电机的 enabled 标志，并依次发送使能命令；只有两轴都报告使能后才返回。
- * 这里的 goto RESET 是使能重试循环，不是 MCU 软件复位。
+ * 两台电机的 enabled 标志并发送使能命令。最多等待2秒；超时会保留错误状态并
+ * 返回，避免阻塞同一控制任务中的其他Application初始化。
  */
 void Gimbal_Init(void)
 {
@@ -179,39 +179,47 @@ void Gimbal_Init(void)
     Gimbal.Target_Pitch_Speed = 10.0f;
     Gimbal.Target_Yaw_Speed = 0.0f;
 
-    // 持续尝试使能两台电机，并通过状态机报告当前未就绪的轴。
-RESET:
-    if (!Gimbal.Pitch_Motor.enabled)
+    // 最多等待2秒。电机断线时必须返回，不能阻塞其他Application初始化。
+    constexpr uint32_t GIMBAL_ENABLE_RETRY_COUNT = 100U;
+    constexpr uint32_t GIMBAL_ENABLE_RETRY_DELAY_MS = 20U;
+    for (uint32_t retry = 0U; retry < GIMBAL_ENABLE_RETRY_COUNT; ++retry)
     {
-        Gimbal.Gimbal_FSM.Set_Status(Gimbal_Status_PITCH_ERROR);
-        QD4310_Enable(&Gimbal.Pitch_Motor);
-    }
-    else if (!Gimbal.Yaw_Motor.enabled)
-    {
-        Gimbal.Gimbal_FSM.Set_Status(Gimbal_Status_YAW_ERROR);
-        QD4310_Enable(&Gimbal.Yaw_Motor);
-    }
-    else if (Gimbal.Pitch_Motor.enabled && Gimbal.Yaw_Motor.enabled)
-    {
-        // 电机刚使能时锁住当前姿态，避免在第一帧视觉数据到达前跳向零点。
-        INS_State ins_state;
-        if (MessageCenter::INS_State_Topic.Read(ins_state) &&
-            std::isfinite(ins_state.yaw_rad))
+        if (Gimbal.Pitch_Motor.enabled && Gimbal.Yaw_Motor.enabled)
         {
-            Gimbal.Target_Yaw_Angle = ins_state.yaw_rad;
+            // 电机刚使能时锁住当前姿态，避免在第一帧视觉数据到达前跳向零点。
+            INS_State ins_state;
+            if (MessageCenter::INS_State_Topic.Read(ins_state) &&
+                std::isfinite(ins_state.yaw_rad))
+            {
+                Gimbal.Target_Yaw_Angle = ins_state.yaw_rad;
+            }
+            if (std::isfinite(Gimbal.Pitch_Motor.angle))
+            {
+                Gimbal.Target_Pitch_Angle = Gimbal_Clamp(
+                    Gimbal.Pitch_Motor.angle,
+                    GIMBAL_PITCH_MIN_ANGLE_RAD,
+                    GIMBAL_PITCH_MAX_ANGLE_RAD);
+            }
+            Gimbal.Gimbal_FSM.Set_Status(Gimbal_Status_READY);
+            return;
         }
-        if (std::isfinite(Gimbal.Pitch_Motor.angle))
+
+        if (!Gimbal.Pitch_Motor.enabled)
         {
-            Gimbal.Target_Pitch_Angle = Gimbal_Clamp(
-                Gimbal.Pitch_Motor.angle,
-                GIMBAL_PITCH_MIN_ANGLE_RAD,
-                GIMBAL_PITCH_MAX_ANGLE_RAD);
+            Gimbal.Gimbal_FSM.Set_Status(Gimbal_Status_PITCH_ERROR);
+            QD4310_Enable(&Gimbal.Pitch_Motor);
         }
-        Gimbal.Gimbal_FSM.Set_Status(Gimbal_Status_READY);
-        return;
+        if (!Gimbal.Yaw_Motor.enabled)
+        {
+            Gimbal.Gimbal_FSM.Set_Status(Gimbal_Status_YAW_ERROR);
+            QD4310_Enable(&Gimbal.Yaw_Motor);
+        }
+        osDelay(GIMBAL_ENABLE_RETRY_DELAY_MS);
     }
-    osDelay(20);
-    goto RESET;
+
+    // 超时后保留明确的故障轴状态并返回，让底盘、发射和RobotCmd继续初始化。
+    Gimbal.Gimbal_FSM.Set_Status(!Gimbal.Pitch_Motor.enabled
+        ? Gimbal_Status_PITCH_ERROR : Gimbal_Status_YAW_ERROR);
 }
 
 /**
@@ -284,7 +292,7 @@ bool Gimbal_RegisterTopics(void)
         APPLICATION_TOPIC_GIMBAL_CMD, sizeof(GimbalCmd));
     Gimbal_Feedback_Publisher = DynamicPublisher_Register(
         APPLICATION_TOPIC_GIMBAL_FEEDBACK, sizeof(GimbalFeedback));
-    Gimbal_Message_Divider = 9U;
+    Gimbal_Message_Divider = 0U;
     return Gimbal_Command_Subscriber != nullptr &&
            Gimbal_Feedback_Publisher != nullptr;
 }
@@ -298,52 +306,47 @@ void Gimbal_Update(void)
         Gimbal_INS_Valid = true;
     }
 
-    Gimbal_Message_Divider++;
-    if (Gimbal_Message_Divider >= 10U)
+    GimbalCmd command;
+    if (DynamicSubscriber_Read(Gimbal_Command_Subscriber, &command))
     {
-        Gimbal_Message_Divider = 0U;
-        GimbalCmd command;
-        if (DynamicSubscriber_Read(Gimbal_Command_Subscriber, &command))
-        {
-            Gimbal_Command = command;
+        Gimbal_Command = command;
 #if GIMBAL
-            if (command.mode == GimbalMode::DISABLED)
+        if (command.mode == GimbalMode::DISABLED)
+        {
+            if (Gimbal_Last_Mode != GimbalMode::DISABLED)
             {
-                if (Gimbal_Last_Mode != GimbalMode::DISABLED)
-                {
-                    QD4310_Disable(&Gimbal.Yaw_Motor);
-                    QD4310_Disable(&Gimbal.Pitch_Motor);
-                }
+                QD4310_Disable(&Gimbal.Yaw_Motor);
+                QD4310_Disable(&Gimbal.Pitch_Motor);
             }
-            else
-            {
-                if (Gimbal_Last_Mode == GimbalMode::DISABLED)
-                {
-                    QD4310_Enable(&Gimbal.Yaw_Motor);
-                    QD4310_Enable(&Gimbal.Pitch_Motor);
-                }
-                if (command.mode == GimbalMode::IMU)
-                {
-                    Gimbal_SetTargetAngle(command.yaw_angle_rad,
-                                          command.pitch_angle_rad);
-                    Gimbal_SetTargetSpeed(command.yaw_speed_rad_s,
-                                          command.pitch_speed_rad_s);
-                }
-                else if (Gimbal_Last_Mode != GimbalMode::LOCK)
-                {
-                    if (Gimbal_INS_Valid)
-                    {
-                        Gimbal.Target_Yaw_Angle = Gimbal_INS_State.yaw_rad;
-                    }
-                    Gimbal.Target_Pitch_Angle = Gimbal_Clamp(
-                        Gimbal.Pitch_Motor.angle,
-                        GIMBAL_PITCH_MIN_ANGLE_RAD,
-                        GIMBAL_PITCH_MAX_ANGLE_RAD);
-                }
-            }
-            Gimbal_Last_Mode = command.mode;
-#endif
         }
+        else
+        {
+            if (Gimbal_Last_Mode == GimbalMode::DISABLED)
+            {
+                QD4310_Enable(&Gimbal.Yaw_Motor);
+                QD4310_Enable(&Gimbal.Pitch_Motor);
+            }
+            if (command.mode == GimbalMode::IMU)
+            {
+                Gimbal_SetTargetAngle(command.yaw_angle_rad,
+                                      command.pitch_angle_rad);
+                Gimbal_SetTargetSpeed(command.yaw_speed_rad_s,
+                                      command.pitch_speed_rad_s);
+            }
+            else if (Gimbal_Last_Mode != GimbalMode::LOCK)
+            {
+                if (Gimbal_INS_Valid)
+                {
+                    Gimbal.Target_Yaw_Angle = Gimbal_INS_State.yaw_rad;
+                }
+                Gimbal.Target_Pitch_Angle = Gimbal_Clamp(
+                    Gimbal.Pitch_Motor.angle,
+                    GIMBAL_PITCH_MIN_ANGLE_RAD,
+                    GIMBAL_PITCH_MAX_ANGLE_RAD);
+            }
+        }
+        Gimbal_Last_Mode = command.mode;
+#endif
     }
 
 #if GIMBAL
@@ -353,8 +356,10 @@ void Gimbal_Update(void)
     }
 #endif
 
-    if (Gimbal_Message_Divider == 0U)
+    Gimbal_Message_Divider++;
+    if (Gimbal_Message_Divider >= 10U)
     {
+        Gimbal_Message_Divider = 0U;
         GimbalFeedback feedback{};
         feedback.yaw_rad = Gimbal_INS_State.yaw_rad;
         feedback.pitch_rad = Gimbal_INS_State.pitch_rad;

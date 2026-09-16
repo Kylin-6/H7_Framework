@@ -35,12 +35,17 @@ struct DynamicPublisher
 static DynamicPublisher_t *Dynamic_Topic_List = NULL;
 static bool Dynamic_Message_Center_Initialized = false;
 
+static bool DynamicMessageCenter_InitializationContextIsValid(void)
+{
+    return (__get_IPSR() == 0U) &&
+           (osKernelGetState() == osKernelReady) &&
+           (xTaskGetSchedulerState() == taskSCHEDULER_NOT_STARTED);
+}
+
 static bool DynamicMessageCenter_RegistrationIsOpen(void)
 {
     return Dynamic_Message_Center_Initialized &&
-           (__get_IPSR() == 0U) &&
-           (osKernelGetState() == osKernelReady) &&
-           (xTaskGetSchedulerState() == taskSCHEDULER_NOT_STARTED);
+           DynamicMessageCenter_InitializationContextIsValid();
 }
 
 static bool DynamicMessageCenter_ValidateTopicName(const char *topic_name,
@@ -129,9 +134,9 @@ static void DynamicMessageCenter_InsertTopic(DynamicPublisher_t *topic)
 
 bool DynamicMessageCenter_Init(void)
 {
-    if (__get_IPSR() != 0U ||
-        osKernelGetState() != osKernelReady ||
-        xTaskGetSchedulerState() != taskSCHEDULER_NOT_STARTED)
+    // Idempotence is valid only inside the original pre-scheduler window.
+    // A repeated call from a task or ISR is misuse and must remain observable.
+    if (!DynamicMessageCenter_InitializationContextIsValid())
     {
         return false;
     }

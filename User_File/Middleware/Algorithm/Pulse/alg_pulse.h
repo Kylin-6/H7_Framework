@@ -5,6 +5,7 @@
 
 #ifndef ALG_PULSE_H
 #define ALG_PULSE_H
+#include <stddef.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -12,18 +13,16 @@ extern "C"
 {
 #endif
 
-    /** @brief pulse() 内部状态, 记录当前 timesmode 计数
-     *  @note  该结构体在 alg_pulse.cpp 中定义为全局变量 tick, 用于 pulse() 内部状态管理
-     */
+    typedef void (*pulse_cb_t)(void);
 
     typedef struct
     {
-        uint32_t timesmode;
-        uint8_t timesnum;
-        void (*task)(void);
-    } timesmode_t;
+        uint16_t period_ms;
+        pulse_cb_t callback;
+    } PulseEntry_t;
 
-    void pulse(uint8_t timesnum, const int& Number, ...);
+    void Pulse_Dispatch(const PulseEntry_t *entries, size_t entry_count,
+                        uint32_t tick_ms);
 
 #ifdef __cplusplus
 }

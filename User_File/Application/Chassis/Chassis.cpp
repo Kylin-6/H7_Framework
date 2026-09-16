@@ -246,13 +246,10 @@ bool Chassis_Init(void)
 
 void Chassis_Update(void)
 {
-    if (Chassis_Feedback_Divider == 0U)
+    ChassisCmd command;
+    if (DynamicSubscriber_Read(Chassis_Command_Subscriber, &command))
     {
-        ChassisCmd command;
-        if (DynamicSubscriber_Read(Chassis_Command_Subscriber, &command))
-        {
-            Chassis_Command = command;
-        }
+        Chassis_Command = command;
     }
 
 #if CHASSIS

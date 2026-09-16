@@ -212,13 +212,10 @@ bool Shoot_Init(void)
 
 void Shoot_Update(void)
 {
-    if (Shoot_Feedback_Divider == 0U)
+    ShootCmd command;
+    if (DynamicSubscriber_Read(Shoot_Command_Subscriber, &command))
     {
-        ShootCmd command;
-        if (DynamicSubscriber_Read(Shoot_Command_Subscriber, &command))
-        {
-            Shoot_Command = command;
-        }
+        Shoot_Command = command;
     }
 
 #if SHOOT

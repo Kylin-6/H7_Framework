@@ -15,7 +15,6 @@
  */
 
 #include "callback.h"
-#include "SEGGER_RTT.h"
 #include "bsp_bmi088.h"
 #include "bsp_w25q64jv.h"
 #include "cmsis_os2.h"
@@ -23,7 +22,7 @@
 #include <cstdint>
 
 extern "C" {
-    extern osThreadId_t GimbalTaskHandle;
+    extern osThreadId_t ControlTaskHandle;
 }
 
 /**
@@ -54,8 +53,8 @@ void Task1s_Callback() {}
  */
 void Task1ms_Callback()
 {
-    // Balance 控制链直接使用 TIM4 的 1 ms 基准，即 1 kHz。
-    osThreadFlagsSet(GimbalTaskHandle, 0x0001);
+    // Application控制链直接使用TIM4的1 ms基准，即1 kHz。
+    osThreadFlagsSet(ControlTaskHandle, 0x0001);
 }
 
 extern "C" void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
@@ -101,18 +100,15 @@ extern "C" void SPI2_Callback(uint8_t *Tx_Buffer, uint8_t *Rx_Buffer, uint16_t T
 
 void OSPI2_Polling_Callback()
 {
-    SEGGER_RTT_printf(0, "Polling CB\n");
     BSP_W25Q64JV.OSPI_StatusMatchCallback();
 }
 
 void OSPI2_Rx_Callback(uint8_t *Buffer)
 {
-    SEGGER_RTT_printf(0, "Rx CB\n");
     BSP_W25Q64JV.OSPI_RxCallback();
 }
 
 void OSPI2_Tx_Callback(uint8_t *Buffer)
 {
-    SEGGER_RTT_printf(0, "Tx CB\n");
     BSP_W25Q64JV.OSPI_TxCallback();
 }
