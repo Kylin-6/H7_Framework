@@ -78,7 +78,7 @@ protected:
     float Input_Signal[Filter_Frequency_Order + 1]{};
 
     // 新数据指示向量
-    uint8_t Signal_Flag = 0;
+    uint32_t Signal_Flag = 0;
 
     // 读变量
 
@@ -117,8 +117,12 @@ void Class_Filter_Frequency<Filter_Frequency_Order>::Init(const float &__Value_C
     Frequency_High = __Frequency_High;
     Sampling_Frequency = __Sampling_Frequency;
 
-    // 将所有计算所得值进行softmax操作成和为1的值
+    Signal_Flag = 0;
+    Out = 0.0f;
+
+    // 参考通带处的增益归一化
     float system_function_sum = 0.0f;
+    float omega_reference = 0.0f;
     // 特征低角速度
     float omega_low;
     // 特征高角速度
@@ -142,6 +146,9 @@ void Class_Filter_Frequency<Filter_Frequency_Order>::Init(const float &__Value_C
     }
     case (Filter_Frequency_Type_HIGHPASS):
     {
+        // 奇数阶对称FIR在Nyquist处为零, 改用高通通带中点
+        omega_reference = Filter_Frequency_Order % 2 == 0 ? PI : (omega_high + PI) / 2.0f;
+
         for (int i = 0; i < Filter_Frequency_Order + 1; i++)
         {
             System_Function[i] = Basic_Math_Sinc(((float) (i) - Filter_Frequency_Order / 2.0f) * PI) - omega_high / PI * Basic_Math_Sinc(((float) (i) - Filter_Frequency_Order / 2.0f) * omega_high);
@@ -151,6 +158,8 @@ void Class_Filter_Frequency<Filter_Frequency_Order>::Init(const float &__Value_C
     }
     case (Filter_Frequency_Type_BANDPASS):
     {
+        omega_reference = (omega_low + omega_high) / 2.0f;
+
         for (int i = 0; i < Filter_Frequency_Order + 1; i++)
         {
             System_Function[i] = omega_high / PI * Basic_Math_Sinc(((float) (i) - Filter_Frequency_Order / 2.0f) * omega_high) - omega_low / PI * Basic_Math_Sinc(((float) (i) - Filter_Frequency_Order / 2.0f) * omega_low);
@@ -171,12 +180,16 @@ void Class_Filter_Frequency<Filter_Frequency_Order>::Init(const float &__Value_C
 
     for (int i = 0; i < Filter_Frequency_Order + 1; i++)
     {
-        system_function_sum += System_Function[i];
+        system_function_sum += System_Function[i] * arm_cos_f32(((float) (i) - Filter_Frequency_Order / 2.0f) * omega_reference);
+        Input_Signal[i] = 0.0f;
     }
 
-    for (int i = 0; i < Filter_Frequency_Order + 1; i++)
+    if (fabsf(system_function_sum) > FLT_EPSILON)
     {
-        System_Function[i] /= system_function_sum;
+        for (int i = 0; i < Filter_Frequency_Order + 1; i++)
+        {
+            System_Function[i] /= system_function_sum;
+        }
     }
 }
 
@@ -216,7 +229,7 @@ inline float Class_Filter_Frequency<Filter_Frequency_Order>::Get_Out() const
 template<uint32_t Filter_Frequency_Order>
 inline void Class_Filter_Frequency<Filter_Frequency_Order>::Set_Now(const float &__Now)
 {
-    float now_value;
+    float now_value = __Now;
 
     // 输入限幅, 全0为不限制
     if (Value_Constrain_Low != 0.0f || Value_Constrain_High != 0.0f)

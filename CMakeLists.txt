@@ -100,6 +100,7 @@ endif()
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Middleware/Algorithm/Basic/alg_basic.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/User_File/Middleware/Algorithm/DOB/alg_dob.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Middleware/Algorithm/Filter/EKF/alg_filter_ekf.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Middleware/Algorithm/FSM/alg_fsm.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Middleware/Algorithm/Filter/Frequency/alg_filter_frequency.cpp
@@ -169,6 +170,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined include paths
         User_File/Middleware/Algorithm/Basic
         User_File/Middleware/Algorithm/Complex
+        User_File/Middleware/Algorithm/DOB
         User_File/Middleware/Algorithm/Filter/EKF
         User_File/Middleware/Algorithm/Filter/Frequency
         User_File/Middleware/Algorithm/Filter/IIR
