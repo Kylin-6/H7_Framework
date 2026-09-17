@@ -32,9 +32,11 @@ struct Struct_DJIMotor_Registration
 
 /* Private variables ---------------------------------------------------------*/
 
-static constexpr float DJI_MOTOR_ENCODER_TO_DEGREE = 360.0f / 8192.0f; ///< 编码器一圈 8192 个计数。
-static constexpr float DJI_MOTOR_RPM_TO_DEGREE_PER_SECOND = 6.0f;     ///< rpm 换算为 deg/s：360 / 60。
-static constexpr float DJI_MOTOR_ROTOR_SPEED_LPF_ALPHA = 0.85f;       ///< 一阶低通中上一帧速度的权重。
+static constexpr float DJI_MOTOR_PI = 3.14159265358979323846f;
+static constexpr float DJI_MOTOR_ENCODER_TO_RADIAN = 2.0f * DJI_MOTOR_PI / 8192.0f;
+static constexpr float DJI_MOTOR_RPM_TO_RADIAN_PER_SECOND = 2.0f * DJI_MOTOR_PI / 60.0f;
+static constexpr float DJI_MOTOR_RADIAN_TO_DEGREE = 180.0f / DJI_MOTOR_PI;
+static constexpr float DJI_MOTOR_ROTOR_SPEED_LPF_ALPHA = 0.85f;
 static constexpr uint8_t DJI_MOTOR_MAX_GROUPS = 15;
 static constexpr uint8_t DJI_MOTOR_MAX_MOTORS = 24;
 
@@ -336,6 +338,11 @@ void Class_DJIMotor::SetRef(float ref)
     reference = ref;
 }
 
+void Class_DJIMotor::SetRef_Degree(float ref)
+{
+    reference = ref / DJI_MOTOR_RADIAN_TO_DEGREE;
+}
+
 void Class_DJIMotor::Enable()
 {
     enabled = true;
@@ -402,16 +409,22 @@ void Class_DJIMotor::CAN_RxCpltCallback(FDCAN_HandleTypeDef *hfdcan,
     float direction = motor->reverse ? -1.0f : 1.0f;
     int16_t rpm = (int16_t)(((uint16_t)data[2] << 8) | data[3]);
     motor->feedback.encoder = new_encoder;
-    motor->feedback.rotor_angle = direction * new_encoder * DJI_MOTOR_ENCODER_TO_DEGREE;
+    motor->feedback.rotor_angle = direction * new_encoder * DJI_MOTOR_ENCODER_TO_RADIAN;
     motor->feedback.rotor_total_angle = direction *
-        (motor->total_round * 360.0f + new_encoder * DJI_MOTOR_ENCODER_TO_DEGREE);
-    float measured_speed = direction * rpm * DJI_MOTOR_RPM_TO_DEGREE_PER_SECOND;
+        (motor->total_round * 2.0f * DJI_MOTOR_PI + new_encoder * DJI_MOTOR_ENCODER_TO_RADIAN);
+    float measured_speed = direction * rpm * DJI_MOTOR_RPM_TO_RADIAN_PER_SECOND;
     motor->feedback.rotor_speed = DJI_MOTOR_ROTOR_SPEED_LPF_ALPHA * motor->feedback.rotor_speed +
         (1.0f - DJI_MOTOR_ROTOR_SPEED_LPF_ALPHA) * measured_speed;
     /** 角度和速度先统一逻辑方向，再通过减速比折算到输出轴；原始电流保留报文符号。 */
     motor->feedback.output_angle = motor->feedback.rotor_angle / motor->gear_ratio;
     motor->feedback.output_total_angle = motor->feedback.rotor_total_angle / motor->gear_ratio;
     motor->feedback.output_speed = motor->feedback.rotor_speed / motor->gear_ratio;
+    motor->feedback.rotor_angle_degree = motor->feedback.rotor_angle * DJI_MOTOR_RADIAN_TO_DEGREE;
+    motor->feedback.rotor_total_angle_degree = motor->feedback.rotor_total_angle * DJI_MOTOR_RADIAN_TO_DEGREE;
+    motor->feedback.rotor_speed_degree_per_second = motor->feedback.rotor_speed * DJI_MOTOR_RADIAN_TO_DEGREE;
+    motor->feedback.output_angle_degree = motor->feedback.output_angle * DJI_MOTOR_RADIAN_TO_DEGREE;
+    motor->feedback.output_total_angle_degree = motor->feedback.output_total_angle * DJI_MOTOR_RADIAN_TO_DEGREE;
+    motor->feedback.output_speed_degree_per_second = motor->feedback.output_speed * DJI_MOTOR_RADIAN_TO_DEGREE;
     motor->feedback.current_raw = (int16_t)(((uint16_t)data[4] << 8) | data[5]);
     if (motor->has_temperature)
     {
@@ -680,6 +693,19 @@ void Class_DJIMotor_Group::SetRef(float ref1, float ref2, float ref3, float ref4
     }
 }
 
+void Class_DJIMotor_Group::SetRef_Degree(float ref1, float ref2, float ref3, float ref4)
+{
+    if (!initialized)
+    {
+        return;
+    }
+    const float refs[4] = {ref1, ref2, ref3, ref4};
+    for (uint8_t i = 0; i < motor_count; ++i)
+    {
+        motors[i]->SetRef_Degree(refs[i]);
+    }
+}
+
 /** @brief 批量设置目标并计算各电机指令，需另行调用 Send 发布组报文。 */
 void Class_DJIMotor_Group::Update(float ref1, float ref2, float ref3, float ref4)
 {
@@ -710,6 +736,25 @@ bool Class_DJIMotor_Group::Control(float ref1, float ref2, float ref3, float ref
         return false;
     }
     SetRef(ref1, ref2, ref3, ref4);
+    Control();
+    bool ready = true;
+    for (uint8_t i = 0; i < motor_count; ++i)
+    {
+        if (!motors[i]->online || !motors[i]->enabled)
+        {
+            ready = false;
+        }
+    }
+    return Send() && ready;
+}
+
+bool Class_DJIMotor_Group::Control_Degree(float ref1, float ref2, float ref3, float ref4)
+{
+    if (!initialized)
+    {
+        return false;
+    }
+    SetRef_Degree(ref1, ref2, ref3, ref4);
     Control();
     bool ready = true;
     for (uint8_t i = 0; i < motor_count; ++i)
