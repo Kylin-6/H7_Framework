@@ -36,7 +36,7 @@ static constexpr float DJI_MOTOR_PI = 3.14159265358979323846f;
 static constexpr float DJI_MOTOR_ENCODER_TO_RADIAN = 2.0f * DJI_MOTOR_PI / 8192.0f;
 static constexpr float DJI_MOTOR_RPM_TO_RADIAN_PER_SECOND = 2.0f * DJI_MOTOR_PI / 60.0f;
 static constexpr float DJI_MOTOR_RADIAN_TO_DEGREE = 180.0f / DJI_MOTOR_PI;
-static constexpr float DJI_MOTOR_ROTOR_SPEED_LPF_ALPHA = 0.85f;
+static constexpr float DJI_MOTOR_ROTOR_SPEED_LPF_ALPHA = 0.85f; // 每帧反馈低通的旧值权重
 static constexpr uint8_t DJI_MOTOR_MAX_GROUPS = 15;
 static constexpr uint8_t DJI_MOTOR_MAX_MOTORS = 24;
 
@@ -181,6 +181,7 @@ static void DJI_Motor_Exit_Critical(uint32_t interrupt_state)
     __set_PRIMASK(interrupt_state);
 }
 
+/** @brief 将配置中的 PID 参数统一传给现有算法接口。 */
 void Class_DJIMotor::PID_Init(Class_PID *pid, const PID_InitTypeDef *config)
 {
     pid->Init(config->K_P, config->K_I, config->K_D, config->K_F,
@@ -329,7 +330,7 @@ void Class_DJIMotor::Update_PID_Debug()
 
 /**
  * @brief 保存控制目标，实际计算由 Control 执行。
- * @param ref 使用电机反馈时，角度目标为输出侧累计角度 deg，速度目标为输出侧 deg/s；
+ * @param ref 使用电机反馈时，角度目标为输出侧累计角度 rad，速度目标为输出侧 rad/s；
  *            电流环目标为协议电流原始值，无闭环时为协议指令值。
  * @note 使用外部反馈时，目标、反馈、前馈及 PID 参数需采用一致的单位和正方向。
  */
@@ -338,16 +339,25 @@ void Class_DJIMotor::SetRef(float ref)
     reference = ref;
 }
 
+/**
+ * @brief 保存角度制目标：角度为 deg，速度为 deg/s，内部统一转换为弧度制。
+ * @note 无条件执行单位转换；开环协议指令和电流目标应使用 SetRef。
+ */
 void Class_DJIMotor::SetRef_Degree(float ref)
 {
     reference = ref / DJI_MOTOR_RADIAN_TO_DEGREE;
 }
 
+/** @brief 恢复本地使能标志，保留目标值；后续 Control 仍需有效反馈。 */
 void Class_DJIMotor::Enable()
 {
     enabled = true;
 }
 
+/**
+ * @brief 切换到开环入口或已配置的单个控制环，保留目标值和 PID 状态。
+ * @note 不转换已有目标的单位；切换后应按新入口重新设置目标。
+ */
 void Class_DJIMotor::Set_Outer_Loop(Enum_DJIMotor_Loop loop)
 {
     if (loop == DJI_MOTOR_OPEN_LOOP || (close_loop & loop) != 0)
@@ -680,6 +690,7 @@ bool Class_DJIMotor_Group::Init(Class_DJIMotor *motor1,
     return true;
 }
 
+/** @brief 按 Init 的成员顺序保存目标，单位与单电机 SetRef 相同，不计算或发送。 */
 void Class_DJIMotor_Group::SetRef(float ref1, float ref2, float ref3, float ref4)
 {
     if (!initialized)
@@ -693,6 +704,7 @@ void Class_DJIMotor_Group::SetRef(float ref1, float ref2, float ref3, float ref4
     }
 }
 
+/** @brief 按成员顺序保存 deg 或 deg/s 目标，仅用于各成员的角度或速度入口。 */
 void Class_DJIMotor_Group::SetRef_Degree(float ref1, float ref2, float ref3, float ref4)
 {
     if (!initialized)
@@ -713,6 +725,7 @@ void Class_DJIMotor_Group::Update(float ref1, float ref2, float ref3, float ref4
     Control();
 }
 
+/** @brief 使用已保存的目标计算组内各电机指令，需另行调用 Send 发布报文。 */
 void Class_DJIMotor_Group::Control()
 {
     if (!initialized)
@@ -748,6 +761,11 @@ bool Class_DJIMotor_Group::Control(float ref1, float ref2, float ref3, float ref
     return Send() && ready;
 }
 
+/**
+ * @brief 设置角度制目标、执行控制并发布组报文。
+ * @return true 发布成功且各成员在线、使能；false 不表示报文一定未发布。
+ * @note 目标转换规则与 SetRef_Degree 相同；返回值不代表电机已执行指令。
+ */
 bool Class_DJIMotor_Group::Control_Degree(float ref1, float ref2, float ref3, float ref4)
 {
     if (!initialized)
@@ -788,6 +806,7 @@ bool Class_DJIMotor_Group::Send()
     return CAN_Tx_Perform(&sender->message);
 }
 
+/** @brief 恢复组内各电机的本地使能标志，后续控制沿用已保存的目标。 */
 void Class_DJIMotor_Group::Enable()
 {
     if (!initialized)

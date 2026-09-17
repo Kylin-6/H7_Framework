@@ -98,6 +98,7 @@ protected:
 
 /**
  * @brief 初始化滤波器
+ * @details 重设系数并清空输入历史、环形索引和输出。
  *
  * @tparam Filter_Frequency_Order 滤波器阶数
  * @param __Value_Constrain_Low 滤波器最小值, 全0不限制
@@ -120,7 +121,7 @@ void Class_Filter_Frequency<Filter_Frequency_Order>::Init(const float &__Value_C
     Signal_Flag = 0;
     Out = 0.0f;
 
-    // 参考通带处的增益归一化
+    // 低通和带阻以直流为参考, 高通和带通在各自通带归一化
     float system_function_sum = 0.0f;
     float omega_reference = 0.0f;
     // 特征低角速度
@@ -178,12 +179,14 @@ void Class_Filter_Frequency<Filter_Frequency_Order>::Init(const float &__Value_C
     }
     }
 
+    // 对称系数去除线性相位后, 余弦加权和即参考频率的实增益
     for (int i = 0; i < Filter_Frequency_Order + 1; i++)
     {
         system_function_sum += System_Function[i] * arm_cos_f32(((float) (i) - Filter_Frequency_Order / 2.0f) * omega_reference);
         Input_Signal[i] = 0.0f;
     }
 
+    // 参考增益接近零时保留原系数, 避免除零或异常放大
     if (fabsf(system_function_sum) > FLT_EPSILON)
     {
         for (int i = 0; i < Filter_Frequency_Order + 1; i++)
