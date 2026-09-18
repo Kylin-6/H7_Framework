@@ -103,6 +103,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Middleware/Algorithm/DOB/alg_dob.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Middleware/Algorithm/Filter/EKF/alg_filter_ekf.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Middleware/Algorithm/FSM/alg_fsm.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/User_File/Middleware/Algorithm/Fuzzy/alg_fuzzy.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Middleware/Algorithm/Filter/Frequency/alg_filter_frequency.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Middleware/Algorithm/Filter/IIR/alg_filter_iir.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Middleware/Algorithm/Filter/Kalman/alg_filter_kalman.cpp
@@ -172,6 +173,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
         User_File/Middleware/Algorithm/Filter/OneEuro
         User_File/Middleware/Algorithm/Filter/VQF
         User_File/Middleware/Algorithm/FSM
+        User_File/Middleware/Algorithm/Fuzzy
         User_File/Middleware/Algorithm/Matrix
         User_File/Middleware/Algorithm/PID
         User_File/Middleware/Algorithm/Quaternion
