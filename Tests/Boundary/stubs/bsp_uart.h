@@ -1,6 +1,7 @@
 #pragma once
 #include <stdint.h>
 #define UART_BUFFER_SIZE 512
+enum { HAL_OK = 0, HAL_ERROR = 1, HAL_BUSY = 2, HAL_TIMEOUT = 3 };
 enum { USART1 = 1, USART2, USART3, UART5, USART6, UART7, USART10 };
 struct UART_HandleTypeDef { int Instance; };
 struct Struct_UART_Manage_Object

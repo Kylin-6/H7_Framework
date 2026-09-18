@@ -2,10 +2,10 @@
  * @file    bsp_uart.cpp
  * @brief   板级支持包：UART 通信初始化与配置流程（基于 STM32H7 + DMA 双缓冲）
  * @details 仿照 SCUT-Robotlab / 达妙 drv_uart 范式改写，适配 H7_BSP 工程。
- *          - 管理对象（含 DMA 收发缓冲区）放入 .dma_buffer 段（RAM_D1，DMA1/DMA2 可访问）
+ *          - 管理对象（含 DMA 收发缓冲区）放入 .dma_buffer 段（RAM_DMA，不可缓存）
  *          - HAL 回调以 extern "C" 定义以正确覆写 HAL 弱符号
- * @note    仅接管具备 RX DMA 的 7 路：USART1/2/3、UART5、USART6、UART7、USART10。
- *          UART4、UART8、UART9 无 DMA（H7 DMA stream 已占满），不在此驱动接管。
+ * @note    接管 USART1/2/3、UART5、USART6、UART7、USART10，DMA 方向以 CubeMX 配置为准。
+ *          UART4、UART8、UART9 暂未纳入管理对象。
  *          UART5 仅有 RX DMA、无 TX DMA，发送时自动回退为阻塞发送。
  *
  * @author  zzm（仿 yssickjgd / USTC-RoboWalker drv_uart）
@@ -26,7 +26,7 @@
 
 /* Private variables ---------------------------------------------------------*/
 
-// 管理对象含 DMA 缓冲区，必须放入 .dma_buffer 段（链接到 RAM_D1，DMA1/DMA2 可访问）
+// RAM_DMA 由 MPU 配置为不可缓存，DMA 缓冲区不需要 Cache clean/invalidate。
 __attribute__((section(".dma_buffer"), aligned(32))) Struct_UART_Manage_Object USART1_Manage_Object;
 __attribute__((section(".dma_buffer"), aligned(32))) Struct_UART_Manage_Object USART2_Manage_Object;
 __attribute__((section(".dma_buffer"), aligned(32))) Struct_UART_Manage_Object USART3_Manage_Object;
@@ -80,7 +80,7 @@ static Struct_UART_Manage_Object *UART_Get_Manage_Object(UART_HandleTypeDef *hua
         return (&USART10_Manage_Object);
     }
 
-    // UART4 / UART8 / UART9 无 DMA，未接管
+    // UART4 / UART8 / UART9 未接管
     return (nullptr);
 }
 
@@ -242,12 +242,40 @@ void UART_TIM_1ms_Recover_PeriodElapsedCallback(void)
  */
 uint8_t UART_Transmit_Data(UART_HandleTypeDef *huart, uint8_t *Data, uint16_t Length)
 {
-    if (huart->hdmatx != nullptr)
+    if (huart == nullptr || Data == nullptr || Length == 0)
     {
-        return (HAL_UART_Transmit_DMA(huart, Data, Length));
+        return HAL_ERROR;
     }
 
-    return (HAL_UART_Transmit(huart, Data, Length, UART_TX_BLOCKING_TIMEOUT));
+    if (huart->hdmatx == nullptr)
+    {
+        return HAL_UART_Transmit(huart, Data, Length, UART_TX_BLOCKING_TIMEOUT);
+    }
+
+    Struct_UART_Manage_Object *manage = UART_Get_Manage_Object(huart);
+    if (manage == nullptr || manage->UART_Handler != huart || Length > UART_BUFFER_SIZE)
+    {
+        return HAL_ERROR;
+    }
+
+    uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    if (manage->Tx_Submitting || huart->gState != HAL_UART_STATE_READY ||
+        huart->hdmatx->State != HAL_DMA_STATE_READY)
+    {
+        __set_PRIMASK(primask);
+        return HAL_BUSY;
+    }
+    manage->Tx_Submitting = true;
+    __set_PRIMASK(primask);
+
+    // 提交锁保护复制及启动；UART 和 DMA 均空闲后才允许复用缓冲区。
+    memcpy(manage->Tx_Buffer, Data, Length);
+    __DMB();
+    HAL_StatusTypeDef status = HAL_UART_Transmit_DMA(huart, manage->Tx_Buffer, Length);
+    __DMB();
+    manage->Tx_Submitting = false;
+    return status;
 }
 
 /**

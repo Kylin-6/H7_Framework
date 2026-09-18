@@ -34,3 +34,22 @@ enable_testing()
 foreach(group pid kalman commands parser)
     add_test(NAME boundary_${group} COMMAND boundary_tests ${group})
 endforeach()
+
+add_executable(uart_tx_tests
+    uart_tx_tests.cpp
+    ${BSP_ROOT}/User_File/Middleware/BSP/UART/bsp_uart.cpp
+    ${ALGORITHM}/Basic/alg_basic.cpp
+    ${PERIPHERAL}/EricTool/dvc_erictool.cpp
+)
+target_compile_features(uart_tx_tests PRIVATE cxx_std_17)
+target_include_directories(uart_tx_tests PRIVATE
+    uart_stubs
+    ${BSP_ROOT}/User_File/Middleware/BSP/UART
+    stubs
+    ${ALGORITHM}/Basic
+    ${PERIPHERAL}/EricTool
+)
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(uart_tx_tests PRIVATE -Wall -Wextra -Werror=return-type)
+endif()
+add_test(NAME boundary_uart_tx COMMAND uart_tx_tests)

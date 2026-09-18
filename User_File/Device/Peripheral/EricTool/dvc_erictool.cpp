@@ -178,13 +178,13 @@ void Class_EricTool_UART::UART_RxCpltCallback(const uint8_t *Rx_Data, const uint
 
 /**
  * @brief TIM 1ms 定时中断：打包并发送 justfloat 帧
- *
+ * @return HAL 发送状态；忙或失败时不排队，下次调用发送最新数据。
  */
-void Class_EricTool_UART::TIM_1ms_Write_PeriodElapsedCallback()
+uint8_t Class_EricTool_UART::TIM_1ms_Write_PeriodElapsedCallback()
 {
-  if (UART_Manage_Object == nullptr) return;
+  if (UART_Manage_Object == nullptr) return HAL_ERROR;
   Output();
-  UART_Transmit_Data(UART_Manage_Object->UART_Handler, Tx_Buffer, Data_Number * sizeof(float) + sizeof(uint32_t));
+  return UART_Transmit_Data(UART_Manage_Object->UART_Handler, Tx_Buffer, Data_Number * sizeof(float) + sizeof(uint32_t));
 }
 
 /**

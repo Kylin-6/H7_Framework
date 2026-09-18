@@ -45,7 +45,7 @@ public:
 
     void UART_RxCpltCallback(const uint8_t *Rx_Data, const uint16_t &Length);
 
-    void TIM_1ms_Write_PeriodElapsedCallback();
+    uint8_t TIM_1ms_Write_PeriodElapsedCallback();
 
 protected:
     // 初始化相关常量
