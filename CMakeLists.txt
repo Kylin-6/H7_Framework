@@ -115,6 +115,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Middleware/Algorithm/Quaternion/alg_quaternion.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Middleware/Algorithm/Queue/alg_queue.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Middleware/Algorithm/Slope/alg_slope.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/User_File/Middleware/Algorithm/Trajectory/alg_trajectory.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Middleware/Algorithm/SMC/alg_smc.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Middleware/BSP/ADC/bsp_adc.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Middleware/BSP/SPI/bsp_spi.cpp
@@ -179,6 +180,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
         User_File/Middleware/Algorithm/Quaternion
         User_File/Middleware/Algorithm/Queue
         User_File/Middleware/Algorithm/Slope
+        User_File/Middleware/Algorithm/Trajectory
         User_File/Middleware/Algorithm/SMC
         User_File/Middleware/BSP/ADC
         User_File/Middleware/BSP/SPI
