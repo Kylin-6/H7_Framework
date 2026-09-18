@@ -22,7 +22,7 @@
 
 
 /**
- * @brief 微分先行
+ * @brief 微分先行：对测量值微分以避开目标阶跃，不包含微分低通。
  *
  */
 enum Enum_PID_D_First
@@ -53,7 +53,9 @@ typedef struct
 
 /**
  * @brief Reusable, PID算法
- *
+ * @note 先 Init 后计算；参数须为有限值，D_T > 0 且与实际计算周期一致。
+ *       Dead_Zone、Out_Max 为非负值；Init 和参数 setter 不复位动态状态。
+ *       死区只归零有效误差，不保证总输出为零；已有积分、微分和前馈仍可输出。
  */
 class Class_PID
 {
@@ -121,7 +123,7 @@ protected:
 
     // PID计时器周期, s
     float D_T;
-    // 死区, Error在其绝对值内不输出
+    // 非负死区阈值：含边界的有效误差归零，区外扣除死区宽度；不修改 Target。
     float Dead_Zone;
     // 微分先行
     Enum_PID_D_First D_First;
@@ -152,7 +154,7 @@ protected:
     float K_I = 0.0f;
     // PID的D
     float K_D = 0.0f;
-    // 前馈
+    // 每周期目标增量前馈系数：K_F * (Target - Pre_Target)，不除以 D_T。
     float K_F = 0.0f;
 
     // 积分输出幅值上限，每次累加后限幅，0为不限制
@@ -160,11 +162,11 @@ protected:
     // 输出限幅, 0为不限制
     float Out_Max = 0;
 
-    // 变速积分定速内段阈值, 0为不限制
+    // 变速积分内段阈值 A；A、B 均为零时关闭，启用线性段时要求 0 <= A < B。
     float I_Variable_Speed_A = 0.0f;
-    // 变速积分变速区间, 0为不限制
+    // 变速积分外段阈值 B（不是区间宽度）；阈值按死区外的原始误差幅值判断。
     float I_Variable_Speed_B = 0.0f;
-    // 积分分离阈值，需为正数, 0为不限制
+    // 积分分离阈值，正数启用、零关闭；死区外原始误差幅值达到阈值时清空积分。
     float I_Separate_Threshold = 0.0f;
 
     // 目标值
@@ -235,9 +237,9 @@ inline void Class_PID::Set_K_D(const float &__K_D)
 }
 
 /**
- * @brief 设定前馈
+ * @brief 设定每周期目标增量前馈系数
  *
- * @param __K_D 前馈
+ * @param __K_F 前馈系数，不除以 D_T
  */
 inline void Class_PID::Set_K_F(const float &__K_F)
 {
@@ -265,9 +267,9 @@ inline void Class_PID::Set_Out_Max(const float &__Out_Max)
 }
 
 /**
- * @brief 设定定速内段阈值, 0为不限制
+ * @brief 设定变速积分内段阈值 A
  *
- * @param __I_Variable_Speed_A 定速内段阈值, 0为不限制
+ * @param __I_Variable_Speed_A 与 B 均为零时关闭；启用线性段时要求 0 <= A < B
  */
 inline void Class_PID::Set_I_Variable_Speed_A(const float &__I_Variable_Speed_A)
 {
@@ -275,9 +277,9 @@ inline void Class_PID::Set_I_Variable_Speed_A(const float &__I_Variable_Speed_A)
 }
 
 /**
- * @brief 设定变速区间, 0为不限制
+ * @brief 设定变速积分外段阈值 B，不是区间宽度
  *
- * @param __I_Variable_Speed_B 变速区间, 0为不限制
+ * @param __I_Variable_Speed_B 与 A 均为零时关闭；启用线性段时要求 0 <= A < B
  */
 inline void Class_PID::Set_I_Variable_Speed_B(const float &__I_Variable_Speed_B)
 {
@@ -285,7 +287,7 @@ inline void Class_PID::Set_I_Variable_Speed_B(const float &__I_Variable_Speed_B)
 }
 
 /**
- * @brief 设定积分分离阈值，需为正数, 0为不限制
+ * @brief 设定积分分离阈值，达到时清空积分，不是冻结积分
  *
  * @param __I_Separate_Threshold 积分分离阈值，需为正数, 0为不限制
  */

@@ -59,6 +59,95 @@ bool CAN_Tx_Perform(const Struct_CAN_Tx_Msg *message)
     return perform_ok;
 }
 
+/** @brief 验证死区目标保持、边界连续性和已有积分/前馈契约。 @author zzm */
+static void TestPIDDeadZone()
+{
+    const float feedback[] = {0.05f, 0.10f, 0.15f};
+    const float expected[] = {0.0f, 0.0f, -0.025f};
+    for (int reset_target = 0; reset_target < 2; ++reset_target)
+    {
+        Class_PID pid;
+        pid.Init(1, 0, 0, 0, 0, 0, 0.001f, 0.125f);
+        pid.Set_Target(0);
+        for (int i = 0; i < 3; ++i)
+        {
+            if (reset_target) pid.Set_Target(0); // DJI 各环每次计算前重设目标。
+            pid.Set_Now(feedback[i]);
+            pid.TIM_Calculate_PeriodElapsedCallback();
+            CHECK(Near(pid.Get_Target(), 0));
+            CHECK(Near(pid.Get_Error(), expected[i]));
+            CHECK(Near(pid.Get_Out(), expected[i]));
+        }
+    }
+
+    const float errors[] = {-0.126f, -0.125f, -0.124f, 0.124f, 0.125f, 0.126f};
+    const float outputs[] = {-0.001f, 0, 0, 0, 0, 0.001f};
+    Class_PID boundary;
+    boundary.Init(1, 0, 0, 0, 0, 0, 0.001f, 0.125f);
+    for (int i = 0; i < 6; ++i)
+    {
+        boundary.Set_Target(errors[i]);
+        boundary.TIM_Calculate_PeriodElapsedCallback();
+        CHECK(Near(boundary.Get_Target(), errors[i]));
+        CHECK(Near(boundary.Get_Out(), outputs[i]));
+    }
+
+    Class_PID feedforward;
+    feedforward.Init(0, 0, 0, 1, 0, 0, 0.001f, 0.125f);
+    for (int i = 0; i < 3; ++i)
+    {
+        feedforward.Set_Target(0);
+        feedforward.Set_Now(feedback[i]);
+        feedforward.TIM_Calculate_PeriodElapsedCallback();
+        CHECK(Near(feedforward.Get_Out(), 0));
+    }
+    feedforward.Set_Target(0.25f);
+    feedforward.Set_Now(0.30f);
+    feedforward.TIM_Calculate_PeriodElapsedCallback();
+    CHECK(Near(feedforward.Get_Target(), 0.25f));
+    CHECK(Near(feedforward.Get_Out(), 0.25f)); // 真实目标增量前馈，不除以 dt。
+    feedforward.TIM_Calculate_PeriodElapsedCallback();
+    CHECK(Near(feedforward.Get_Out(), 0));
+
+    Class_PID integral;
+    integral.Init(0, 1, 0, 0, 5, 0, 0.001f, 0.125f);
+    integral.Set_Integral_Error(2);
+    integral.Set_Now(0.05f);
+    integral.TIM_Calculate_PeriodElapsedCallback();
+    CHECK(Near(integral.Get_Error(), 0));
+    CHECK(Near(integral.Get_Out(), 2)); // 死区不清除已有负载补偿。
+
+    Class_PID derivative;
+    derivative.Init(0, 0, 1, 0, 0, 0, 0.001f, 0.125f, 0, 0, 0, PID_D_First_ENABLE);
+    derivative.Set_Now(0.05f);
+    derivative.TIM_Calculate_PeriodElapsedCallback();
+    CHECK(Near(derivative.Get_Error(), 0));
+    CHECK(Near(derivative.Get_Out(), -50)); // 测量微分不受有效误差归零影响。
+
+    Class_PID variable;
+    variable.Init(0, 1, 0, 0, 0, 0, 0.001f, 0.125f, 0.2f, 0.4f);
+    variable.Set_Target(0.3f);
+    variable.TIM_Calculate_PeriodElapsedCallback();
+    CHECK(Near(variable.Get_Error(), 0.175f));
+    CHECK(Near(variable.Get_Integral_Error() * 1000, 0.0875f)); // 区外阈值仍使用原始误差幅值。
+    variable.Set_I_Separate_Threshold(0.2f);
+    variable.Set_Integral_Error(2);
+    variable.TIM_Calculate_PeriodElapsedCallback();
+    CHECK(Near(variable.Get_Integral_Error(), 0)); // 分离仍清空，不改成冻结。
+
+    Class_PID error_derivative;
+    error_derivative.Init(0, 0, 1, 0, 0, 0, 0.001f, 0.125f);
+    error_derivative.Set_Target(0.124f);
+    error_derivative.TIM_Calculate_PeriodElapsedCallback();
+    CHECK(Near(error_derivative.Get_Out(), 0));
+    error_derivative.Set_Target(0.125f);
+    error_derivative.TIM_Calculate_PeriodElapsedCallback();
+    CHECK(Near(error_derivative.Get_Out(), 0));
+    error_derivative.Set_Target(0.126f);
+    error_derivative.TIM_Calculate_PeriodElapsedCallback();
+    CHECK(Near(error_derivative.Get_Out(), 1));
+}
+
 static void TestPID()
 {
     Class_PID pid;
@@ -115,6 +204,7 @@ static void TestPID()
     pid.Set_Out_Max(2);
     pid.TIM_Calculate_PeriodElapsedCallback();
     CHECK(Near(pid.Get_Out(), 2));
+    TestPIDDeadZone();
 }
 
 static void TestKalman()

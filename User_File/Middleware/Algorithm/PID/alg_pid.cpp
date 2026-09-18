@@ -24,19 +24,19 @@
 /* Function prototypes -------------------------------------------------------*/
 
 /**
- * @brief PID初始化
+ * @brief 更新 PID 参数，保留目标、输出及积分/微分历史状态。
  *
  * @param __K_P P值
  * @param __K_I I值
  * @param __K_D D值
- * @param __K_F 前馈
+ * @param __K_F 每周期目标增量前馈系数，不除以 D_T
  * @param __I_Out_Max 积分限幅
  * @param __Out_Max 输出限幅
  * @param __D_T 时间片长度
- * @param __Dead_Zone 死区误差阈值
- * @param __I_Variable_Speed_A 变速积分误差阈值A
- * @param __I_Variable_Speed_B 变速积分误差阈值B
- * @param __I_Separate_Threshold 积分分离误差阈值
+ * @param __Dead_Zone 非负死区阈值，含边界的有效误差归零，区外扣除死区宽度
+ * @param __I_Variable_Speed_A 变速积分内段阈值，与 B 均为零时关闭变速积分
+ * @param __I_Variable_Speed_B 变速积分外段阈值，启用线性段时要求 0 <= A < B
+ * @param __I_Separate_Threshold 积分分离阈值，达到时清空积分；零为关闭，非零须为正
  * @param __D_First 是否开启微分先行
  */
 void Class_PID::Init(const float &__K_P, const float &__K_I, const float &__K_D, const float &__K_F, const float &__I_Out_Max, const float &__Out_Max, const float &__D_T, const float &__Dead_Zone, const float &__I_Variable_Speed_A, const float &__I_Variable_Speed_B, const float &__I_Separate_Threshold, const Enum_PID_D_First &__D_First)
@@ -94,18 +94,17 @@ void Class_PID::TIM_Calculate_PeriodElapsedCallback()
     error = Target - Now;
     abs_error = Basic_Math_Abs(error);
 
-    // 判断死区
-    if (abs_error < Dead_Zone)
+    // 死区只处理局部误差，不改写调用者目标；正负边界均连续。
+    if (abs_error <= Dead_Zone)
     {
-        Target = Now;
         error = 0.0f;
         abs_error = 0.0f;
     }
-    else if (error > 0.0f && abs_error > Dead_Zone)
+    else if (error > 0.0f)
     {
         error -= Dead_Zone;
     }
-    else if (error < 0.0f && abs_error > Dead_Zone)
+    else
     {
         error += Dead_Zone;
     }
@@ -114,7 +113,7 @@ void Class_PID::TIM_Calculate_PeriodElapsedCallback()
 
     p_out = K_P * error;
 
-    // 计算i项
+    // 计算i项；为保留阈值调参语义，abs_error 在死区内为零、区外仍为原始误差幅值。
 
     if (I_Variable_Speed_A == 0.0f && I_Variable_Speed_B == 0.0f)
     {
