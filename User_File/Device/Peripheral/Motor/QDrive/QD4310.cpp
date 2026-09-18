@@ -82,7 +82,7 @@ static float QD4310_Clamp(float value, float min, float max) {
  * @param  value 命令参数值 (int16_t)
  * @note   电流、速度、角度和低速命令更新周期槽, 其余动作命令进入插入队列
  */
-void QD4310_SendCommand(QD4310_t *motor, QD4310_Command_t cmd, int16_t value) {
+bool QD4310_SendCommand(QD4310_t *motor, QD4310_Command_t cmd, int16_t value) {
     Struct_CAN_Tx_Msg message = {0};
 
     message.hfdcan = motor->hfdcan;
@@ -97,11 +97,10 @@ void QD4310_SendCommand(QD4310_t *motor, QD4310_Command_t cmd, int16_t value) {
         cmd == QD4310_CMD_ANGLE ||
         cmd == QD4310_CMD_LOW_SPEED)
     {
-        CAN_Tx_Perform(&message);
-        return;
+        return CAN_Tx_Perform(&message);
     }
 
-    CAN_Tx_Submit(&message);
+    return CAN_Tx_Submit(&message);
 }
 
 /**
@@ -131,16 +130,16 @@ void QD4310_Update(QD4310_t *motor, const uint8_t feedback[8]) {
  * @brief  使能电机驱动输出
  * @param  motor 电机实例指针
  */
-void QD4310_Enable(QD4310_t *motor) {
-    QD4310_SendCommand(motor, QD4310_CMD_ENABLE, 0x0000);
+bool QD4310_Enable(QD4310_t *motor) {
+    return QD4310_SendCommand(motor, QD4310_CMD_ENABLE, 0x0000);
 }
 
 /**
  * @brief  失能电机驱动输出
  * @param  motor 电机实例指针
  */
-void QD4310_Disable(QD4310_t *motor) {
-    QD4310_SendCommand(motor, QD4310_CMD_DISABLE, 0x0000);
+bool QD4310_Disable(QD4310_t *motor) {
+    return QD4310_SendCommand(motor, QD4310_CMD_DISABLE, 0x0000);
 }
 
 /**
@@ -148,10 +147,10 @@ void QD4310_Disable(QD4310_t *motor) {
  * @param  motor 电机实例指针
  * @param  angle 目标角度, 范围 [0, 2π] rad
  */
-void QD4310_SetAngle(QD4310_t *motor, float angle) {
+bool QD4310_SetAngle(QD4310_t *motor, float angle) {
     angle = QD4310_Clamp(angle, 0.0f, QD4310_TWO_PI);
     int16_t angle_value = (int16_t)(angle / QD4310_TWO_PI * UINT16_MAX);
-    QD4310_SendCommand(motor, QD4310_CMD_ANGLE, angle_value);
+    return QD4310_SendCommand(motor, QD4310_CMD_ANGLE, angle_value);
 }
 
 /**
@@ -159,10 +158,10 @@ void QD4310_SetAngle(QD4310_t *motor, float angle) {
  * @param  motor      电机实例指针
  * @param  step_angle 步进角度, 范围 [-2π, 2π] rad
  */
-void QD4310_SetStepAngle(QD4310_t *motor, float step_angle) {
+bool QD4310_SetStepAngle(QD4310_t *motor, float step_angle) {
     step_angle = QD4310_Clamp(step_angle, QD4310_MIN_STEPANGLE, QD4310_MAX_STEPANGLE);
     int16_t step_angle_value = (int16_t)(step_angle / QD4310_MAX_STEPANGLE * INT16_MAX);
-    QD4310_SendCommand(motor, QD4310_CMD_STEP_ANGLE, step_angle_value);
+    return QD4310_SendCommand(motor, QD4310_CMD_STEP_ANGLE, step_angle_value);
 }
 
 /**
@@ -170,10 +169,10 @@ void QD4310_SetStepAngle(QD4310_t *motor, float step_angle) {
  * @param  motor 电机实例指针
  * @param  speed 目标转速, 范围 [-1000, 1000] rpm
  */
-void QD4310_SetSpeed(QD4310_t *motor, float speed) {
+bool QD4310_SetSpeed(QD4310_t *motor, float speed) {
     speed = QD4310_Clamp(speed, QD4310_MIN_SPEED, QD4310_MAX_SPEED);
     int16_t speed_value = (int16_t)(speed / QD4310_MAX_SPEED * INT16_MAX);
-    QD4310_SendCommand(motor, QD4310_CMD_SPEED, speed_value);
+    return QD4310_SendCommand(motor, QD4310_CMD_SPEED, speed_value);
 }
 
 /**
@@ -181,10 +180,10 @@ void QD4310_SetSpeed(QD4310_t *motor, float speed) {
  * @param  motor 电机实例指针
  * @param  speed 目标转速, 范围 [-1000, 1000] rpm
  */
-void QD4310_SetLowSpeed(QD4310_t *motor, float speed) {
+bool QD4310_SetLowSpeed(QD4310_t *motor, float speed) {
     speed = QD4310_Clamp(speed, QD4310_MIN_SPEED, QD4310_MAX_SPEED);
     int16_t speed_value = (int16_t)(speed / QD4310_MAX_SPEED * INT16_MAX);
-    QD4310_SendCommand(motor, QD4310_CMD_LOW_SPEED, speed_value);
+    return QD4310_SendCommand(motor, QD4310_CMD_LOW_SPEED, speed_value);
 }
 
 /**
@@ -192,10 +191,10 @@ void QD4310_SetLowSpeed(QD4310_t *motor, float speed) {
  * @param  motor   电机实例指针
  * @param  current 目标电流, 范围 [-10, 10] A
  */
-void QD4310_SetCurrent(QD4310_t *motor, float current) {
+bool QD4310_SetCurrent(QD4310_t *motor, float current) {
     current = QD4310_Clamp(current, QD4310_MIN_CURRENT, QD4310_MAX_CURRENT);
     int16_t current_value = (int16_t)(current / QD4310_MAX_CURRENT * INT16_MAX);
-    QD4310_SendCommand(motor, QD4310_CMD_CURRENT, current_value);
+    return QD4310_SendCommand(motor, QD4310_CMD_CURRENT, current_value);
 }
 
 /**
@@ -203,6 +202,6 @@ void QD4310_SetCurrent(QD4310_t *motor, float current) {
  * @param  motor 电机实例指针
  *
  */
-void QD4310_SetZeroAngle(QD4310_t *motor) {
-    QD4310_SendCommand(motor, QD4310_CMD_ZERO_ANGLE, 0x0000);
+bool QD4310_SetZeroAngle(QD4310_t *motor) {
+    return QD4310_SendCommand(motor, QD4310_CMD_ZERO_ANGLE, 0x0000);
 }

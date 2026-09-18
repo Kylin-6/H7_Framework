@@ -31,6 +31,8 @@ motor.ClearError();
 motor.SetZeroPosition();
 ```
 
+`Enable()`、`Disable()`、`ClearError()` 和 `SetZeroPosition()` 返回命令入队结果：`true` 表示已入队，`false` 表示提交失败，可由调用方重试。入队成功不代表电机已经执行。`SetZeroPosition()` 仅在入队成功后重置本地位置展开状态，失败时保持原状态。
+
 后续可选参数依次为反转、PMAX、VMAX 和 TMAX：
 
 ```c
@@ -119,7 +121,7 @@ motor.SetForcePosition(1.0f, 5.0f, 0.2f);
 motor.SetMode(Enum_DMMotor_Mode::POSITION_SPEED);
 ```
 
-- `SetMode()` 非阻塞，也不返回切换结果；调用返回不代表电机已经切换成功。
+- `SetMode()` 非阻塞，返回命令入队结果：`true` 表示已入队；参数非法、其他模式仍待应答或入队失败时返回 `false`。返回值不代表电机已经切换成功。
 - 请求成功入队后记录待确认模式，只有收到等待期限内、目标匹配的 `0x55 / 0x0A` 回包才更新软件模式。入队失败时保留原模式。
 - 已识别的模式参数回包不参与位置、速度、力矩等普通反馈解码，重复或过期回包也不会覆盖已确认模式。
 - 等待期间允许重发相同目标，但不会延长原来的超时；不同目标需等待当前请求确认或超时。

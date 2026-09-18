@@ -125,9 +125,9 @@ void Class_DMMotor::FeedbackCallback(FDCAN_HandleTypeDef *callback_hfdcan,
 
 /**
  * @brief 发送使能、失能、清错或置零命令：前 7 字节固定为 0xFF，末字节为命令码。
- * @note 通过插入队列提交一次性命令，避免被周期控制帧覆盖；本接口未向上层返回入队结果。
+ * @return 命令是否成功入队，不代表电机已执行。
  */
-void Class_DMMotor::SendModeCommand(uint8_t command)
+bool Class_DMMotor::SendModeCommand(uint8_t command)
 {
     Struct_CAN_Tx_Msg message{};
     message.hfdcan = hfdcan;
@@ -135,7 +135,7 @@ void Class_DMMotor::SendModeCommand(uint8_t command)
     message.len = 8U;
     memset(message.data, 0xFF, 7U);
     message.data[7] = command;
-    CAN_Tx_Submit(&message);
+    return CAN_Tx_Submit(&message);
 }
 
 /**
@@ -193,44 +193,48 @@ uint32_t Class_DMMotor::ControlId() const
     }
 }
 
-void Class_DMMotor::Enable()
+bool Class_DMMotor::Enable()
 {
-    SendModeCommand(DM_CMD_ENABLE);
+    return SendModeCommand(DM_CMD_ENABLE);
 }
 
-void Class_DMMotor::Disable()
+bool Class_DMMotor::Disable()
 {
-    SendModeCommand(DM_CMD_DISABLE);
+    return SendModeCommand(DM_CMD_DISABLE);
 }
 
-void Class_DMMotor::ClearError()
+bool Class_DMMotor::ClearError()
 {
-    SendModeCommand(DM_CMD_CLEAR_ERROR);
+    return SendModeCommand(DM_CMD_CLEAR_ERROR);
 }
 
 /**
- * @brief 清除本地位置展开状态，并提交电机置零命令。
- * @note 本地状态先于电机处理命令重置，下一帧反馈重新建立起点；调用完成不代表电机已置零。
+ * @brief 提交置零命令，入队成功后清除本地位置展开状态。
+ * @note 入队失败保持本地状态；成功后下一帧反馈重新建立起点，不代表电机已置零。
  */
-void Class_DMMotor::SetZeroPosition()
+bool Class_DMMotor::SetZeroPosition()
 {
+    if (!SendModeCommand(DM_CMD_ZERO_POSITION))
+    {
+        return false;
+    }
     feedback_initialized = false;
     last_position = 0.0f;
     total_round = 0;
     feedback.total_position = 0.0f;
-    SendModeCommand(DM_CMD_ZERO_POSITION);
+    return true;
 }
 
 /**
  * @brief 向 0x7FF 提交模式参数写入请求，由匹配应答确认后更新本地 mode。
  * @note 待应答期间允许重发同一模式且不延长原超时窗口；不同模式请求需等应答或超时后重试。
  */
-void Class_DMMotor::SetMode(Enum_DMMotor_Mode new_mode)
+bool Class_DMMotor::SetMode(Enum_DMMotor_Mode new_mode)
 {
     const uint32_t mode_value = (uint32_t)new_mode;
     if (mode_value < 1 || mode_value > 4)
     {
-        return;
+        return false;
     }
 
     Struct_CAN_Tx_Msg message{};
@@ -251,7 +255,8 @@ void Class_DMMotor::SetMode(Enum_DMMotor_Mode new_mode)
     {
         mode_pending = false;
     }
-    if ((!mode_pending || requested_mode == mode_value) && CAN_Tx_Submit(&message))
+    const bool submitted = (!mode_pending || requested_mode == mode_value) && CAN_Tx_Submit(&message);
+    if (submitted)
     {
         if (!mode_pending)
         {
@@ -265,6 +270,7 @@ void Class_DMMotor::SetMode(Enum_DMMotor_Mode new_mode)
     {
         __enable_irq();
     }
+    return submitted;
 }
 
 /**
