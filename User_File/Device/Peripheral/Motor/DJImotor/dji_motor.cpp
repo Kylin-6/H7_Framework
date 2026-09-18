@@ -187,7 +187,7 @@ void Class_DJIMotor::PID_Init(Class_PID *pid, const PID_InitTypeDef *config)
     pid->Init(config->K_P, config->K_I, config->K_D, config->K_F,
                 config->I_Out_Max, config->Out_Max, config->D_T, config->Dead_Zone,
                 config->I_Variable_Speed_A, config->I_Variable_Speed_B,
-                config->I_Separate_Threshold, config->D_First);
+                config->I_Separate_Threshold, config->D_First, config->D_Filter_Cutoff);
 }
 
 /**

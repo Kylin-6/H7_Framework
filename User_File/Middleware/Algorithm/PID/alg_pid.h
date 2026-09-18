@@ -15,6 +15,7 @@
 /* Includes ------------------------------------------------------------------*/
 
 #include "alg_basic.h"
+#include "alg_filter_iir.h"
 
 /* Exported macros -----------------------------------------------------------*/
 
@@ -22,7 +23,7 @@
 
 
 /**
- * @brief 微分先行：对测量值微分以避开目标阶跃，不包含微分低通。
+ * @brief 微分先行：对测量值微分以避开目标阶跃；与可选 D 低通独立。
  *
  */
 enum Enum_PID_D_First
@@ -49,18 +50,22 @@ typedef struct
     float I_Variable_Speed_B;
     float I_Separate_Threshold;
     Enum_PID_D_First D_First;
+    float D_Filter_Cutoff = 0.0f; // D 支路一阶 IIR 截止频率，Hz；0 关闭。
 } PID_InitTypeDef;
 
 /**
  * @brief Reusable, PID算法
  * @note 先 Init 后计算；参数须为有限值，D_T > 0 且与实际计算周期一致。
- *       Dead_Zone、Out_Max 为非负值；Init 和参数 setter 不复位动态状态。
+ *       Dead_Zone、Out_Max 为非负值；Init 保留 PID 历史，D 滤波启停规则见 Init。
  *       死区只归零有效误差，不保证总输出为零；已有积分、微分和前馈仍可输出。
  */
 class Class_PID
 {
 public:
-    void Init(const float &__K_P, const float &__K_I, const float &__K_D, const float &__K_F = 0.0f, const float &__I_Out_Max = 0.0f, const float &__Out_Max = 0.0f, const float &__D_T = 0.001f, const float &__Dead_Zone = 0.0f, const float &__I_Variable_Speed_A = 0.0f, const float &__I_Variable_Speed_B = 0.0f, const float &__I_Separate_Threshold = 0.0f, const Enum_PID_D_First &__D_First = PID_D_First_DISABLE);
+    // D_Filter_Cutoff: Hz，0 关闭；非正/非有限值按关闭处理，上限由 IIR 限为采样频率的一半。
+    // 首次启用或切换 D_First 时滤波状态从 0 开始；持续启用且 D_First 不变时保留滤波值。
+    // 低通不对齐 Pre_Now/Pre_Error，不能替代停机恢复时的历史对齐。
+    void Init(const float &__K_P, const float &__K_I, const float &__K_D, const float &__K_F = 0.0f, const float &__I_Out_Max = 0.0f, const float &__Out_Max = 0.0f, const float &__D_T = 0.001f, const float &__Dead_Zone = 0.0f, const float &__I_Variable_Speed_A = 0.0f, const float &__I_Variable_Speed_B = 0.0f, const float &__I_Separate_Threshold = 0.0f, const Enum_PID_D_First &__D_First = PID_D_First_DISABLE, const float &__D_Filter_Cutoff = 0.0f);
 
     float Get_Target() const;
     float Get_Now() const;
@@ -91,6 +96,8 @@ public:
     inline float Get_D_T() const;
 
     inline Enum_PID_D_First Get_D_First() const;
+
+    inline float Get_D_Filter_Cutoff() const;
 
     inline void Set_K_P(const float &__K_P);
 
@@ -126,7 +133,9 @@ protected:
     // 非负死区阈值：含边界的有效误差归零，区外扣除死区宽度；不修改 Target。
     float Dead_Zone;
     // 微分先行
-    Enum_PID_D_First D_First;
+    Enum_PID_D_First D_First = PID_D_First_DISABLE;
+    // D 支路低通请求截止频率，Hz；0 关闭。滤波对象静态持有，无动态分配。
+    float D_Filter_Cutoff = 0.0f;
 
     // 常量
 
@@ -140,6 +149,8 @@ protected:
     float Pre_Out = 0.0f;
     // 前向误差
     float Pre_Error = 0.0f;
+    // 滤波差分速率，之后再乘 K_D；K_D 在线改变不混入滤波历史。
+    Class_Filter_IIR_First_Order D_Filter;
 
     // 读变量
 
@@ -347,6 +358,8 @@ inline float Class_PID::Get_I_Separate_Threshold() const { return I_Separate_Thr
 inline float Class_PID::Get_D_T() const { return D_T; }
 
 inline Enum_PID_D_First Class_PID::Get_D_First() const { return D_First; }
+
+inline float Class_PID::Get_D_Filter_Cutoff() const { return D_Filter_Cutoff; }
 
 #endif
 

@@ -11,6 +11,7 @@ add_executable(boundary_tests
     ${ALGORITHM}/Basic/alg_basic.cpp
     ${ALGORITHM}/Matrix/alg_matrix.cpp
     ${ALGORITHM}/PID/alg_pid.cpp
+    ${ALGORITHM}/Filter/IIR/alg_filter_iir.cpp
     ${PERIPHERAL}/EricTool/dvc_erictool.cpp
     ${PERIPHERAL}/Motor/DMmotor/dmmotor.cpp
     ${PERIPHERAL}/Motor/QDrive/QD4310.cpp
@@ -21,6 +22,7 @@ target_include_directories(boundary_tests PRIVATE
     ${ALGORITHM}/Basic
     ${ALGORITHM}/Matrix
     ${ALGORITHM}/PID
+    ${ALGORITHM}/Filter/IIR
     ${ALGORITHM}/Filter/Kalman
     ${PERIPHERAL}/EricTool
     ${PERIPHERAL}/Motor/DMmotor

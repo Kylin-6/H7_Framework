@@ -148,6 +148,130 @@ static void TestPIDDeadZone()
     CHECK(Near(error_derivative.Get_Out(), 1));
 }
 
+/** @brief 验证生产 IIR 在 D 支路的响应、旁路、增益和参数更新语义。 @author zzm */
+static void TestPIDDerivativeFilter()
+{
+    const float dt = 0.001f;
+    const float cutoff = 50.0f;
+    const float alpha = 1.0f - expf(-2.0f * PI * cutoff * dt);
+    const PID_InitTypeDef legacy_config = {0, 0, 1, 0, 0, 0, dt, 0, 0, 0, 0, PID_D_First_DISABLE};
+    PID_InitTypeDef assigned_config; // 旧式逐字段赋值也必须默认关闭新增选项。
+    CHECK(Near(legacy_config.D_Filter_Cutoff, 0));
+    CHECK(Near(assigned_config.D_Filter_Cutoff, 0));
+
+    for (int mode = 0; mode < 2; ++mode)
+    {
+        const Enum_PID_D_First d_first = (Enum_PID_D_First)mode;
+        const float sign = mode == 0 ? 1.0f : -1.0f;
+        Class_PID raw, filtered;
+        raw.Init(0, 0, 1, 0, 0, 0, dt, 0, 0, 0, 0, d_first);
+        filtered.Init(0, 0, 1, 0, 0, 0, dt, 0, 0, 0, 0, d_first, cutoff);
+        if (mode == 0)
+        {
+            raw.Set_Target(1);
+            filtered.Set_Target(1);
+        }
+        else
+        {
+            raw.Set_Now(1);
+            filtered.Set_Now(1);
+        }
+        raw.TIM_Calculate_PeriodElapsedCallback();
+        filtered.TIM_Calculate_PeriodElapsedCallback();
+        CHECK(Near(raw.Get_Out() * dt, sign));
+        CHECK(Near(filtered.Get_Out() * dt, sign * alpha)); // 首帧也滤波，不直通尖峰。
+        float expected = sign * alpha;
+        for (int i = 0; i < 8; ++i)
+        {
+            raw.TIM_Calculate_PeriodElapsedCallback();
+            filtered.TIM_Calculate_PeriodElapsedCallback();
+            expected *= 1.0f - alpha;
+            CHECK(Near(raw.Get_Out(), 0));
+            CHECK(Near(filtered.Get_Out() * dt, expected));
+        }
+    }
+
+    Class_PID measurement;
+    measurement.Init(0, 0, 1, 0, 0, 0, dt, 0, 0, 0, 0, PID_D_First_ENABLE, cutoff);
+    measurement.Set_Target(10);
+    measurement.TIM_Calculate_PeriodElapsedCallback();
+    CHECK(Near(measurement.Get_Out(), 0)); // D_First 的目标阶跃抑制仍有效。
+    measurement.Set_Now(10);
+    measurement.TIM_Calculate_PeriodElapsedCallback();
+    CHECK(Near(measurement.Get_Out() * dt, -10.0f * alpha)); // 低通未冒充历史对齐。
+
+    Class_PID gain;
+    gain.Init(0, 0, 1, 0, 0, 0, dt, 0, 0, 0, 0, PID_D_First_DISABLE, cutoff);
+    gain.Set_Target(1);
+    gain.TIM_Calculate_PeriodElapsedCallback();
+    gain.Set_K_D(0);
+    gain.Set_Target(2);
+    gain.TIM_Calculate_PeriodElapsedCallback();
+    CHECK(Near(gain.Get_Out(), 0)); // Kd=0 时没有旧 D 输出尾巴。
+    const float rate2 = alpha + (1.0f - alpha) * alpha;
+    gain.Set_K_D(-2);
+    gain.Set_Target(3);
+    gain.TIM_Calculate_PeriodElapsedCallback();
+    CHECK(Near(gain.Get_Out() * dt, -2.0f * (alpha + (1.0f - alpha) * rate2)));
+
+    Class_PID update;
+    update.Init(0, 1, 1, 0, 0, 0, dt, 0, 0, 0, 0, PID_D_First_DISABLE, cutoff);
+    update.Set_Target(1);
+    update.TIM_Calculate_PeriodElapsedCallback();
+    const float old_out = update.Get_Out();
+    const float old_integral = update.Get_Integral_Error();
+    update.Init(0, 1, 1, 0, 0, 0, 2 * dt, 0, 0, 0, 0, PID_D_First_DISABLE, 2 * cutoff);
+    CHECK(Near(update.Get_Target(), 1));
+    CHECK(Near(update.Get_Out(), old_out));
+    CHECK(Near(update.Get_Integral_Error(), old_integral));
+    update.TIM_Calculate_PeriodElapsedCallback();
+    const float new_alpha = 1.0f - expf(-2.0f * PI * (2 * cutoff) * (2 * dt));
+    CHECK(Near((update.Get_Out() - update.Get_Integral_Error()) * dt, alpha * (1.0f - new_alpha)));
+    // 关闭立即旁路，再启用不会恢复之前的滤波尾巴。
+    update.Init(0, 0, 1, 0, 0, 0, dt);
+    update.TIM_Calculate_PeriodElapsedCallback();
+    CHECK(Near(update.Get_Out(), 0));
+    update.Init(0, 0, 1, 0, 0, 0, dt, 0, 0, 0, 0, PID_D_First_DISABLE, cutoff);
+    update.TIM_Calculate_PeriodElapsedCallback();
+    CHECK(Near(update.Get_Out(), 0));
+    update.Set_Target(2);
+    update.TIM_Calculate_PeriodElapsedCallback();
+    update.Init(0, 0, 1, 0, 0, 0, dt, 0, 0, 0, 0, PID_D_First_ENABLE, cutoff);
+    update.TIM_Calculate_PeriodElapsedCallback();
+    CHECK(Near(update.Get_Out(), 0)); // 切换微分来源不继承误差微分的滤波尾巴。
+
+    // 只有 D 支路经过滤波，P/I/F 以及末端 Out_Max 不改变位置。
+    Class_PID combined;
+    combined.Init(2, 3, 1, 4, 0, 0, dt, 0, 0, 0, 0, PID_D_First_DISABLE, cutoff);
+    combined.Set_Target(1);
+    combined.TIM_Calculate_PeriodElapsedCallback();
+    CHECK(Near((combined.Get_Out() - 2.0f - 3.0f * dt - 4.0f) * dt, alpha));
+    combined.Set_Out_Max(10);
+    combined.TIM_Calculate_PeriodElapsedCallback();
+    CHECK(Near(combined.Get_Out(), 10));
+
+    // 高频反馈扰动下比较实际生产 PID 响应，检验抑制量而非只验证接线。
+    Class_PID noisy;
+    noisy.Init(0, 0, 1, 0, 0, 0, dt, 0, 0, 0, 0, PID_D_First_ENABLE, cutoff);
+    for (int i = 0; i < 100; ++i)
+    {
+        noisy.Set_Now(i % 2 == 0 ? 1.0f : -1.0f);
+        noisy.TIM_Calculate_PeriodElapsedCallback();
+    }
+    CHECK(Near(fabsf(noisy.Get_Out()) * dt / 2.0f, alpha / (2.0f - alpha)));
+
+    const float bypass_cutoffs[] = {0, -1, NAN, INFINITY};
+    for (float bypass_cutoff : bypass_cutoffs)
+    {
+        Class_PID bypass;
+        bypass.Init(0, 0, 1, 0, 0, 0, dt, 0, 0, 0, 0, PID_D_First_DISABLE, bypass_cutoff);
+        bypass.Set_Target(1);
+        bypass.TIM_Calculate_PeriodElapsedCallback();
+        CHECK(Near(bypass.Get_D_Filter_Cutoff(), 0));
+        CHECK(Near(bypass.Get_Out() * dt, 1));
+    }
+}
+
 static void TestPID()
 {
     Class_PID pid;
@@ -205,6 +329,7 @@ static void TestPID()
     pid.TIM_Calculate_PeriodElapsedCallback();
     CHECK(Near(pid.Get_Out(), 2));
     TestPIDDeadZone();
+    TestPIDDerivativeFilter();
 }
 
 static void TestKalman()
