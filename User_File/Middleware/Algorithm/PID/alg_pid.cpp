@@ -137,32 +137,21 @@ void Class_PID::TIM_Calculate_PeriodElapsedCallback()
             speed_ratio = 0.0f;
         }
     }
-    // 积分限幅
-    if (I_Out_Max != 0.0f)
+    // Ki 为零或进入分离区间时清空积分，避免重新启用时带入旧累积量。
+    if (K_I == 0.0f || (I_Separate_Threshold != 0.0f && abs_error >= I_Separate_Threshold))
     {
-        Basic_Math_Constrain(&Integral_Error, -I_Out_Max / K_I, I_Out_Max / K_I);
-    }
-    if (I_Separate_Threshold == 0.0f)
-    {
-        // 没有积分分离
-        Integral_Error += speed_ratio * D_T * error;
-        i_out = K_I * Integral_Error;
+        Integral_Error = 0.0f;
     }
     else
     {
-        // 有积分分离
-        if (abs_error < I_Separate_Threshold)
+        Integral_Error += speed_ratio * D_T * error;
+        // 累加后限幅，保证本周期的积分输出也不越界；兼容负 Ki。
+        if (I_Out_Max != 0.0f)
         {
-            // 不在积分分离区间上
-            Integral_Error += speed_ratio * D_T * error;
-            i_out = K_I * Integral_Error;
+            const float integral_max = Basic_Math_Abs(I_Out_Max / K_I);
+            Basic_Math_Constrain(&Integral_Error, -integral_max, integral_max);
         }
-        else
-        {
-            // 在积分分离区间上
-            Integral_Error = 0.0f;
-            i_out = 0.0f;
-        }
+        i_out = K_I * Integral_Error;
     }
 
     // 计算d项

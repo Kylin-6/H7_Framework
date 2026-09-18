@@ -148,14 +148,14 @@ protected:
 
     // PID的P
     float K_P = 0.0f;
-    // PID的I
+    // PID的I，设为零时在下一次计算中清空积分
     float K_I = 0.0f;
     // PID的D
     float K_D = 0.0f;
     // 前馈
     float K_F = 0.0f;
 
-    // 积分限幅, 0为不限制
+    // 积分输出幅值上限，每次累加后限幅，0为不限制
     float I_Out_Max = 0;
     // 输出限幅, 0为不限制
     float Out_Max = 0;
