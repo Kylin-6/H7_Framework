@@ -4,7 +4,7 @@
 
 底层使用 STM32CubeMX、HAL 与 FreeRTOS，任务接口采用 CMSIS-RTOS V2，构建使用 CMake + Ninja。用户层保持 C 风格运算、结构体与自由函数，设备和算法保留简洁的 `Class_` 封装。
 
-[整体架构](#整体架构) · [通信与外设](#通信与外设-bsp) · [设备层](#设备层) · [算法层](#算法层) · [接入方式](#接入方式) · [构建与调试](#构建与调试)
+[整体架构](#整体架构) · [通信与外设](#通信与外设-bsp) · [设备层](#设备层) · [算法层](#算法层) · [接入方式](#接入方式) · [构建与调试](#构建与调试) · [主机回归](#主机回归)
 
 ## 整体架构
 
@@ -38,6 +38,7 @@ Middlewares/                FreeRTOS、USB Device、CMSIS-DSP 等依赖
 USB_DEVICE/                 USB CDC 设备配置
 User_Config/                链接脚本、FreeRTOS 补丁与烧录配置
 SystemView/                 SEGGER SystemView 与 RTT
+Tests/                      独立主机算法与通信边界回归
 sysid/                      系统辨识数据、脚本与报告
 ```
 
@@ -48,7 +49,7 @@ BSP 以外设管理对象和接口函数承接 HAL，设备层通过注册回调
 | 模块 | 提供的能力 | 使用入口 |
 | --- | --- | --- |
 | CAN / FDCAN | 按总线与 ID 分发接收；命令队列与最新周期帧两条发送通道 | [bsp_can.h](User_File/Middleware/BSP/CAN/bsp_can.h) |
-| UART | DMA + IDLE 不定长接收、双缓冲、接收回调与错误恢复 | [bsp_uart.h](User_File/Middleware/BSP/UART/bsp_uart.h) |
+| UART | DMA + IDLE 不定长接收、双缓冲、错误恢复；DMA 发送复制到专用缓冲并返回提交状态 | [bsp_uart.h](User_File/Middleware/BSP/UART/bsp_uart.h) |
 | SPI | 外设管理、片选、收发缓冲与完成回调 | [SPI](User_File/Middleware/BSP/SPI) |
 | USB | CDC 收发封装，供调试通信组件使用 | [USB](User_File/Middleware/BSP/USB) |
 | OSPI | 外部存储器收发与自动轮询接口 | [OSPI](User_File/Middleware/BSP/OSPI) |
@@ -61,6 +62,8 @@ CAN 的两条发送通道适用于不同数据语义：
 - `CanTxTask` 调用 `BSP_CAN_SendAsync()` / `BSP_CAN_SendPer()` 处理发送。调用方需要检查提交结果；进入软件缓冲与总线发送完成是不同阶段。
 
 CAN 接收回调在中断上下文执行。UART 的 DMA 接收须同时具备 CubeMX 的 RX DMA 配置和 BSP 管理入口，接入新端口时需同步核对。
+
+`UART_Transmit_Data()` 在有 TX DMA 时，将数据复制到该端口位于 `.dma_buffer` 的专用发送缓冲；调用返回后，调用方可复用原始数据。UART 或 DMA 忙时返回 `HAL_BUSY`，不覆盖正在发送的内容；启动失败返回对应 HAL 状态，由调用方决定重试。无 TX DMA 的端口保留阻塞发送路径。
 
 ## 设备层
 
@@ -76,6 +79,8 @@ CAN 接收回调在中断上下文执行。UART 的 DMA 接收须同时具备 Cu
 
 电机型号、CAN ID、反馈源、方向、映射范围和控制参数由使用方配置；应用层负责控制周期、目标生成与输出边界。
 
+达妙动作/模式请求及 QDrive 命令接口返回 `bool`，表示是否成功提交到软件发送通道。提交失败时保留相应状态，调用方可据此重试；达妙置零仅在提交成功后重置位置展开状态。返回成功不代表电机已经执行或确认命令。
+
 ### 板载设备与外接工具
 
 | 组件 | 功能 |
@@ -84,9 +89,11 @@ CAN 接收回调在中断上下文执行。UART 的 DMA 接收须同时具备 Cu
 | W25Q64JV | 基于 OSPI 的外部 Flash 驱动 |
 | Power | 板载电源输出控制与 ADC 电压采样 |
 | WS2812 / Buzzer / Key | 灯效、蜂鸣器与按键处理 |
-| EricTool | USB / UART 调试通信与数据输出 |
+| EricTool | USB / UART JustFloat 输出与 `variable:value#` 文本指令解析；UART 输出返回发送状态 |
 
 板载组件位于 [Onboard](User_File/Device/Onboard)，外接组件位于 [Peripheral](User_File/Device/Peripheral)。硬件资源绑定和设备初始化集中在 [Init.cpp](User_File/System/Init/Init.cpp)。
+
+EricTool 的 USB/UART 解析均只读取回调传入的缓冲区及有效长度，通过字符串指针字典匹配变量名；非法帧返回索引 `-1`、值 `0`，不会沿用上一帧结果。当前保持首帧语义，第一个 `#` 后的字节忽略，不提供跨回调拼帧。UART 周期输出的返回值沿用 HAL 状态，应用需处理忙或失败。
 
 ## 算法层
 
@@ -94,16 +101,31 @@ CAN 接收回调在中断上下文执行。UART 的 DMA 接收须同时具备 Cu
 
 | 分类 | 组件 | 内容 |
 | --- | --- | --- |
-| 控制 | [PID](User_File/Middleware/Algorithm/PID) | 通用 PID 控制器 |
+| 控制 | [PID](User_File/Middleware/Algorithm/PID) | PID 与前馈、积分分离/变速积分、微分先行及可选 D 支路一阶 IIR 低通 |
 | 控制 | [SMC](User_File/Middleware/Algorithm/SMC) | 单轴二阶对象滑模控制，线性滑模面与饱和边界层 |
+| 轨迹 | [Trajectory](User_File/Middleware/Algorithm/Trajectory) | 单轴三阶 S 曲线，位置/速度目标，限制速度、加速度和 jerk，支持运动中改目标 |
+| 模糊推理 | [Fuzzy](User_File/Middleware/Algorithm/Fuzzy) | 双输入、多输出零阶 Sugeno 推理，完整规则表与分片双线性插值 |
 | 观测 | [DOB](User_File/Middleware/Algorithm/DOB) | 一阶名义模型、零阶保持离散与 Q 滤波扰动估计 |
 | 状态估计 | [Kalman](User_File/Middleware/Algorithm/Filter/Kalman)、[EKF](User_File/Middleware/Algorithm/Filter/EKF) | 线性与扩展卡尔曼滤波组件 |
 | 姿态估计 | [VQF](User_File/Middleware/Algorithm/Filter/VQF) | 姿态与陀螺仪零偏估计 |
 | 信号滤波 | [Frequency](User_File/Middleware/Algorithm/Filter/Frequency)、[IIR](User_File/Middleware/Algorithm/Filter/IIR) | FIR 频率滤波与 IIR 低通、陷波等组件 |
+| 自适应滤波 | [OneEuro](User_File/Middleware/Algorithm/Filter/OneEuro) | 标量 One Euro 低通，根据变化速率调节截止频率 |
 | 数学 | [Basic](User_File/Middleware/Algorithm/Basic)、[Complex](User_File/Middleware/Algorithm/Complex)、[Matrix](User_File/Middleware/Algorithm/Matrix)、[Quaternion](User_File/Middleware/Algorithm/Quaternion) | 基础运算、复数、定长矩阵与姿态表示转换 |
 | 辅助 | [Slope](User_File/Middleware/Algorithm/Slope)、[FSM](User_File/Middleware/Algorithm/FSM)、[Queue](User_File/Middleware/Algorithm/Queue)、[Pulse](User_File/Middleware/Algorithm/Pulse) | 斜坡、状态机、队列与周期分频 |
 
 使用算法时需要明确量纲、采样周期、状态初始化和输出限幅。模型相关约定以模块头文件为准，例如 DOB 使用 `y[k]` 与上一周期实际输入 `u[k-1]`，SMC 由调用方提供同一时刻的状态及其导数。
+
+### 控制与轨迹约定
+
+- **PID**：死区作用于有效误差，不修改调用者目标；积分在本周期累加后限幅，支持负 `Ki`，`Ki=0` 时清空积分。积分限幅为零表示不限制积分，积分分离和变速积分的阈值约定见头文件。
+- **D 支路滤波**：`D_Filter_Cutoff` 使用 Hz，默认 `0` 关闭；与 `D_First` 微分先行独立配置。先滤波差分速率，再乘 `Kd`；DJI 的 `PID_InitTypeDef` 配置已透传该字段。首次启用或切换微分来源时滤波状态从零开始，持续启用且来源不变时保留滤波值。PID 参数更新不自动清空全部历史状态，死区也不保证总输出为零。
+- **Trajectory**：独立于原有 Slope，一个对象管理一个轴。位置目标以零速度、零加速度到达；速度目标到达后保持匀速，设置零速度可平滑停止。目标在下一周期从当前规划的 `p/v/a` 接续，重复目标不重新规划。模块不分配堆内存、不创建任务，不保证时间最优或多轴同步；制动距离内改目标允许必要的越过与返回。接口、错误处理和接入示例见 [轨迹说明](Tests/Trajectory/README.md)。
+
+### 滤波、估计与模糊推理约定
+
+- **One Euro**：固定周期标量输入，以首帧对齐初值；最低截止频率、速率系数 `Beta` 与导数截止频率可配置。周期或参数改变时重新初始化。
+- **Kalman**：每周期先预测，缺测时跳过测量更新，状态与协方差仍连续推进；恢复有效测量后再执行更新。
+- **Sugeno**：调用方提供有序节点和完整规则表，节点/规则在使用期间保持有效且只读；输入超范围时保持边界值。输入缩放、微分、规则设计及 PID 增益映射由应用负责，库中没有预设的电机或云台控制规则。使用方式与独立参考对照见 [模糊推理说明](Tests/Fuzzy/README.md)。
 
 ## 系统服务
 
@@ -157,6 +179,8 @@ CAN 接收回调在中断上下文执行。UART 的 DMA 接收须同时具备 Cu
 
 DMA1/DMA2 缓冲区应放入 `.dma_buffer`，并核对对齐、生命周期和传输长度；BDMA 等控制器需要单独确认内存可达性。`RAM_DMA` 的地址与大小必须与 `main.c` / `.ioc` 中的 MPU 配置一致，链接脚本包含一致性断言。
 
+UART 的专用 TX 缓冲随管理对象放在该不可缓存区域，CPU 复制完成后通过内存屏障再启动 DMA；该路径无需额外清理 D-Cache。此约定依赖当前链接布局与 MPU 配置，修改内存属性时须一并复核。
+
 FreeRTOS 使用 `heap_5`，默认总量 64 KiB，分为 **48 KiB DTCMRAM + 16 KiB RAM_D1**。DTCM 分区由 `H7_FREERTOS_DTCM_HEAP_SIZE` 配置，heap 与 port 补丁位于 [FreeRTOS_Patch](User_Config/FreeRTOS_Patch)。
 
 ### CubeMX 与构建边界
@@ -185,6 +209,31 @@ cmake --build --preset Release
 ```
 
 [CMakePresets.json](CMakePresets.json) 管理构建配置。Debug 使用 `-Og -g3`，Release 使用 `-Os -g0`。
+
+### 主机回归
+
+仓库内提供独立 CMake 测试工程，使用主机 C++ 编译器直接编译生产源码，按需以桩函数替换硬件接口。不要给这些工程加载固件 ARM 工具链。
+
+| 工程 | 覆盖范围 |
+| --- | --- |
+| [Fuzzy](Tests/Fuzzy/README.md) | 独立 Sugeno 参考模型、9 万个随机输入、多输出、非均匀节点及配置/输入边界 |
+| [Boundary](Tests/Boundary) | PID 积分/死区/D 低通、KF 连续缺测、电机命令失败返回、EricTool 有界解析、UART DMA 发送寿命及忙/失败路径，共 5 组 |
+| [Trajectory](Tests/Trajectory/README.md) | 输入契约、6 万组随机初态、1657 组边界初态、10 万次逐周期改目标、连续信号跟随及分段连续性，共 5 组 |
+
+在仓库根目录运行下列 PowerShell 命令；将 `g++` 替换为本机主机编译器路径：
+
+```powershell
+foreach ($suite in @("Fuzzy", "Boundary", "Trajectory")) {
+    cmake -S "Tests/$suite" -B "build/Tests_$suite" -G Ninja -DCMAKE_CXX_COMPILER=g++ -DCMAKE_BUILD_TYPE=Release
+    if ($LASTEXITCODE -ne 0) { throw "$suite 配置失败" }
+    cmake --build "build/Tests_$suite"
+    if ($LASTEXITCODE -ne 0) { throw "$suite 构建失败" }
+    ctest --test-dir "build/Tests_$suite" --output-on-failure
+    if ($LASTEXITCODE -ne 0) { throw "$suite 测试失败" }
+}
+```
+
+2026-09-19 的功能与边界修复已进行主机验证及 MC02 Debug 编译链接。主机测试不代替实际 DMA/CAN 通信、电机闭环和实时性验证；新增算法仍需由应用接入，Trajectory 尚未测量板上的最坏重规划耗时。
 
 ### 烧录与观察
 
