@@ -35,15 +35,29 @@ enum Enum_Filter_Frequency_Type
     Filter_Frequency_Type_BANDSTOP,
 };
 
+enum Enum_Filter_Frequency_Window
+{
+    Filter_Frequency_Window_RECTANGULAR = 0,
+    Filter_Frequency_Window_HAMMING,
+    Filter_Frequency_Window_HANN,
+    Filter_Frequency_Window_BLACKMAN,
+};
+
+float Filter_Frequency_Window_Value(Enum_Filter_Frequency_Window __Window,
+                                  uint32_t __Index, uint32_t __Order);
+
 /**
  * @brief Reusable, Frequency滤波器算法
- *
+ * @details Init成功后按固定周期输入有限采样值。Init、Reset与采样不得并发调用。
+ * 对称系数的群延迟为阶数/(2*采样率), 更换窗函数不改变同阶群延迟。
  */
 template<uint32_t Filter_Frequency_Order = 50>
 class Class_Filter_Frequency
 {
 public:
-    void Init(const float &__Value_Constrain_Low = 0.0f, const float &__Value_Constrain_High = 1.0f, const Enum_Filter_Frequency_Type &__Filter_Frequency_Type = Filter_Frequency_Type_LOWPASS, const float &__Frequency_Low = 0.0f, const float &__Frequency_High = FREQUENCY_FILTER_DEFAULT_SAMPLING_FREQUENCY / 2.0f, const float &__Sampling_Frequency = FREQUENCY_FILTER_DEFAULT_SAMPLING_FREQUENCY);
+    bool Init(const float &__Value_Constrain_Low = 0.0f, const float &__Value_Constrain_High = 1.0f, const Enum_Filter_Frequency_Type &__Filter_Frequency_Type = Filter_Frequency_Type_LOWPASS, const float &__Frequency_Low = 0.0f, const float &__Frequency_High = FREQUENCY_FILTER_DEFAULT_SAMPLING_FREQUENCY / 2.0f, const float &__Sampling_Frequency = FREQUENCY_FILTER_DEFAULT_SAMPLING_FREQUENCY, const Enum_Filter_Frequency_Window &__Window = Filter_Frequency_Window_RECTANGULAR);
+
+    void Reset();
 
     inline float Get_Out() const;
 
@@ -55,17 +69,17 @@ protected:
     // 初始化相关常量
 
     // 输入限幅
-    float Value_Constrain_Low;
-    float Value_Constrain_High;
+    float Value_Constrain_Low = 0.0f;
+    float Value_Constrain_High = 0.0f;
 
     // 滤波器类型
-    Enum_Filter_Frequency_Type Filter_Frequency_Type;
+    Enum_Filter_Frequency_Type Filter_Frequency_Type = Filter_Frequency_Type_LOWPASS;
     // 滤波器特征低频
-    float Frequency_Low;
+    float Frequency_Low = 0.0f;
     // 滤波器特征高频
-    float Frequency_High;
+    float Frequency_High = 0.0f;
     // 滤波器采样频率
-    float Sampling_Frequency;
+    float Sampling_Frequency = 0.0f;
 
     // 常量
 
@@ -90,6 +104,9 @@ protected:
     // 读写变量
 
     // 内部函数
+    float Calculate_Coefficient(uint32_t __Index, Enum_Filter_Frequency_Type __Type,
+                                float __Omega_Low, float __Omega_High,
+                                Enum_Filter_Frequency_Window __Window) const;
 };
 
 /* Exported variables --------------------------------------------------------*/
@@ -98,102 +115,148 @@ protected:
 
 /**
  * @brief 初始化滤波器
- * @details 重设系数并清空输入历史、环形索引和输出。
+ * @details 成功时重设系数并清空历史; 失败时保留原配置、系数、历史和输出。
+ * 阶数必须大于0, 高通与带阻要求偶数阶。默认零截止频率返回false。
  *
  * @tparam Filter_Frequency_Order 滤波器阶数
  * @param __Value_Constrain_Low 滤波器最小值, 全0不限制
  * @param __Value_Constrain_High 滤波器最大值, 全0不限制
  * @param __Filter_Frequency_Type 滤波器类型
- * @param __Frequency_Low 滤波器特征低频, 非高通有效
- * @param __Frequency_High 滤波器特征高频, 非低通有效
- * @param __Sampling_Frequency 滤波器采样频率
+ * @param __Frequency_Low 低通截止频率或带通/带阻下边界, Hz
+ * @param __Frequency_High 高通截止频率或带通/带阻上边界, Hz
+ * @param __Sampling_Frequency 滤波器采样频率, Hz
+ * @param __Window 对称窗类型, 默认矩形窗
+ * @return 配置与归一化系数有效时返回true
  */
 template<uint32_t Filter_Frequency_Order>
-void Class_Filter_Frequency<Filter_Frequency_Order>::Init(const float &__Value_Constrain_Low, const float &__Value_Constrain_High, const Enum_Filter_Frequency_Type &__Filter_Frequency_Type, const float &__Frequency_Low, const float &__Frequency_High, const float &__Sampling_Frequency)
+bool Class_Filter_Frequency<Filter_Frequency_Order>::Init(const float &__Value_Constrain_Low, const float &__Value_Constrain_High, const Enum_Filter_Frequency_Type &__Filter_Frequency_Type, const float &__Frequency_Low, const float &__Frequency_High, const float &__Sampling_Frequency, const Enum_Filter_Frequency_Window &__Window)
 {
+    if (Filter_Frequency_Order == 0 ||
+        Basic_Math_Is_Invalid_Float(__Value_Constrain_Low) ||
+        Basic_Math_Is_Invalid_Float(__Value_Constrain_High) ||
+        Basic_Math_Is_Invalid_Float(__Frequency_Low) ||
+        Basic_Math_Is_Invalid_Float(__Frequency_High) ||
+        Basic_Math_Is_Invalid_Float(__Sampling_Frequency) ||
+        __Value_Constrain_Low > __Value_Constrain_High || __Sampling_Frequency <= 0.0f ||
+        __Filter_Frequency_Type < Filter_Frequency_Type_LOWPASS ||
+        __Filter_Frequency_Type > Filter_Frequency_Type_BANDSTOP ||
+        __Window < Filter_Frequency_Window_RECTANGULAR || __Window > Filter_Frequency_Window_BLACKMAN)
+    {
+        return (false);
+    }
+
+    float nyquist = __Sampling_Frequency / 2.0f;
+    if ((__Filter_Frequency_Type != Filter_Frequency_Type_HIGHPASS &&
+         (__Frequency_Low <= 0.0f || __Frequency_Low >= nyquist)) ||
+        (__Filter_Frequency_Type != Filter_Frequency_Type_LOWPASS &&
+         (__Frequency_High <= 0.0f || __Frequency_High >= nyquist)) ||
+        ((__Filter_Frequency_Type == Filter_Frequency_Type_BANDPASS ||
+          __Filter_Frequency_Type == Filter_Frequency_Type_BANDSTOP) &&
+         __Frequency_Low >= __Frequency_High) ||
+        ((__Filter_Frequency_Type == Filter_Frequency_Type_HIGHPASS ||
+          __Filter_Frequency_Type == Filter_Frequency_Type_BANDSTOP) &&
+         Filter_Frequency_Order % 2 != 0))
+    {
+        return (false);
+    }
+
+    float omega_low = __Filter_Frequency_Type == Filter_Frequency_Type_HIGHPASS ?
+                      0.0f : (__Frequency_Low / __Sampling_Frequency) * (2.0f * PI);
+    float omega_high = __Filter_Frequency_Type == Filter_Frequency_Type_LOWPASS ?
+                       0.0f : (__Frequency_High / __Sampling_Frequency) * (2.0f * PI);
+    float omega_reference = 0.0f;
+    if (__Filter_Frequency_Type == Filter_Frequency_Type_HIGHPASS)
+    {
+        omega_reference = PI;
+    }
+    else if (__Filter_Frequency_Type == Filter_Frequency_Type_BANDPASS)
+    {
+        omega_reference = (omega_low + omega_high) / 2.0f;
+    }
+
+    double gain = 0.0;
+    float coefficient_max = 0.0f;
+    // 先验证整组系数与归一化, 通过后再写入, 不占用阶数相关的临时数组。
+    for (uint32_t i = 0; i <= Filter_Frequency_Order / 2; i++)
+    {
+        float coefficient = Calculate_Coefficient(i, __Filter_Frequency_Type, omega_low, omega_high, __Window);
+        if (Basic_Math_Is_Invalid_Float(coefficient))
+        {
+            return (false);
+        }
+        coefficient_max = fmaxf(coefficient_max, fabsf(coefficient));
+        float reference = arm_cos_f32(((float)i - Filter_Frequency_Order / 2.0f) * omega_reference);
+        gain += (double)coefficient * reference * (i == Filter_Frequency_Order - i ? 1.0 : 2.0);
+    }
+
+    float normalization = (float)gain;
+    if (Basic_Math_Is_Invalid_Float(normalization) || fabsf(normalization) <= FLT_EPSILON)
+    {
+        return (false);
+    }
+    float scale = 1.0f / normalization;
+    if (Basic_Math_Is_Invalid_Float(coefficient_max * scale))
+    {
+        return (false);
+    }
+
+    for (uint32_t i = 0; i <= Filter_Frequency_Order / 2; i++)
+    {
+        float coefficient = Calculate_Coefficient(i, __Filter_Frequency_Type, omega_low, omega_high, __Window) * scale;
+        System_Function[i] = coefficient;
+        System_Function[Filter_Frequency_Order - i] = coefficient;
+    }
+
     Value_Constrain_Low = __Value_Constrain_Low;
     Value_Constrain_High = __Value_Constrain_High;
     Filter_Frequency_Type = __Filter_Frequency_Type;
     Frequency_Low = __Frequency_Low;
     Frequency_High = __Frequency_High;
     Sampling_Frequency = __Sampling_Frequency;
+    Reset();
+    return (true);
+}
 
-    Signal_Flag = 0;
-    Out = 0.0f;
-
-    // 低通和带阻以直流为参考, 高通和带通在各自通带归一化
-    float system_function_sum = 0.0f;
-    float omega_reference = 0.0f;
-    // 特征低角速度
-    float omega_low;
-    // 特征高角速度
-    float omega_high;
-
-    omega_low = 2.0f * PI * Frequency_Low / Sampling_Frequency;
-    omega_high = 2.0f * PI * Frequency_High / Sampling_Frequency;
-
-    // 计算滤波器系统
-
-    switch (Filter_Frequency_Type)
+/**
+ * @brief 计算未归一化的加窗系数, 调用前由Init验证参数
+ */
+template<uint32_t Filter_Frequency_Order>
+float Class_Filter_Frequency<Filter_Frequency_Order>::Calculate_Coefficient(
+    uint32_t __Index, Enum_Filter_Frequency_Type __Type, float __Omega_Low,
+    float __Omega_High, Enum_Filter_Frequency_Window __Window) const
+{
+    float position = (float)__Index - Filter_Frequency_Order / 2.0f;
+    float coefficient = 0.0f;
+    switch (__Type)
     {
-    case (Filter_Frequency_Type_LOWPASS):
-    {
-        for (int i = 0; i < Filter_Frequency_Order + 1; i++)
-        {
-            System_Function[i] = omega_low / PI * Basic_Math_Sinc(((float) (i) - Filter_Frequency_Order / 2.0f) * omega_low);
-        }
-
+    case Filter_Frequency_Type_LOWPASS:
+        coefficient = __Omega_Low / PI * Basic_Math_Sinc(position * __Omega_Low);
+        break;
+    case Filter_Frequency_Type_HIGHPASS:
+        coefficient = Basic_Math_Sinc(position * PI) - __Omega_High / PI * Basic_Math_Sinc(position * __Omega_High);
+        break;
+    case Filter_Frequency_Type_BANDPASS:
+        coefficient = __Omega_High / PI * Basic_Math_Sinc(position * __Omega_High) - __Omega_Low / PI * Basic_Math_Sinc(position * __Omega_Low);
+        break;
+    case Filter_Frequency_Type_BANDSTOP:
+        coefficient = Basic_Math_Sinc(position * PI) + __Omega_Low / PI * Basic_Math_Sinc(position * __Omega_Low) - __Omega_High / PI * Basic_Math_Sinc(position * __Omega_High);
         break;
     }
-    case (Filter_Frequency_Type_HIGHPASS):
+    return (coefficient * Filter_Frequency_Window_Value(__Window, __Index, Filter_Frequency_Order));
+}
+
+/**
+ * @brief 清空输入历史、环形索引和输出, 保留滤波配置与系数
+ */
+template<uint32_t Filter_Frequency_Order>
+void Class_Filter_Frequency<Filter_Frequency_Order>::Reset()
+{
+    for (uint32_t i = 0; i <= Filter_Frequency_Order; i++)
     {
-        // 奇数阶对称FIR在Nyquist处为零, 改用高通通带中点
-        omega_reference = Filter_Frequency_Order % 2 == 0 ? PI : (omega_high + PI) / 2.0f;
-
-        for (int i = 0; i < Filter_Frequency_Order + 1; i++)
-        {
-            System_Function[i] = Basic_Math_Sinc(((float) (i) - Filter_Frequency_Order / 2.0f) * PI) - omega_high / PI * Basic_Math_Sinc(((float) (i) - Filter_Frequency_Order / 2.0f) * omega_high);
-        }
-
-        break;
-    }
-    case (Filter_Frequency_Type_BANDPASS):
-    {
-        omega_reference = (omega_low + omega_high) / 2.0f;
-
-        for (int i = 0; i < Filter_Frequency_Order + 1; i++)
-        {
-            System_Function[i] = omega_high / PI * Basic_Math_Sinc(((float) (i) - Filter_Frequency_Order / 2.0f) * omega_high) - omega_low / PI * Basic_Math_Sinc(((float) (i) - Filter_Frequency_Order / 2.0f) * omega_low);
-        }
-
-        break;
-    }
-    case (Filter_Frequency_Type_BANDSTOP):
-    {
-        for (int i = 0; i < Filter_Frequency_Order + 1; i++)
-        {
-            System_Function[i] = Basic_Math_Sinc(((float) (i) - Filter_Frequency_Order / 2.0f) * PI) + omega_low / PI * Basic_Math_Sinc(((float) (i) - Filter_Frequency_Order / 2.0f) * omega_low) - omega_high / PI * Basic_Math_Sinc(((float) (i) - Filter_Frequency_Order / 2.0f) * omega_high);
-        }
-
-        break;
-    }
-    }
-
-    // 对称系数去除线性相位后, 余弦加权和即参考频率的实增益
-    for (int i = 0; i < Filter_Frequency_Order + 1; i++)
-    {
-        system_function_sum += System_Function[i] * arm_cos_f32(((float) (i) - Filter_Frequency_Order / 2.0f) * omega_reference);
         Input_Signal[i] = 0.0f;
     }
-
-    // 参考增益接近零时保留原系数, 避免除零或异常放大
-    if (fabsf(system_function_sum) > FLT_EPSILON)
-    {
-        for (int i = 0; i < Filter_Frequency_Order + 1; i++)
-        {
-            System_Function[i] /= system_function_sum;
-        }
-    }
+    Signal_Flag = 0;
+    Out = 0.0f;
 }
 
 /**
@@ -206,10 +269,14 @@ void Class_Filter_Frequency<Filter_Frequency_Order>::TIM_Calculate_PeriodElapsed
 {
     Out = 0.0f;
 
-    // 执行卷积操作
-    for (int i = 0; i < Filter_Frequency_Order + 1; i++)
+    uint32_t coefficient = 0;
+    for (uint32_t i = Signal_Flag; i <= Filter_Frequency_Order; i++)
     {
-        Out += System_Function[i] * Input_Signal[(Signal_Flag + i) % (Filter_Frequency_Order + 1)];
+        Out += System_Function[coefficient++] * Input_Signal[i];
+    }
+    for (uint32_t i = 0; i < Signal_Flag; i++)
+    {
+        Out += System_Function[coefficient++] * Input_Signal[i];
     }
 }
 
