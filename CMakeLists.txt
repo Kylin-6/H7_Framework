@@ -161,6 +161,13 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Device/Peripheral/Motor/DMmotor/dmmotor.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Device/Peripheral/Motor/DJImotor/dji_motor.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Middleware/Algorithm/Pulse/alg_pulse.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/User_File/Middleware/Algorithm/CRC/crc8.c
+        ${CMAKE_CURRENT_LIST_DIR}/User_File/Middleware/Algorithm/CRC/crc16.c
+        ${CMAKE_CURRENT_LIST_DIR}/User_File/Device/Peripheral/Remote/remote_control.c
+        ${CMAKE_CURRENT_LIST_DIR}/User_File/Device/Peripheral/Referee/crc_ref.c
+        ${CMAKE_CURRENT_LIST_DIR}/User_File/Device/Peripheral/Referee/referee_26.c
+        ${CMAKE_CURRENT_LIST_DIR}/User_File/Device/Peripheral/Referee/referee_UI_26.c
+        ${CMAKE_CURRENT_LIST_DIR}/User_File/Device/Peripheral/Referee/vtm_26.c
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Task/Control_Task.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Application/application.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Application/RobotCmd/RobotCmd.cpp
@@ -220,6 +227,9 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
         User_File/Device/Peripheral/Motor/DMmotor
         User_File/Device/Peripheral/Motor/DJImotor
         User_File/Middleware/Algorithm/Pulse/
+        User_File/Middleware/Algorithm/CRC/
+        User_File/Device/Peripheral/Remote/
+        User_File/Device/Peripheral/Referee/
         User_File/Application/
         User_File/Application/RobotCmd/
         User_File/Application/Gimbal/
