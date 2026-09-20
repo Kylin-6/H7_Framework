@@ -29,11 +29,101 @@ Class_EricTool_UART EricTool_UART;
 /* Function prototypes -------------------------------------------------------*/
 
 /**
+ * @brief 解析一条 variable:value# 指令；失败输出 index=-1、value=0。
+ * @note 只读取 Length 范围，变量名最多 99 字节；支持负数、小数，不支持指数形式。
+ */
+static void EricTool_ParseCommand(const uint8_t *data, uint16_t length,
+                                  const char **names, uint8_t count,
+                                  int32_t &variable_index, float &variable_value)
+{
+    variable_index = -1;
+    variable_value = 0.0f;
+    if (data == nullptr || names == nullptr)
+    {
+        return;
+    }
+
+    uint16_t name_length = 0;
+    while (name_length < length && name_length < ERICTOOL_RX_VARIABLE_ASSIGNMENT_MAX_LENGTH &&
+           data[name_length] != ':' && data[name_length] != 0)
+    {
+        ++name_length;
+    }
+    if (name_length == 0 || name_length >= length ||
+        name_length >= ERICTOOL_RX_VARIABLE_ASSIGNMENT_MAX_LENGTH || data[name_length] != ':')
+    {
+        return;
+    }
+
+    int32_t index = -1;
+    for (int i = 0; i < count; ++i)
+    {
+        if (names[i] != nullptr && strlen(names[i]) == name_length &&
+            memcmp(data, names[i], name_length) == 0)
+        {
+            index = i;
+            break;
+        }
+    }
+    if (index == -1)
+    {
+        return;
+    }
+
+    uint16_t cursor = name_length + 1;
+    float sign = 1.0f;
+    if (cursor < length && data[cursor] == '-')
+    {
+        sign = -1.0f;
+        ++cursor;
+    }
+    float value = 0.0f;
+    float decimal_scale = 1.0f;
+    bool has_dot = false;
+    bool has_digit = false;
+    while (cursor < length && data[cursor] != '#')
+    {
+        const uint8_t ch = data[cursor++];
+        if (ch == '.' && !has_dot)
+        {
+            has_dot = true;
+        }
+        else if (ch >= '0' && ch <= '9')
+        {
+            has_digit = true;
+            if (has_dot)
+            {
+                decimal_scale *= 0.1f;
+                value += (ch - '0') * decimal_scale;
+            }
+            else
+            {
+                value = value * 10.0f + (ch - '0');
+            }
+            if (Basic_Math_Is_Invalid_Float(value))
+            {
+                return;
+            }
+        }
+        else
+        {
+            return;
+        }
+    }
+    if (cursor == length || !has_digit)
+    {
+        return;
+    }
+    variable_index = index;
+    variable_value = sign * value;
+}
+
+/**
  * @brief Vofa+ 初始化
  *
  * @param huart                        绑定的 UART 外设句柄
  * @param __Rx_Variable_Assignment_Num 接收指令字典数量
- * @param __Rx_Variable_Assignment_List 接收指令字典列表指针（字符串数组，每项 100 字节）
+ * @param __Rx_Variable_Assignment_List 接收指令字典列表指针（字符串指针数组）
  * @param __Frame_Tail                 帧尾（justfloat 默认 0x7f800000）
  */
 void Class_EricTool_UART::Init(const UART_HandleTypeDef *huart, const uint8_t &__Rx_Variable_Assignment_Num, const char **__Rx_Variable_Assignment_List, const uint32_t &__Frame_Tail)
@@ -69,7 +159,9 @@ void Class_EricTool_UART::Init(const UART_HandleTypeDef *huart, const uint8_t &_
     }
 
     Rx_Variable_Num = __Rx_Variable_Assignment_Num;
-    Rx_Variable_List = const_cast<char **>(__Rx_Variable_Assignment_List);
+    Rx_Variable_List = __Rx_Variable_Assignment_List;
+    Variable_Index = -1;
+    Variable_Value = 0.0f;
     Frame_Tail = __Frame_Tail;
 }
 
@@ -81,103 +173,18 @@ void Class_EricTool_UART::Init(const UART_HandleTypeDef *huart, const uint8_t &_
  */
 void Class_EricTool_UART::UART_RxCpltCallback(const uint8_t *Rx_Data, const uint16_t &Length)
 {
-    Data_Process(Length);
+    EricTool_ParseCommand(Rx_Data, Length, Rx_Variable_List, Rx_Variable_Num, Variable_Index, Variable_Value);
 }
 
 /**
  * @brief TIM 1ms 定时中断：打包并发送 justfloat 帧
- *
+ * @return HAL 发送状态；忙或失败时不排队，下次调用发送最新数据。
  */
-void Class_EricTool_UART::TIM_1ms_Write_PeriodElapsedCallback()
+uint8_t Class_EricTool_UART::TIM_1ms_Write_PeriodElapsedCallback()
 {
-  if (UART_Manage_Object == nullptr) return;
+  if (UART_Manage_Object == nullptr) return HAL_ERROR;
   Output();
-  UART_Transmit_Data(UART_Manage_Object->UART_Handler, Tx_Buffer, Data_Number * sizeof(float) + sizeof(uint32_t));
-}
-
-/**
- * @brief 处理接收到的文本指令（格式："variable=value#"）
- *
- * @param Length 帧长度
- */
-void Class_EricTool_UART::Data_Process(const uint16_t &Length)
-{
-    int flag = _Judge_Variable_Name(Length);
-    _Judge_Variable_Value(Length, flag);
-}
-
-/**
- * @brief 解析指令变量名，返回等号后第一个字符的下标
- *
- * @param Length 帧长度
- * @return uint8_t 等号后第一个字符的下标
- */
-uint8_t Class_EricTool_UART::_Judge_Variable_Name(const uint16_t &Length)
-{
-    char tmp_variable_name[ERICTOOL_RX_VARIABLE_ASSIGNMENT_MAX_LENGTH];
-    int flag;
-
-    for (flag = 0; UART_Manage_Object->Rx_Buffer_Ready[flag] != ':' && flag < Length && UART_Manage_Object->Rx_Buffer_Ready[flag] != 0; flag++)
-    {
-        tmp_variable_name[flag] = UART_Manage_Object->Rx_Buffer_Ready[flag];
-    }
-    tmp_variable_name[flag] = 0;
-
-    for (int i = 0; i < Rx_Variable_Num; i++)
-    {
-        if (strcmp(tmp_variable_name, (char *) ((int) Rx_Variable_List + ERICTOOL_RX_VARIABLE_ASSIGNMENT_MAX_LENGTH * i)) == 0)
-        {
-            Variable_Index = i;
-            return (flag + 1);
-        }
-    }
-    Variable_Index = -1;
-    return (flag + 1);
-}
-
-/**
- * @brief 解析指令数值（支持负数和小数）
- *
- * @param Length 帧长度
- * @param flag   等号后第一个字符的下标
- */
-void Class_EricTool_UART::_Judge_Variable_Value(const uint16_t &Length, int flag)
-{
-    int tmp_dot_flag, tmp_sign_coefficient, i;
-
-    tmp_dot_flag = 0;
-    tmp_sign_coefficient = 1;
-    Variable_Value = 0.0f;
-
-    if (Variable_Index == -1)
-    {
-        return;
-    }
-
-    if (UART_Manage_Object->Rx_Buffer_Ready[flag] == '-')
-    {
-        tmp_sign_coefficient = -1;
-        flag++;
-    }
-
-    for (i = flag; UART_Manage_Object->Rx_Buffer_Ready[i] != '#' && i < Length && UART_Manage_Object->Rx_Buffer_Ready[flag] != 0; i++)
-    {
-        if (UART_Manage_Object->Rx_Buffer_Ready[i] == '.')
-        {
-            tmp_dot_flag = i;
-        }
-        else
-        {
-            Variable_Value = Variable_Value * 10.0f + (float) (UART_Manage_Object->Rx_Buffer_Ready[i] - '0');
-        }
-    }
-
-    if (tmp_dot_flag != 0)
-    {
-        Variable_Value /= powf(10.0f, (float) (i - tmp_dot_flag) - 1.0f);
-    }
-
-    Variable_Value *= (float) (tmp_sign_coefficient);
+  return UART_Transmit_Data(UART_Manage_Object->UART_Handler, Tx_Buffer, Data_Number * sizeof(float) + sizeof(uint32_t));
 }
 
 /**
@@ -202,14 +209,16 @@ void Class_EricTool_UART::Output()
  * @brief EricTool USB CDC 初始化
  *
  * @param __Rx_Variable_Assignment_Num 接收指令字典数量
- * @param __Rx_Variable_Assignment_List 接收指令字典列表指针（字符串数组，每项 100 字节）
+ * @param __Rx_Variable_Assignment_List 接收指令字典列表指针（字符串指针数组）
  * @param __Frame_Tail                 帧尾（justfloat 默认 0x7f800000）
  */
 void Class_EricTool_USB::Init(const uint8_t &__Rx_Variable_Assignment_Num, const char **__Rx_Variable_Assignment_List, const uint32_t &__Frame_Tail)
 {
     USB_Manage_Object = &USB0_Manage_Object;
     Rx_Variable_Num = __Rx_Variable_Assignment_Num;
-    Rx_Variable_List = const_cast<char **>(__Rx_Variable_Assignment_List);
+    Rx_Variable_List = __Rx_Variable_Assignment_List;
+    Variable_Index = -1;
+    Variable_Value = 0.0f;
     Frame_Tail = __Frame_Tail;
 }
 
@@ -221,8 +230,7 @@ void Class_EricTool_USB::Init(const uint8_t &__Rx_Variable_Assignment_Num, const
  */
 void Class_EricTool_USB::USB_RxCallback(const uint8_t *Rx_Data, const uint16_t &Length)
 {
-    (void)Rx_Data;
-    Data_Process(Length);
+    EricTool_ParseCommand(Rx_Data, Length, Rx_Variable_List, Rx_Variable_Num, Variable_Index, Variable_Value);
 }
 
 /**
@@ -232,91 +240,6 @@ void Class_EricTool_USB::TIM_1ms_Write_PeriodElapsedCallback()
 {
     Output();
     USB_Transmit_Data(Tx_Buffer, Data_Number * sizeof(float) + sizeof(uint32_t));
-}
-
-/**
- * @brief 处理接收到的文本指令（格式："variable=value#"）
- *
- * @param Length 帧长度
- */
-void Class_EricTool_USB::Data_Process(const uint16_t &Length)
-{
-    int flag = _Judge_Variable_Name(Length);
-    _Judge_Variable_Value(Length, flag);
-}
-
-/**
- * @brief 解析指令变量名，返回等号后第一个字符的下标
- *
- * @param Length 帧长度
- * @return uint8_t 等号后第一个字符的下标
- */
-uint8_t Class_EricTool_USB::_Judge_Variable_Name(const uint16_t &Length)
-{
-    char tmp_variable_name[ERICTOOL_RX_VARIABLE_ASSIGNMENT_MAX_LENGTH];
-    int flag;
-
-    for (flag = 0; USB_Manage_Object->Rx_Buffer_Ready[flag] != ':' && flag < Length && USB_Manage_Object->Rx_Buffer_Ready[flag] != 0; flag++)
-    {
-        tmp_variable_name[flag] = USB_Manage_Object->Rx_Buffer_Ready[flag];
-    }
-    tmp_variable_name[flag] = 0;
-
-    for (int i = 0; i < Rx_Variable_Num; i++)
-    {
-        if (strcmp(tmp_variable_name, (char *) ((int) Rx_Variable_List + ERICTOOL_RX_VARIABLE_ASSIGNMENT_MAX_LENGTH * i)) == 0)
-        {
-            Variable_Index = i;
-            return (flag + 1);
-        }
-    }
-    Variable_Index = -1;
-    return (flag + 1);
-}
-
-/**
- * @brief 解析指令数值（支持负数和小数）
- *
- * @param Length 帧长度
- * @param flag   等号后第一个字符的下标
- */
-void Class_EricTool_USB::_Judge_Variable_Value(const uint16_t &Length, int flag)
-{
-    int tmp_dot_flag, tmp_sign_coefficient, i;
-
-    tmp_dot_flag = 0;
-    tmp_sign_coefficient = 1;
-    Variable_Value = 0.0f;
-
-    if (Variable_Index == -1)
-    {
-        return;
-    }
-
-    if (USB_Manage_Object->Rx_Buffer_Ready[flag] == '-')
-    {
-        tmp_sign_coefficient = -1;
-        flag++;
-    }
-
-    for (i = flag; USB_Manage_Object->Rx_Buffer_Ready[i] != '#' && i < Length && USB_Manage_Object->Rx_Buffer_Ready[flag] != 0; i++)
-    {
-        if (USB_Manage_Object->Rx_Buffer_Ready[i] == '.')
-        {
-            tmp_dot_flag = i;
-        }
-        else
-        {
-            Variable_Value = Variable_Value * 10.0f + (float) (USB_Manage_Object->Rx_Buffer_Ready[i] - '0');
-        }
-    }
-
-    if (tmp_dot_flag != 0)
-    {
-        Variable_Value /= powf(10.0f, (float) (i - tmp_dot_flag) - 1.0f);
-    }
-
-    Variable_Value *= (float) (tmp_sign_coefficient);
 }
 
 /**

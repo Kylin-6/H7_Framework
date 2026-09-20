@@ -31,7 +31,7 @@
     /**
      * @brief Reusable, EricTool justfloat 串口调试工具（UART 版本）
      * @note  上行：justfloat 帧（N×float + 4B 帧尾 0x7f800000）
-     *        下行：文本指令 "variable=value#"，解析后写入变量字典
+     *        下行：文本指令 "variable:value#"，成功后可读取字典索引和值；非法帧返回索引 -1、值 0
      */
     class Class_EricTool_UART {
 public:
@@ -45,7 +45,7 @@ public:
 
     void UART_RxCpltCallback(const uint8_t *Rx_Data, const uint16_t &Length);
 
-    void TIM_1ms_Write_PeriodElapsedCallback();
+    uint8_t TIM_1ms_Write_PeriodElapsedCallback();
 
 protected:
     // 初始化相关常量
@@ -53,9 +53,9 @@ protected:
     // 绑定的 UART 管理对象
   Struct_UART_Manage_Object *UART_Manage_Object = nullptr;
   // 接收指令字典数量
-  uint8_t Rx_Variable_Num;
+  uint8_t Rx_Variable_Num = 0;
   // 接收指令字典列表指针
-  char **Rx_Variable_List;
+  const char **Rx_Variable_List = nullptr;
   // 数据包尾标（justfloat 默认 0x7f800000）
   uint32_t Frame_Tail;
 
@@ -71,7 +71,7 @@ protected:
   // 当前发送的数据数量
   uint8_t Data_Number = 0;
   // 当前接收的指令在指令字典中的编号（-1 表示未匹配）
-  int32_t Variable_Index = 0;
+  int32_t Variable_Index = -1;
   // 当前接收的指令值
   float Variable_Value = 0.0f;
 
@@ -83,19 +83,13 @@ protected:
 
   // 内部函数
 
-  void Data_Process(const uint16_t &Length);
-
-  uint8_t _Judge_Variable_Name(const uint16_t &Length);
-
-  void _Judge_Variable_Value(const uint16_t &Length, int flag);
-
   void Output();
 };
 
 /**
  * @brief Reusable, EricTool justfloat 调试工具（USB CDC 版本）
  * @note  上行：justfloat 帧（N×float + 4B 帧尾 0x7f800000）
- *        下行：文本指令 "variable=value#"，解析后写入变量字典
+ *        下行：文本指令 "variable:value#"，成功后可读取字典索引和值；非法帧返回索引 -1、值 0
  */
 class Class_EricTool_USB
 {
@@ -116,9 +110,9 @@ protected:
     // 绑定的 USB 管理对象
     Struct_USB_Manage_Object *USB_Manage_Object;
     // 接收指令字典数量
-    uint8_t Rx_Variable_Num;
+    uint8_t Rx_Variable_Num = 0;
     // 接收指令字典列表指针
-    char **Rx_Variable_List;
+    const char **Rx_Variable_List = nullptr;
     // 数据包尾标（justfloat 默认 0x7f800000）
     uint32_t Frame_Tail;
 
@@ -130,15 +124,9 @@ protected:
     // 当前发送的数据数量
     uint8_t Data_Number = 0;
     // 当前接收的指令在指令字典中的编号（-1 表示未匹配）
-    int32_t Variable_Index = 0;
+    int32_t Variable_Index = -1;
     // 当前接收的指令值
     float Variable_Value = 0.0f;
-
-    void Data_Process(const uint16_t &Length);
-
-    uint8_t _Judge_Variable_Name(const uint16_t &Length);
-
-    void _Judge_Variable_Value(const uint16_t &Length, int flag);
 
     void Output();
 };

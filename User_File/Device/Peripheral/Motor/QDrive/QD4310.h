@@ -41,17 +41,17 @@ typedef struct {
     FDCAN_HandleTypeDef* hfdcan;
 } QD4310_t;
 
-// 函数声明
+// 命令接口返回值：true 表示已提交队列或周期槽，false 表示提交失败；不代表电机已执行。
 /**
  * @brief 使能电机
  * @param motor 电机结构体指针
  */
-void QD4310_Enable(QD4310_t *motor);
+bool QD4310_Enable(QD4310_t *motor);
 /**
  * @brief 失能电机
  * @param motor 电机结构体指针
  */
-void QD4310_Disable(QD4310_t *motor);
+bool QD4310_Disable(QD4310_t *motor);
 /**
  * @brief 更新电机状态
  * @param motor 电机结构体指针
@@ -63,33 +63,35 @@ void QD4310_Update(QD4310_t *motor, const uint8_t feedback[8]);
  * @param motor 电机结构体指针
  * @param angle 设置的角度,[0,2pi]
  */
-void QD4310_SetAngle(QD4310_t *motor, float angle);
+bool QD4310_SetAngle(QD4310_t *motor, float angle);
 /**
  * @brief 设置电机步进角度
  * @param motor 电机结构体指针
  * @param step_angle 设置的角度,[-2pi,2pi]
  */
-void QD4310_SetStepAngle(QD4310_t *motor, float step_angle);
+bool QD4310_SetStepAngle(QD4310_t *motor, float step_angle);
 /**
  * @brief 设置电机转速
  * @param motor 电机结构体指针
  * @param speed 设置的转速,[-1000,1000]
  */
-void QD4310_SetSpeed(QD4310_t *motor, float speed);
+bool QD4310_SetSpeed(QD4310_t *motor, float speed);
 /**
  * @brief 设置电机转速
  * @param motor 电机结构体指针
  * @param speed 设置的转速,[-1000,1000]
  */
-void QD4310_SetLowSpeed(QD4310_t *motor, float speed);
+bool QD4310_SetLowSpeed(QD4310_t *motor, float speed);
 /**
  * @brief 设置电机电流
  * @param motor 电机结构体指针
  * @param current 设置的转速,[-10,10]
  */
-void QD4310_SetCurrent(QD4310_t *motor, float current);
+bool QD4310_SetCurrent(QD4310_t *motor, float current);
 
-void QD4310_SendCommand(QD4310_t *motor, QD4310_Command_t cmd, int16_t value);
+bool QD4310_SetZeroAngle(QD4310_t *motor);
+
+bool QD4310_SendCommand(QD4310_t *motor, QD4310_Command_t cmd, int16_t value);
 
 void QD4310_Init(QD4310_t* motor, uint8_t id, FDCAN_HandleTypeDef* hfdcan);
 

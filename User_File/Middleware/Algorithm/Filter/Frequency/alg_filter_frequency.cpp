@@ -27,4 +27,33 @@ const float FREQUENCY_FILTER_DEFAULT_SAMPLING_FREQUENCY = 1000.0f;
 
 /* Function prototypes -------------------------------------------------------*/
 
+/**
+ * @brief 计算对称窗权重, 调用前由Init验证类型与阶数
+ */
+float Filter_Frequency_Window_Value(Enum_Filter_Frequency_Window __Window,
+                                  uint32_t __Index, uint32_t __Order)
+{
+    if (__Window == Filter_Frequency_Window_RECTANGULAR)
+    {
+        return (1.0f);
+    }
+    if (__Index == 0 || __Index == __Order)
+    {
+        return (__Window == Filter_Frequency_Window_HAMMING ? 0.08f : 0.0f);
+    }
+
+    float cosine = arm_cos_f32((2.0f * PI) * ((float)__Index / __Order));
+    switch (__Window)
+    {
+    case Filter_Frequency_Window_HAMMING:
+        return (0.54f - 0.46f * cosine);
+    case Filter_Frequency_Window_HANN:
+        return (0.5f - 0.5f * cosine);
+    case Filter_Frequency_Window_BLACKMAN:
+        return (0.42f - 0.5f * cosine + 0.08f * (2.0f * cosine * cosine - 1.0f));
+    default:
+        return (0.0f);
+    }
+}
+
 /************************ COPYRIGHT(C) USTC-ROBOWALKER **************************/

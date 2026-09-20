@@ -129,6 +129,7 @@ void Class_Filter_Kalman<State_Dimension, Input_Dimension, Measurement_Dimension
 
 /**
  * @brief Kalman滤波器预测步骤, 周期与采样周期相同
+ * @note 预测后 X/P 即为当前估计；缺测时跳过更新，下一次预测继续推进状态与协方差。
  *
  * @tparam State_Dimension 状态维度
  * @tparam Input_Dimension 输入维度
@@ -142,10 +143,14 @@ void Class_Filter_Kalman<State_Dimension, Input_Dimension, Measurement_Dimension
 
     // 预测误差协方差矩阵
     Matrix_P_Prior = Matrix_A * Matrix_P * Matrix_A.Get_Transpose() + Matrix_Q;
+
+    Vector_X = Vector_X_Prior;
+    Matrix_P = Matrix_P_Prior;
 }
 
 /**
  * @brief Kalman滤波器更新步骤, 周期与采样周期相同
+ * @note 每周期先预测；仅在本周期有有效测量时更新一次。
  *
  * @tparam State_Dimension 状态维度
  * @tparam Input_Dimension 输入维度

@@ -2,11 +2,10 @@
  * @file    bsp_uart.h
  * @brief   板级支持包：UART 通信初始化与配置流程（基于 STM32H7 + DMA 双缓冲）
  * @details 仿照 SCUT-Robotlab / 达妙 drv_uart 范式改写，适配 H7_BSP 工程：
- *          - 仅接管具备 RX DMA 的 7 路 UART：UART5、UART7、USART1、USART2、USART3、USART6、USART10
+ *          - 接管 UART5、UART7、USART1、USART2、USART3、USART6、USART10；DMA 方向以 CubeMX 配置为准
  *          - 接收采用 HAL_UARTEx_ReceiveToIdle_DMA + IDLE 中断，双缓冲交替，收不定长帧
- *          - 管理对象（含 DMA 收发缓冲区）放入 .dma_buffer 段（链接到 RAM_D1，DMA1/DMA2 可访问）
- * @note    UART4、UART8、UART9 因 STM32H7 DMA1+DMA2 共 16 条 stream 已被占满，
- *          无法分配 DMA，暂不在本驱动接管。如需使用请改用中断/阻塞方式单独实现。
+ *          - 管理对象（含 DMA 收发缓冲区）放入 .dma_buffer 段（RAM_DMA，不可缓存）
+ * @note    UART4、UART8、UART9 暂未纳入管理对象；DMA 发送前须先补齐 BSP 接管。
  *
  * @author  zzm（仿 yssickjgd / USTC-RoboWalker drv_uart）
  * @version 1.0
@@ -55,6 +54,9 @@ struct Struct_UART_Manage_Object
     // 接收完毕的缓冲区
     uint8_t *Rx_Buffer_Ready;
 
+    uint8_t Tx_Buffer[UART_BUFFER_SIZE] __attribute__((aligned(32)));
+    volatile bool Tx_Submitting;
+
     // 接收时间戳
     uint64_t Rx_Timestamp;
 
@@ -69,7 +71,7 @@ struct Struct_UART_Manage_Object
 
 extern volatile bool init_finished;
 
-// 仅接管具备 RX DMA 的 7 路 UART，命名与外设实例一致
+// BSP 接管的 7 路 UART，命名与外设实例一致
 extern struct Struct_UART_Manage_Object USART1_Manage_Object;
 extern struct Struct_UART_Manage_Object USART2_Manage_Object;
 extern struct Struct_UART_Manage_Object USART3_Manage_Object;
@@ -86,6 +88,11 @@ void UART_Reinit(UART_HandleTypeDef *huart);
 
 void UART_TIM_1ms_Recover_PeriodElapsedCallback(void);
 
+/**
+ * @brief 发送字节帧；DMA 路径复制到 BSP 缓冲区，返回后调用方可复用源数据。
+ * @note DMA 路径须先 UART_Init，最多 UART_BUFFER_SIZE 字节；忙时返回 HAL_BUSY，不排队。
+ *       同一路 TX 统一经本接口提交；UART_Init 仅用于无在途传输的初始化。
+ */
 uint8_t UART_Transmit_Data(UART_HandleTypeDef *huart, uint8_t *Data, uint16_t Length);
 
 #endif // !BSP_UART_H

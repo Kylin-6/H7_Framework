@@ -44,11 +44,13 @@ public:
               float position_max = 12.5f,
               float velocity_max = 30.0f,
               float torque_max = 10.0f);
-    void Enable();
-    void Disable();
-    void ClearError();
-    void SetZeroPosition();
-    void SetMode(Enum_DMMotor_Mode mode);
+    // true 仅表示命令入队成功，不代表电机已执行；false 时可由上层重试。
+    bool Enable();
+    bool Disable();
+    bool ClearError();
+    bool SetZeroPosition();
+    // 参数非法、其他模式待应答或入队失败均返回 false。
+    bool SetMode(Enum_DMMotor_Mode mode);
     void SetMIT(float position_rad,
                 float velocity_rad_s,
                 float kp,
@@ -74,7 +76,7 @@ private:
                                  uint8_t *data,
                                  uint32_t len,
                                  void *context);
-    void SendModeCommand(uint8_t command);
+    bool SendModeCommand(uint8_t command);
     void Publish(const Struct_CAN_Tx_Msg &message);
     uint32_t ControlId() const;
 
