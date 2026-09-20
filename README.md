@@ -4,6 +4,8 @@
 
 底层使用 STM32CubeMX、HAL 与 FreeRTOS，任务接口采用 CMSIS-RTOS V2，构建使用 CMake + Ninja。用户层保持 C 风格运算、结构体与自由函数，设备和算法保留简洁的 `Class_` 封装。
 
+> **打开 `H7_BSP.ioc` 遇到版本迁移提示时，选择 Continue，不要选择 Migrate。** 迁移并重新生成可能使 `Middlewares/` 中的 FreeRTOS 与现有 SystemView 适配不兼容。请保持项目原有固件包，详见 [CubeMX 与构建边界](#cubemx-与构建边界)。
+
 [整体架构](#整体架构) · [通信与外设](#通信与外设-bsp) · [设备层](#设备层) · [算法层](#算法层) · [接入方式](#接入方式) · [构建与调试](#构建与调试) · [主机回归](#主机回归)
 
 ## 整体架构
@@ -187,6 +189,8 @@ FreeRTOS 使用 `heap_5`，默认总量 64 KiB，分为 **48 KiB DTCMRAM + 16 Ki
 
 ### CubeMX 与构建边界
 
+- **打开 IOC 时选择 Continue，禁止直接使用 Migrate 升级本工程。** 当前 [H7_BSP.ioc](H7_BSP.ioc) 记录 STM32CubeMX **6.15.0**、STM32Cube FW_H7 **V1.12.1**，仓库内 FreeRTOS 为 **V10.3.1**。缺少原固件包时先安装对应版本，再继续打开。
+- `Migrate` 会迁移项目使用的数据库与固件版本；重新生成时可能替换 `Middlewares/` 中的 FreeRTOS，使其与现有 SystemView 跟踪宏、RTOS 适配和 [port 补丁](User_Config/FreeRTOS_Patch/port_patched.c) 不兼容。需要升级时应配套调整并验证这些组件，不能仅靠迁移后编译通过判断跟踪功能正常。迁移选项含义见 [ST CubeMX 官方说明](https://dev.st.com/stm32cube-docs/stm32cubemx/6.18.1/en/docs/markup/CubeMX_UserManual/chapters/04_4_stm32cubemx_user_interface.html)。
 - 外设配置入口为 [H7_BSP.ioc](H7_BSP.ioc)，生成代码的用户修改放在 `USER CODE BEGIN/END` 区域。
 - 用户源码与 include 路径由根 [CMakeLists.txt](CMakeLists.txt) 显式维护；链接布局、RTOS 补丁维护在 `User_Config/`。
 - CubeMX 重生成后重新 configure/build，检查用户集成、链接脚本选择和补丁接入。
