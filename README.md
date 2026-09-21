@@ -6,21 +6,23 @@
 
 > **打开 `H7_BSP.ioc` 遇到版本迁移提示时，选择 Continue，不要选择 Migrate。** 迁移并重新生成可能使 `Middlewares/` 中的 FreeRTOS 与现有 SystemView 适配不兼容。请保持项目原有固件包，详见 [CubeMX 与构建边界](#cubemx-与构建边界)。
 
-[整体架构](#整体架构) · [通信与外设](#通信与外设-bsp) · [设备层](#设备层) · [算法层](#算法层) · [消息中心](#消息中心) · [应用层](#应用层) · [接入方式](#接入方式) · [构建与调试](#构建与调试) · [主机回归](#主机回归)
+[整体架构](#整体架构) · [通信与外设](#通信与外设-bsp) · [设备层](#设备层) · [算法层](#算法层) · [系统服务](#系统服务) · [接入方式](#接入方式) · [构建与调试](#构建与调试) · [主机回归](#主机回归)
+
+核心专篇：[BSP 开发指南](User_File/Middleware/BSP/README.md) · [Message Center](User_File/System/MessageCenter/README.md) · [Application 开发指南](User_File/Application/README.md)
 
 ## 整体架构
 
-![H7_BSP 框架模块与主要使用关系](Assets/Architecture/H7_BSP.svg)
+框架以模块职责划分边界：BSP 处理外设收发，Device 处理设备协议与状态，Algorithm 提供计算组件，System 提供共享服务；Task 和 Application 负责调度与业务组合。
 
-框架以模块职责划分边界：BSP 处理外设收发，Device 处理设备协议与状态，Algorithm 提供计算组件，System 提供共享服务；Task 和 Application 负责调度与业务组合。图中展示模块组织和主要使用关系。[交互图](Assets/Architecture/H7_BSP.html) 可下载后在本地浏览器打开。
+> [打开交互式 H7_BSP 架构图](Assets/Architecture/H7_BSP.html)：支持亮/暗主题、搜索、聚焦、关系追踪和导出；可维护源为 [H7_BSP.architecture.json](Assets/Architecture/H7_BSP.architecture.json)。
 
 | 层次 | 职责 | 入口 |
 | --- | --- | --- |
-| Application / Task | 组织控制逻辑、任务周期与模块协作 | [Application](User_File/Application)、[Task](User_File/Task) |
+| Application / Task | 组织控制逻辑、任务周期与模块协作 | [Application 指南](User_File/Application/README.md)、[Task](User_File/Task) |
 | Device | 封装电机、板载器件与外接工具 | [Device](User_File/Device) |
 | Algorithm | 提供控制、观测、滤波、数学与调度辅助组件 | [Algorithm](User_File/Middleware/Algorithm) |
 | System | 统一初始化、回调、时间戳与调试服务 | [System](User_File/System) |
-| BSP | 管理外设实例、缓冲区、收发与回调注册 | [BSP](User_File/Middleware/BSP) |
+| BSP | 管理外设实例、缓冲区、收发与回调注册 | [BSP 指南](User_File/Middleware/BSP/README.md) |
 | HAL / RTOS / 工程配置 | 外设初始化、任务调度、内存布局与构建 | [Core](Core)、[User_Config](User_Config)、[CMakeLists.txt](CMakeLists.txt) |
 
 ### 工程目录
@@ -47,6 +49,8 @@ sysid/                      系统辨识数据、脚本与报告
 ## 通信与外设 BSP
 
 BSP 以外设管理对象和接口函数承接 HAL，设备层通过注册回调与收发接口使用总线资源。
+启动顺序、DMA 内存、并发模型、错误处理和扩展检查表见
+[BSP 开发指南](User_File/Middleware/BSP/README.md)。
 
 | 模块 | 提供的能力 | 使用入口 |
 | --- | --- | --- |
@@ -146,22 +150,22 @@ EricTool 的 USB/UART 解析均只读取回调传入的缓冲区及有效长度�
 
 [main.c](Core/Src/main.c) 完成 MPU、HAL 和外设初始化后调用 `System_Init()`，随后初始化 RTOS、创建任务并启动调度。CAN 发送资源在内核初始化后建立，周期服务与设备计算按职责由任务调度。
 
-## 消息中心
+### 消息中心
 
 消息中心提供两种静态、类型安全的数据通道：
 
 - `Topic<T>` 使用 Latest-Value 语义，传递连续状态和控制目标；`Publisher`/`Subscriber` 只是其无分配访问封装。
 - `EventQueue<T,N>` 使用固定容量 FIFO，传递不能被最新值覆盖的离散事件；队列满时拒绝新事件并累计溢出次数。
 
-业务类型和唯一静态通道统一定义在 [MessageCenter](User_File/System/MessageCenter)。`INS_State_Topic` 由 BMI088 链路发布，云台读取最新姿态；RobotCmd 发布 Gimbal、Chassis、Shoot 连续命令并汇总反馈。单发和三连发通过固定容量 `ShootEvent` FIFO 传递。
+业务类型和唯一静态通道统一定义在 [MessageCenter](User_File/System/MessageCenter)。`INS_State_Topic` 由 BMI088 链路发布，云台读取最新姿态；RobotCmd 发布 Gimbal、Chassis、Shoot 连续命令并汇总反馈。单发和三连发通过固定容量 `ShootEvent` FIFO 传递。完整 API、并发语义、通道所有权、示例和验证清单见 [Message Center 专篇](User_File/System/MessageCenter/README.md)。
 
 Daemon 只负责在线状态判断，不负责掉线后的停机、安全策略或消息路由。设备在收到合法反馈后直接 `Feed()`；`StatusTask` 每 10 ms 调用 `CheckAll()`，各设备使用独立超时时间。管理器采用固定容量注册，无动态分配。
 
-## 应用层
+### Application
 
-[Control_Task.cpp](User_File/Task/Control_Task.cpp) 以 1 kHz 周期调度 `RobotCmd_Update()`、`Gimbal_Update()`、`Chassis_Update()` 和 `Shoot_Update()`。Gimbal、Chassis、Shoot 的硬件控制路径由 CMake 选项 `H7_APP_GIMBAL`、`H7_APP_CHASSIS`、`H7_APP_SHOOT` 控制，默认关闭；启用前需确认 CAN 总线、电机 ID、机械参数和控制参数。
-
-RobotCmd 统一持有并发布应用命令，同时汇总反馈。外部输入模块（遥控器、视觉、裁判系统等）应通过 `RobotCmd_Set*()` 接入，避免多个模块直接争用设备控制权。
+Application 作为独立机器人业务层维护，不在 BSP 总览展开具体控制实现。当前模块、
+Control_Task 调度顺序、RobotCmd 所有权、Gimbal/Chassis/Shoot 行为和新应用接入规范见
+[Application 开发指南](User_File/Application/README.md)。
 
 ## 接入方式
 
@@ -270,6 +274,7 @@ foreach ($suite in @("Fuzzy", "Boundary", "Trajectory", "FilterPolynomial")) {
 
 ## 文档与参考
 
+- [BSP 开发指南](User_File/Middleware/BSP/README.md) · [Message Center](User_File/System/MessageCenter/README.md) · [Application 开发指南](User_File/Application/README.md)。
 - [DJI 电机驱动](User_File/Device/Peripheral/Motor/DJImotor/dji_motor.md) · [达妙电机驱动](User_File/Device/Peripheral/Motor/DMmotor/dmmotor.md) · [更新记录](CHANGELOG.md)。
 - [FreeRTOS heap memory management](https://www.freertos.org/Documentation/02-Kernel/02-Kernel-features/09-Memory-management/01-Memory-management)。
 - [ST AN4891：STM32H7 系统架构与性能](https://www.st.com/resource/en/application_note/an4891-stm32h72x-stm32h73x-and-singlecore-stm32h74x75x-system-architecture-and-performance-stmicroelectronics.pdf)。
@@ -284,12 +289,16 @@ foreach ($suite in @("Fuzzy", "Boundary", "Trajectory", "FilterPolynomial")) {
 <details>
 <summary>维护架构图</summary>
 
-架构图由 [Archify](https://github.com/tt-a1i/archify) 生成。编辑 [H7_BSP.architecture.json](Tools/Architecture/H7_BSP.architecture.json)，使用 [版本记录](Tools/Architecture/Archify.lock.json) 对应的 Archify 技能目录执行：
+架构图由 Archify 生成。编辑 [H7_BSP.architecture.json](Assets/Architecture/H7_BSP.architecture.json)，在 Archify skill 目录执行：
 
-```powershell
-.\Tools\Architecture\Build.ps1 -ArchifyRoot "<Archify 技能目录>"
+```bash
+node bin/archify.mjs validate architecture \
+  <仓库>/Assets/Architecture/H7_BSP.architecture.json --quality showcase --json
+node bin/archify.mjs deliver architecture \
+  <仓库>/Assets/Architecture/H7_BSP.architecture.json \
+  <仓库>/Assets/Architecture/H7_BSP.html --quality showcase --json
 ```
 
-[Build.ps1](Tools/Architecture/Build.ps1) 更新 `Assets/Architecture/` 下的 SVG 与交互 HTML。
+交付后运行 `visual-check` 记录多分辨率浏览器证据，再人工检查亮色与暗色主题。
 
 </details>

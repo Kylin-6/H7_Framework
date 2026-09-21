@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "H7_BSP · STM32H723 控制框架",
+    "locale": "zh-CN",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/Kylin-6/H7_RM.git",
+      "provider": "github",
+      "link_mode": "web",
+      "revision": "2508b3994a7bdc1bd87e8e5c0a91fedc5603bf24"
+    },
+    "viewBox": [1320, 760],
+    "views": [
+      { "id": "control", "label": "控制主链", "focus": ["hardware", "hal", "bsp", "device", "application"], "note": "从板级外设到设备抽象，再进入机器人控制应用。" },
+      { "id": "realtime", "label": "实时任务", "focus": ["callbacks", "tasks", "system", "device", "application"], "note": "中断回调只搬运和唤醒，任务承担计算、检查与发送。" },
+      { "id": "messages", "label": "消息中心", "focus": ["message_center", "system", "application"], "note": "连续状态走 Topic，离散事件走 EventQueue。" }
+    ]
+  },
+  "components": [
+    { "id": "hardware", "type": "external", "label": "板卡与外设", "sublabel": "MC02 外设总线", "pos": [45, 330], "size": [155, 82] },
+    { "id": "hal", "type": "backend", "label": "STM32 HAL / CMSIS", "sublabel": "CubeMX 生成层", "pos": [245, 330], "size": [165, 82], "sources": [{ "path": "Core/Src/main.c" }, { "path": "H7_BSP.ioc" }] },
+    { "id": "bsp", "type": "backend", "label": "Middleware / BSP", "sublabel": "总线、缓冲与回调", "tag": "资源管理与 DMA", "pos": [455, 330], "size": [195, 82], "sources": [{ "path": "User_File/Middleware/BSP/CAN/bsp_can.h" }, { "path": "User_File/Middleware/BSP/UART/bsp_uart.h" }] },
+    { "id": "device", "type": "backend", "label": "Device", "sublabel": "电机 · BMI088 · Flash", "pos": [710, 330], "size": [205, 82], "sources": [{ "path": "User_File/Device/Onboard/BMI088/bsp_bmi088.h" }] },
+    { "id": "application", "type": "frontend", "label": "Application", "sublabel": "RobotCmd 与控制应用", "tag": "1 kHz 控制", "pos": [1040, 330], "size": [215, 82], "sources": [{ "path": "User_File/Application/RobotCmd/RobotCmd.cpp" }, { "path": "User_File/Task/Control_Task.cpp" }] },
+    { "id": "callbacks", "type": "backend", "label": "Callback 分发", "sublabel": "HAL ISR → BSP / Device", "pos": [455, 105], "size": [195, 72], "sources": [{ "path": "User_File/System/callback/callback.cpp" }] },
+    { "id": "tasks", "type": "cloud", "label": "FreeRTOS Tasks", "sublabel": "INS · CAN · Status · Control", "pos": [710, 105], "size": [205, 72], "sources": [{ "path": "User_File/Task/BMI088_Task.cpp" }, { "path": "User_File/Task/CanTxTask.cpp" }] },
+    { "id": "system", "type": "backend", "label": "System Services", "sublabel": "Init · IMU · Daemon · Debug", "pos": [710, 555], "size": [205, 76], "sources": [{ "path": "User_File/System/Init/Init.cpp" }, { "path": "User_File/System/Daemon/daemon.cpp" }] },
+    { "id": "message_center", "type": "messagebus", "label": "Message Center", "sublabel": "Topic<T> + EventQueue<T,N>", "tag": "静态 · 类型安全", "pos": [1015, 535], "size": [240, 96], "sources": [{ "path": "User_File/System/MessageCenter/message_center.h" }, { "path": "User_File/System/MessageCenter/topic.h" }, { "path": "User_File/System/MessageCenter/event_queue.h" }] },
+    { "id": "algorithms", "type": "database", "label": "Algorithm", "sublabel": "PID · 滤波 · VQF · 轨迹 · 数学", "pos": [455, 555], "size": [195, 76], "sources": [{ "path": "User_File/Middleware/Algorithm/PID/alg_pid.cpp" }] },
+    { "id": "memory", "type": "security", "label": "内存与构建约束", "sublabel": "MPU · DMA · Linker", "pos": [245, 555], "size": [165, 76], "sources": [{ "path": "User_Config/Linker/h7_memory.ld" }, { "path": "CMakeLists.txt" }] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "STM32H723 Firmware", "wraps": ["hal", "bsp", "device", "application", "callbacks", "tasks", "system", "message_center", "algorithms", "memory"], "pad": 24 }
+  ],
+  "connections": [
+    { "id": "hardware_hal", "from": "hardware", "to": "hal", "label": "寄存器 / IRQ / DMA", "variant": "emphasis", "labelAt": [223, 326] },
+    { "id": "hal_bsp", "from": "hal", "to": "bsp", "label": "HAL Handle 与回调", "route": "straight", "labelAt": [433, 326] },
+    { "id": "bsp_device", "from": "bsp", "to": "device", "label": "收发、缓冲与资源绑定", "labelAt": [680, 326] },
+    { "id": "device_app", "from": "device", "to": "application", "label": "状态反馈 / 直接控制", "variant": "emphasis" },
+    { "id": "hal_callback", "from": "hal", "to": "callbacks", "label": "完成 / 错误 / EXTI", "fromSide": "top", "toSide": "left" },
+    { "id": "callback_bsp", "from": "callbacks", "to": "bsp", "fromSide": "bottom", "toSide": "top" },
+    { "id": "callback_tasks", "from": "callbacks", "to": "tasks", "label": "线程标志" },
+    { "id": "tasks_device", "from": "tasks", "to": "device", "label": "采样、发送、检查", "fromSide": "bottom", "toSide": "top", "labelAt": [813, 191] },
+    { "id": "tasks_app", "from": "tasks", "to": "application", "label": "1 kHz 调度", "fromSide": "right", "toSide": "top", "variant": "emphasis" },
+    { "id": "alg_device", "from": "algorithms", "to": "device", "label": "估计与信号处理", "fromSide": "top", "toSide": "bottom" },
+    { "id": "alg_app", "from": "algorithms", "to": "application", "label": "控制与轨迹", "fromSide": "bottom", "toSide": "right", "via": [[552.5, 700], [1280, 700], [1280, 371]], "labelSegment": 1 },
+    { "id": "system_device", "from": "system", "to": "device", "label": "初始化、时间与在线状态", "fromSide": "top", "toSide": "bottom" },
+    { "id": "system_messages", "from": "system", "to": "message_center", "label": "INS_State 发布" },
+    { "id": "messages_app", "from": "message_center", "to": "application", "label": "Latest Value / FIFO Event", "fromSide": "top", "toSide": "bottom", "variant": "emphasis" },
+    { "id": "memory_bsp", "from": "memory", "to": "bsp", "label": "DMA 可达性与链接布局", "fromSide": "top", "toSide": "bottom", "variant": "security" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "数据语义", "items": ["连续状态与控制目标 → Topic<T>", "离散且不可覆盖的动作 → EventQueue<T,N>"] },
+    { "dot": "emerald", "title": "实时边界", "items": ["ISR 做最少工作并唤醒任务", "控制、INS 与 CAN 发送按职责分离"] },
+    { "dot": "amber", "title": "分层约束", "items": ["BSP 管资源，Device 管协议", "Application 组织机器人行为"] }
+  ]
+}
