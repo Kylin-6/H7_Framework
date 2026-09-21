@@ -282,9 +282,9 @@ foreach ($suite in @("Fuzzy", "Boundary", "Trajectory", "FilterPolynomial")) {
 
 ## 致谢
 
-感谢 [Kylin-6](https://github.com/Kylin-6) 在 [PR #4](https://github.com/MermaidFAR/H7_BSP/pull/4) 中贡献达妙电机驱动及初版使用说明，并在 [PR #5](https://github.com/MermaidFAR/H7_BSP/pull/5) 中贡献 DJI 电机原始驱动。
+感谢 MermaidFAR 开源并提供本项目所基于的 [H7_BSP](https://github.com/MermaidFAR/H7_BSP) 基础工程。
 
-部分驱动参考 [达妙 MC02 BSP](https://github.com/yssickjgd/damiao_mc02_bsp)；UART 实现参考 SCUT-Robotlab / 达妙 `drv_uart` 的组织方式。感谢相关开源项目与原作者。
+本框架的分层设计、设备抽象与工程组织参考了[湖南大学 RoboMaster 跃鹿战队 `basic_framework`](https://github.com/HNUYueLuRM/basic_framework)、中国科学技术大学 RoboWalker 的开源框架，以及 [Meta-Team 的 `Meta-Embedded-NG`](https://github.com/Meta-Team/Meta-Embedded-NG)。感谢这些团队对 RoboMaster 电控社区的开放分享与长期贡献。
 
 <details>
 <summary>维护架构图</summary>
