@@ -125,7 +125,6 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/User_File/System/IMU/sys_imu.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/System/Daemon/daemon.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/System/MessageCenter/message_center.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/User_File/System/MessageCenter/dynamic_message_center.c
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Device/Onboard/Power/bsp_power.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Device/Onboard/BMI088/bsp_bmi088.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Device/Onboard/BMI088/Accel/bsp_bmi088_accel.cpp
@@ -169,7 +168,6 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Device/Peripheral/Referee/referee_UI_26.c
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Device/Peripheral/Referee/vtm_26.c
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Task/Control_Task.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/User_File/Application/application.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Application/RobotCmd/RobotCmd.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Application/Gimbal/Gimbal.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Application/Chassis/Chassis.cpp

@@ -8,15 +8,20 @@
 
 #include "RobotCmd.h"
 
-#include "application_topics.h"
-#include "dynamic_message_center.h"
+#include "message_center.h"
 
-static DynamicPublisher_t *Gimbal_Command_Publisher;
-static DynamicPublisher_t *Chassis_Command_Publisher;
-static DynamicPublisher_t *Shoot_Command_Publisher;
-static DynamicSubscriber_t *Gimbal_Feedback_Subscriber;
-static DynamicSubscriber_t *Chassis_Feedback_Subscriber;
-static DynamicSubscriber_t *Shoot_Feedback_Subscriber;
+static Publisher<GimbalCmd> Gimbal_Command_Publisher(
+    MessageCenter::Gimbal_Command_Topic);
+static Publisher<ChassisCmd> Chassis_Command_Publisher(
+    MessageCenter::Chassis_Command_Topic);
+static Publisher<ShootCmd> Shoot_Command_Publisher(
+    MessageCenter::Shoot_Command_Topic);
+static Subscriber<GimbalFeedback> Gimbal_Feedback_Subscriber(
+    MessageCenter::Gimbal_Feedback_Topic);
+static Subscriber<ChassisFeedback> Chassis_Feedback_Subscriber(
+    MessageCenter::Chassis_Feedback_Topic);
+static Subscriber<ShootFeedback> Shoot_Feedback_Subscriber(
+    MessageCenter::Shoot_Feedback_Topic);
 
 static GimbalCmd Gimbal_Command;
 static ChassisCmd Chassis_Command;
@@ -33,32 +38,6 @@ static bool Gimbal_Feedback_Valid;
 static bool Chassis_Feedback_Valid;
 static bool Shoot_Feedback_Valid;
 static uint8_t RobotCmd_Feedback_Divider;
-
-bool RobotCmd_RegisterTopics(void)
-{
-    /* 命令由 RobotCmd 独占发布，应用模块分别持有对应 Subscriber。 */
-    Gimbal_Command_Publisher = DynamicPublisher_Register(
-        APPLICATION_TOPIC_GIMBAL_CMD, sizeof(GimbalCmd));
-    Chassis_Command_Publisher = DynamicPublisher_Register(
-        APPLICATION_TOPIC_CHASSIS_CMD, sizeof(ChassisCmd));
-    Shoot_Command_Publisher = DynamicPublisher_Register(
-        APPLICATION_TOPIC_SHOOT_CMD, sizeof(ShootCmd));
-
-    /* 反馈方向相反：各应用发布，RobotCmd 为独立订阅者。 */
-    Gimbal_Feedback_Subscriber = DynamicSubscriber_Register(
-        APPLICATION_TOPIC_GIMBAL_FEEDBACK, sizeof(GimbalFeedback));
-    Chassis_Feedback_Subscriber = DynamicSubscriber_Register(
-        APPLICATION_TOPIC_CHASSIS_FEEDBACK, sizeof(ChassisFeedback));
-    Shoot_Feedback_Subscriber = DynamicSubscriber_Register(
-        APPLICATION_TOPIC_SHOOT_FEEDBACK, sizeof(ShootFeedback));
-
-    return Gimbal_Command_Publisher != nullptr &&
-           Chassis_Command_Publisher != nullptr &&
-           Shoot_Command_Publisher != nullptr &&
-           Gimbal_Feedback_Subscriber != nullptr &&
-           Chassis_Feedback_Subscriber != nullptr &&
-           Shoot_Feedback_Subscriber != nullptr;
-}
 
 void RobotCmd_Init(void)
 {
@@ -88,17 +67,17 @@ void RobotCmd_Update(void)
         ChassisFeedback chassis_feedback;
         ShootFeedback shoot_feedback;
 
-        if (DynamicSubscriber_Read(Gimbal_Feedback_Subscriber, &gimbal_feedback))
+        if (Gimbal_Feedback_Subscriber.Read(gimbal_feedback))
         {
             Gimbal_Feedback = gimbal_feedback;
             Gimbal_Feedback_Valid = true;
         }
-        if (DynamicSubscriber_Read(Chassis_Feedback_Subscriber, &chassis_feedback))
+        if (Chassis_Feedback_Subscriber.Read(chassis_feedback))
         {
             Chassis_Feedback = chassis_feedback;
             Chassis_Feedback_Valid = true;
         }
-        if (DynamicSubscriber_Read(Shoot_Feedback_Subscriber, &shoot_feedback))
+        if (Shoot_Feedback_Subscriber.Read(shoot_feedback))
         {
             Shoot_Feedback = shoot_feedback;
             Shoot_Feedback_Valid = true;
@@ -109,17 +88,17 @@ void RobotCmd_Update(void)
     /* 只发布被上层更新过的目标；发布后清除 Dirty 标志。 */
     if (Gimbal_Command_Dirty)
     {
-        DynamicPublisher_Publish(Gimbal_Command_Publisher, &Gimbal_Command);
+        Gimbal_Command_Publisher.Publish(Gimbal_Command);
         Gimbal_Command_Dirty = false;
     }
     if (Chassis_Command_Dirty)
     {
-        DynamicPublisher_Publish(Chassis_Command_Publisher, &Chassis_Command);
+        Chassis_Command_Publisher.Publish(Chassis_Command);
         Chassis_Command_Dirty = false;
     }
     if (Shoot_Command_Dirty)
     {
-        DynamicPublisher_Publish(Shoot_Command_Publisher, &Shoot_Command);
+        Shoot_Command_Publisher.Publish(Shoot_Command);
         Shoot_Command_Dirty = false;
     }
 }
@@ -140,6 +119,11 @@ void RobotCmd_SetShoot(const ShootCmd &command)
 {
     Shoot_Command = command;
     Shoot_Command_Dirty = true;
+}
+
+bool RobotCmd_PushShootEvent(const ShootEvent &event)
+{
+    return MessageCenter::Shoot_Event_Queue.Push(event);
 }
 
 bool RobotCmd_GetGimbalFeedback(GimbalFeedback &feedback)

@@ -3,8 +3,6 @@
 
 #include "message_types.h"
 
-/** 注册全部应用命令 Publisher 和反馈 Subscriber。 */
-bool RobotCmd_RegisterTopics(void);
 /** 装载机器人安全启动默认命令。 */
 void RobotCmd_Init(void);
 /** 周期读取模块反馈，并发布发生变化的控制命令。 */
@@ -14,6 +12,8 @@ void RobotCmd_Update(void);
 void RobotCmd_SetGimbal(const GimbalCmd &command);
 void RobotCmd_SetChassis(const ChassisCmd &command);
 void RobotCmd_SetShoot(const ShootCmd &command);
+/** 将一次性射击动作压入固定容量 FIFO；队列已满时返回 false。 */
+bool RobotCmd_PushShootEvent(const ShootEvent &event);
 
 /** 返回 false 表示对应应用尚未发布过有效反馈，输出对象保持不变。 */
 bool RobotCmd_GetGimbalFeedback(GimbalFeedback &feedback);

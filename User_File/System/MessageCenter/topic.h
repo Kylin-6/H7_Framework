@@ -23,7 +23,7 @@ struct TopicSnapshot
  *
  * Publish/Read 面向任务上下文。通过极短的 PRIMASK 临界区保证 FreeRTOS
  * 任务间读取的数据与元信息一致，不使用互斥锁、队列或动态内存。
- * 适用于 INS 等高频状态；应用层低频命令应使用动态 Message Center。
+ * 适用于只关心最新值的连续状态和控制目标，与消息更新频率无关。
  */
 template<typename T>
 class Topic
@@ -112,6 +112,50 @@ private:
     uint32_t sequence_ = 0U;     ///< 发布序号
     uint64_t timestamp_ = 0U;    ///< 最近一次发布时间，单位：us
     bool valid_ = false;         ///< 首次发布完成标志
+};
+
+/** Topic 的轻量发布端；仅保存绑定对象的引用。 */
+template<typename T>
+class Publisher
+{
+public:
+    explicit Publisher(Topic<T> &topic) : topic_(topic) {}
+
+    void Publish(const T &data)
+    {
+        topic_.Publish(data);
+    }
+
+private:
+    Topic<T> &topic_;
+};
+
+/** 每个订阅端独立跟踪序号，只在有新发布时返回数据。 */
+template<typename T>
+class Subscriber
+{
+public:
+    explicit Subscriber(Topic<T> &topic) : topic_(topic) {}
+
+    bool Read(T &data)
+    {
+        const TopicSnapshot<T> snapshot = topic_.ReadWithMeta();
+        if (!snapshot.valid ||
+            (has_read_ && snapshot.sequence == last_sequence_))
+        {
+            return false;
+        }
+
+        data = snapshot.data;
+        last_sequence_ = snapshot.sequence;
+        has_read_ = true;
+        return true;
+    }
+
+private:
+    Topic<T> &topic_;
+    uint32_t last_sequence_ = 0U;
+    bool has_read_ = false;
 };
 
 #endif

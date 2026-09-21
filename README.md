@@ -139,7 +139,7 @@ EricTool 的 USB/UART 解析均只读取回调传入的缓冲区及有效长度�
 | 回调分发 | 将 HAL 回调转交外设与设备处理逻辑 | [System/callback](User_File/System/callback) |
 | 时间戳 | 提供统一微秒时间，供周期测量与超时判断使用 | [System/Timestamp](User_File/System/Timestamp) |
 | 参数配置 | 集中维护当前 IMU 采样、姿态与零偏估计参数 | [System/IMU](User_File/System/IMU) |
-| 消息中心 | 静态 Latest-Value Topic 与动态 Pub/Sub | [System/MessageCenter](User_File/System/MessageCenter) |
+| 消息中心 | 静态 Latest-Value Topic 与事件 FIFO | [System/MessageCenter](User_File/System/MessageCenter) |
 | 在线检测 | 固定容量设备注册、Feed 与超时状态检查 | [System/Daemon](User_File/System/Daemon) |
 | 调试数据 | 导出便于 Watch、绘图与遥测读取的状态 | [System/debug](User_File/System/debug) |
 | 周期与任务 | CMSIS-RTOS V2 任务入口、线程标志和周期回调 | [Task](User_File/Task) |
@@ -148,12 +148,12 @@ EricTool 的 USB/UART 解析均只读取回调传入的缓冲区及有效长度�
 
 ## 消息中心
 
-消息中心提供两条用途不同的数据通道：
+消息中心提供两种静态、类型安全的数据通道：
 
-- 静态 `Topic<T>` 使用编译期固定存储和 Latest-Value 语义，适合 INS 等高频状态；发布者覆写最新值，订阅者通过版本号判断是否有更新。
-- 动态 Pub/Sub 使用固定容量注册表和每订阅者独立队列，适合应用命令与反馈；Topic 名称集中定义在 [application_topics.h](User_File/Application/application_topics.h)。
+- `Topic<T>` 使用 Latest-Value 语义，传递连续状态和控制目标；`Publisher`/`Subscriber` 只是其无分配访问封装。
+- `EventQueue<T,N>` 使用固定容量 FIFO，传递不能被最新值覆盖的离散事件；队列满时拒绝新事件并累计溢出次数。
 
-`INS_State_Topic` 由 `BMI088_Task` 发布，云台直接读取最新姿态。`RobotCmd` 是 Gimbal、Chassis、Shoot 命令的唯一发布者，各 Application 消费命令并发布反馈。高频状态不应迁入动态队列，以免改变 Latest-Value 语义并引入额外调度开销。
+业务类型和唯一静态通道统一定义在 [MessageCenter](User_File/System/MessageCenter)。`INS_State_Topic` 由 BMI088 链路发布，云台读取最新姿态；RobotCmd 发布 Gimbal、Chassis、Shoot 连续命令并汇总反馈。单发和三连发通过固定容量 `ShootEvent` FIFO 传递。
 
 Daemon 只负责在线状态判断，不负责掉线后的停机、安全策略或消息路由。设备在收到合法反馈后直接 `Feed()`；`StatusTask` 每 10 ms 调用 `CheckAll()`，各设备使用独立超时时间。管理器采用固定容量注册，无动态分配。
 

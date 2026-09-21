@@ -2,6 +2,12 @@
 
 namespace MessageCenter
 {
-/* 静态存储期对象：不占用 FreeRTOS 堆，启动后即可直接发布和读取。 */
 Topic<INS_State> INS_State_Topic;
+Topic<GimbalCmd> Gimbal_Command_Topic;
+Topic<ChassisCmd> Chassis_Command_Topic;
+Topic<ShootCmd> Shoot_Command_Topic;
+Topic<GimbalFeedback> Gimbal_Feedback_Topic;
+Topic<ChassisFeedback> Chassis_Feedback_Topic;
+Topic<ShootFeedback> Shoot_Feedback_Topic;
+EventQueue<ShootEvent, 8U> Shoot_Event_Queue;
 }

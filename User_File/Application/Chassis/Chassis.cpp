@@ -9,9 +9,7 @@
 
 #include "Chassis.h"
 
-#include "application_topics.h"
-#include "dynamic_message_center.h"
-#include "message_types.h"
+#include "message_center.h"
 
 #if CHASSIS
 #include "dji_motor.h"
@@ -19,8 +17,10 @@
 #include <cmath>
 #endif
 
-static DynamicSubscriber_t *Chassis_Command_Subscriber;
-static DynamicPublisher_t *Chassis_Feedback_Publisher;
+static Subscriber<ChassisCmd> Chassis_Command_Subscriber(
+    MessageCenter::Chassis_Command_Topic);
+static Publisher<ChassisFeedback> Chassis_Feedback_Publisher(
+    MessageCenter::Chassis_Feedback_Topic);
 static ChassisCmd Chassis_Command;
 static ChassisFeedback Chassis_Feedback;
 static uint8_t Chassis_Feedback_Divider;
@@ -187,17 +187,6 @@ static void Chassis_UpdateFeedback(void)
 }
 #endif
 
-bool Chassis_RegisterTopics(void)
-{
-    /* 底盘订阅速度命令并以独立 Topic 发布状态反馈。 */
-    Chassis_Command_Subscriber = DynamicSubscriber_Register(
-        APPLICATION_TOPIC_CHASSIS_CMD, sizeof(ChassisCmd));
-    Chassis_Feedback_Publisher = DynamicPublisher_Register(
-        APPLICATION_TOPIC_CHASSIS_FEEDBACK, sizeof(ChassisFeedback));
-    return Chassis_Command_Subscriber != nullptr &&
-           Chassis_Feedback_Publisher != nullptr;
-}
-
 bool Chassis_Init(void)
 {
     Chassis_Command = {};
@@ -250,7 +239,7 @@ void Chassis_Update(void)
 {
     /* 每个控制周期都尝试接收新命令；无新数据时保留上一帧目标。 */
     ChassisCmd command;
-    if (DynamicSubscriber_Read(Chassis_Command_Subscriber, &command))
+    if (Chassis_Command_Subscriber.Read(command))
     {
         Chassis_Command = command;
     }
@@ -279,6 +268,6 @@ void Chassis_Update(void)
     if (Chassis_Feedback_Divider >= 10U)
     {
         Chassis_Feedback_Divider = 0U;
-        DynamicPublisher_Publish(Chassis_Feedback_Publisher, &Chassis_Feedback);
+        Chassis_Feedback_Publisher.Publish(Chassis_Feedback);
     }
 }

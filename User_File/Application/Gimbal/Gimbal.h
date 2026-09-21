@@ -3,8 +3,6 @@
 
 #include "message_types.h"
 
-/** 在系统启动阶段注册云台命令订阅端和反馈发布端。 */
-bool Gimbal_RegisterTopics(void);
 /** 云台应用的 1 kHz 周期入口，由 Control_Task 调度。 */
 void Gimbal_Update(void);
 

@@ -8,9 +8,7 @@
 
 #include "Shoot.h"
 
-#include "application_topics.h"
-#include "dynamic_message_center.h"
-#include "message_types.h"
+#include "message_center.h"
 
 #if SHOOT
 #include "dji_motor.h"
@@ -18,8 +16,10 @@
 #include <cmath>
 #endif
 
-static DynamicSubscriber_t *Shoot_Command_Subscriber;
-static DynamicPublisher_t *Shoot_Feedback_Publisher;
+static Subscriber<ShootCmd> Shoot_Command_Subscriber(
+    MessageCenter::Shoot_Command_Topic);
+static Publisher<ShootFeedback> Shoot_Feedback_Publisher(
+    MessageCenter::Shoot_Feedback_Topic);
 static ShootCmd Shoot_Command;
 static ShootFeedback Shoot_Feedback;
 static uint8_t Shoot_Feedback_Divider;
@@ -37,7 +37,7 @@ static Class_DJIMotor_Group Shoot_Friction_Group;
 static Class_DJIMotor_Group Shoot_Loader_Group;
 static bool Shoot_Initialized;
 static bool Shoot_Output_Enabled;
-static LoaderMode Shoot_Last_Loader_Mode;
+static bool Shoot_Event_Angle_Active;
 static float Shoot_Loader_Angle_Target;
 
 static PID_InitTypeDef Shoot_MakePID(float kp, float ki, float kd,
@@ -79,7 +79,7 @@ static void Shoot_ApplyCommand(void)
     Shoot_SetEnabled(enabled);
     if (!enabled)
     {
-        Shoot_Last_Loader_Mode = LoaderMode::STOP;
+        Shoot_Event_Angle_Active = false;
         return;
     }
 
@@ -95,22 +95,9 @@ static void Shoot_ApplyCommand(void)
     float loader_reference = 0.0f;
     switch (Shoot_Command.loader_mode)
     {
-    case LoaderMode::SINGLE:
-    case LoaderMode::TRIPLE:
-        /* 单发/三连发在模式切换沿锁存一次角度目标，避免每周期重复累加。 */
-        if (Shoot_Command.loader_mode != Shoot_Last_Loader_Mode)
-        {
-            const float bullet_count =
-                Shoot_Command.loader_mode == LoaderMode::SINGLE ? 1.0f : 3.0f;
-            Shoot_Loader_Angle_Target = Shoot_Loader.feedback.output_total_angle +
-                bullet_count * SHOOT_ONE_BULLET_ANGLE_DEG;
-        }
-        Shoot_Loader.Set_Outer_Loop(DJI_MOTOR_ANGLE_LOOP);
-        loader_reference = Shoot_Loader_Angle_Target;
-        break;
-
     case LoaderMode::BURST:
     {
+        Shoot_Event_Angle_Active = false;
         Shoot_Loader.Set_Outer_Loop(DJI_MOTOR_SPEED_LOOP);
         const float rate = Shoot_Command.shoot_rate_hz > 0.0f
             ? Shoot_Command.shoot_rate_hz : SHOOT_DEFAULT_RATE_HZ;
@@ -121,6 +108,7 @@ static void Shoot_ApplyCommand(void)
     }
 
     case LoaderMode::REVERSE:
+        Shoot_Event_Angle_Active = false;
         Shoot_Loader.Set_Outer_Loop(DJI_MOTOR_SPEED_LOOP);
         loader_reference = Shoot_Command.loader_speed_deg_s != 0.0f
             ? -std::fabs(Shoot_Command.loader_speed_deg_s)
@@ -129,13 +117,36 @@ static void Shoot_ApplyCommand(void)
 
     case LoaderMode::STOP:
     default:
-        Shoot_Loader.Set_Outer_Loop(DJI_MOTOR_SPEED_LOOP);
-        loader_reference = 0.0f;
+    {
+        ShootEvent event;
+        if (MessageCenter::Shoot_Event_Queue.Pop(event))
+        {
+            if (!Shoot_Event_Angle_Active)
+            {
+                Shoot_Loader_Angle_Target =
+                    Shoot_Loader.feedback.output_total_angle;
+            }
+            const float bullet_count =
+                event.type == ShootEventType::ShootTriple ? 3.0f : 1.0f;
+            Shoot_Loader_Angle_Target +=
+                bullet_count * SHOOT_ONE_BULLET_ANGLE_DEG;
+            Shoot_Event_Angle_Active = true;
+        }
+        if (Shoot_Event_Angle_Active)
+        {
+            Shoot_Loader.Set_Outer_Loop(DJI_MOTOR_ANGLE_LOOP);
+            loader_reference = Shoot_Loader_Angle_Target;
+        }
+        else
+        {
+            Shoot_Loader.Set_Outer_Loop(DJI_MOTOR_SPEED_LOOP);
+            loader_reference = 0.0f;
+        }
         break;
+    }
     }
 
     Shoot_Loader_Group.Control(loader_reference);
-    Shoot_Last_Loader_Mode = Shoot_Command.loader_mode;
 }
 
 static void Shoot_UpdateFeedback(void)
@@ -152,17 +163,6 @@ static void Shoot_UpdateFeedback(void)
                             Shoot_Loader.online;
 }
 #endif
-
-bool Shoot_RegisterTopics(void)
-{
-    /* 发射机构订阅控制命令并发布速度、角度和在线状态反馈。 */
-    Shoot_Command_Subscriber = DynamicSubscriber_Register(
-        APPLICATION_TOPIC_SHOOT_CMD, sizeof(ShootCmd));
-    Shoot_Feedback_Publisher = DynamicPublisher_Register(
-        APPLICATION_TOPIC_SHOOT_FEEDBACK, sizeof(ShootFeedback));
-    return Shoot_Command_Subscriber != nullptr &&
-           Shoot_Feedback_Publisher != nullptr;
-}
 
 bool Shoot_Init(void)
 {
@@ -205,7 +205,7 @@ bool Shoot_Init(void)
     {
         Shoot_SetEnabled(false);
     }
-    Shoot_Last_Loader_Mode = LoaderMode::STOP;
+    Shoot_Event_Angle_Active = false;
     Shoot_Loader_Angle_Target = 0.0f;
     return Shoot_Initialized;
 #else
@@ -217,9 +217,19 @@ void Shoot_Update(void)
 {
     /* 每个控制周期读取最新命令；没有新消息时继续执行上一帧。 */
     ShootCmd command;
-    if (DynamicSubscriber_Read(Shoot_Command_Subscriber, &command))
+    if (Shoot_Command_Subscriber.Read(command))
     {
         Shoot_Command = command;
+    }
+
+    if (Shoot_Command.shoot_mode == ShootMode::OFF)
+    {
+        ShootEvent discarded_event;
+        size_t pending_events = MessageCenter::Shoot_Event_Queue.Size();
+        while (pending_events-- > 0U &&
+               MessageCenter::Shoot_Event_Queue.Pop(discarded_event))
+        {
+        }
     }
 
 #if SHOOT
@@ -235,6 +245,6 @@ void Shoot_Update(void)
     if (Shoot_Feedback_Divider >= 10U)
     {
         Shoot_Feedback_Divider = 0U;
-        DynamicPublisher_Publish(Shoot_Feedback_Publisher, &Shoot_Feedback);
+        Shoot_Feedback_Publisher.Publish(Shoot_Feedback);
     }
 }

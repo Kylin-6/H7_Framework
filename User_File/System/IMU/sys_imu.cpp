@@ -19,6 +19,8 @@
 
 /* Private variables ---------------------------------------------------------*/
 
+static Publisher<INS_State> INS_State_Publisher(MessageCenter::INS_State_Topic);
+
 /* Private function declarations ---------------------------------------------*/
 
 /* Function prototypes -------------------------------------------------------*/
@@ -95,5 +97,5 @@ void System_IMU_Publish_State()
         .gyro_z_rad_s = gyro_body.Data[2],
     };
     /* 高频姿态使用静态 Topic，避免动态队列进入 1 kHz 闭环路径。 */
-    MessageCenter::INS_State_Topic.Publish(ins_state);
+    INS_State_Publisher.Publish(ins_state);
 }

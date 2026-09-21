@@ -1,13 +1,14 @@
 #include "Gimbal.h"
-#include "application_topics.h"
-#include "dynamic_message_center.h"
 #include "message_center.h"
 
 static INS_State Gimbal_INS_State;
 static bool Gimbal_INS_Valid = false;
 static GimbalCmd Gimbal_Command;
-static DynamicSubscriber_t *Gimbal_Command_Subscriber;
-static DynamicPublisher_t *Gimbal_Feedback_Publisher;
+static Subscriber<INS_State> Gimbal_INS_Subscriber(MessageCenter::INS_State_Topic);
+static Subscriber<GimbalCmd> Gimbal_Command_Subscriber(
+    MessageCenter::Gimbal_Command_Topic);
+static Publisher<GimbalFeedback> Gimbal_Feedback_Publisher(
+    MessageCenter::Gimbal_Feedback_Topic);
 static uint8_t Gimbal_Message_Divider;
 #if GIMBAL
 static GimbalMode Gimbal_Last_Mode = GimbalMode::DISABLED;
@@ -286,31 +287,19 @@ void Gimbal_Loop(void)
 
 #endif
 
-bool Gimbal_RegisterTopics(void)
-{
-    /* 云台消费控制命令并发布自身反馈；端点只在系统启动阶段注册一次。 */
-    Gimbal_Command_Subscriber = DynamicSubscriber_Register(
-        APPLICATION_TOPIC_GIMBAL_CMD, sizeof(GimbalCmd));
-    Gimbal_Feedback_Publisher = DynamicPublisher_Register(
-        APPLICATION_TOPIC_GIMBAL_FEEDBACK, sizeof(GimbalFeedback));
-    Gimbal_Message_Divider = 0U;
-    return Gimbal_Command_Subscriber != nullptr &&
-           Gimbal_Feedback_Publisher != nullptr;
-}
-
 void Gimbal_Update(void)
 {
     /* 高频姿态走静态 Topic，云台无需感知底层具体使用哪一种 IMU。 */
     INS_State ins_state;
-    if (MessageCenter::INS_State_Topic.Read(ins_state))
+    if (Gimbal_INS_Subscriber.Read(ins_state))
     {
         Gimbal_INS_State = ins_state;
         Gimbal_INS_Valid = true;
     }
 
-    /* 动态通道为非阻塞 Latest-Value：没有新命令时继续沿用上一帧。 */
+    /* 没有新命令时继续沿用上一帧 Latest-Value。 */
     GimbalCmd command;
-    if (DynamicSubscriber_Read(Gimbal_Command_Subscriber, &command))
+    if (Gimbal_Command_Subscriber.Read(command))
     {
         Gimbal_Command = command;
 #if GIMBAL
@@ -361,7 +350,7 @@ void Gimbal_Update(void)
     }
 #endif
 
-    /* 控制保持 1 kHz，反馈降频到 100 Hz，减少应用消息队列操作。 */
+    /* 控制保持 1 kHz，反馈降频到 100 Hz，减少应用消息复制。 */
     Gimbal_Message_Divider++;
     if (Gimbal_Message_Divider >= 10U)
     {
@@ -375,6 +364,6 @@ void Gimbal_Update(void)
 #if GIMBAL
         feedback.enabled = Gimbal.Yaw_Motor.enabled && Gimbal.Pitch_Motor.enabled;
 #endif
-        DynamicPublisher_Publish(Gimbal_Feedback_Publisher, &feedback);
+        Gimbal_Feedback_Publisher.Publish(feedback);
     }
 }
