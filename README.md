@@ -14,6 +14,8 @@
 
 框架以模块职责划分边界：BSP 处理外设收发，Device 处理设备协议与状态，Algorithm 提供计算组件，System 提供共享服务；Task 和 Application 负责调度与业务组合。
 
+![H7_BSP 整体架构](Assets/Architecture/H7_BSP.svg)
+
 > [打开交互式 H7_BSP 架构图](Assets/Architecture/H7_BSP.html)：支持亮/暗主题、搜索、聚焦、关系追踪和导出；可维护源为 [H7_BSP.architecture.json](Assets/Architecture/H7_BSP.architecture.json)。
 
 | 层次 | 职责 | 入口 |
