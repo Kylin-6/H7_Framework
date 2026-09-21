@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg viewBox="0 0 960 610" role="img" lang="zh-CN" aria-labelledby="archify-diagram-title archify-diagram-description" data-preset="classic" data-quality-profile="showcase" style="" width="960" height="610" xmlns="http://www.w3.org/2000/svg"><style>
+<svg viewBox="0 0 1320 760" role="img" lang="zh-CN" aria-labelledby="archify-diagram-title archify-diagram-description" data-preset="classic" data-quality-profile="showcase" style="" width="1320" height="760" xmlns="http://www.w3.org/2000/svg"><style>
 /*
 JetBrains Mono variable WOFF2 subsets from Google Fonts service revision v24.
 These fixed bytes are shared by the viewer and its SVG/raster exports.
@@ -416,7 +416,7 @@ svg[data-theme="light"] { --bg: #f8fafc; --grid: #e2e8f0; --text: #0f172a; --tex
 svg[data-theme="dark"] { --bg: #020617; --grid: #1e293b; --text: #ffffff; --text-muted: #94a3b8; --text-dim: #475569; --text-faint: #7d8da1; --panel: rgba(15, 23, 42, 0.5); --panel-border: #1e293b; --lane-fill: rgba(15, 23, 42, 0.22); --lane-stroke: #334155; --arrow: #64748b; --arrow-emphasis: #34d399; --mask: #0f172a; --frontend-fill: rgba(8, 51, 68, 0.4); --frontend-stroke: #22d3ee; --backend-fill: rgba(6, 78, 59, 0.4); --backend-stroke: #34d399; --database-fill: rgba(76, 29, 149, 0.4); --database-stroke: #a78bfa; --cloud-fill: rgba(120, 53, 15, 0.3); --cloud-stroke: #fbbf24; --security-fill: rgba(136, 19, 55, 0.4); --security-stroke: #fb7185; --messagebus-fill: rgba(251, 146, 60, 0.3); --messagebus-stroke: #fb923c; --external-fill: rgba(30, 41, 59, 0.5); --external-stroke: #94a3b8; --toolbar-bg: rgba(15, 23, 42, 0.8); --toolbar-border: #334155; --toolbar-text: #e2e8f0; --toolbar-hover: rgba(15, 23, 42, 0.95); --toolbar-menu-bg: #0f172a; }
 rect.c-bg-rect { fill: var(--bg); }
 </style><rect width="100%" height="100%" class="c-bg-rect"/>
-        <title id="archify-diagram-title">H7_BSP · 嵌入式控制框架</title>
+        <title id="archify-diagram-title">H7_BSP · STM32H723 控制框架</title>
         <desc id="archify-diagram-description">由 Archify 生成的架构图。</desc>
         <!-- Definitions -->
         <defs>
@@ -441,142 +441,254 @@ rect.c-bg-rect { fill: var(--bg); }
         <rect width="100%" height="100%" fill="url(#grid)"/>
 
         <!-- Boundaries (behind everything) -->
-
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="0" data-composition-frame-label="STM32H723 Firmware" x="221" y="81" width="1058" height="570" rx="12" class="c-region" stroke-width="1"/>
 
         <!-- Connection paths (before components for correct z-order) -->
-        <path data-edge-from="application" data-edge-to="algorithm" data-edge-label="计算" data-edge-key="0" data-edge-id="use-algorithm" data-composition-points="345,80;145,80;145,190" d="M 345 80 L 153 80 Q 145 80 145 88 L 145 190" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="application" data-edge-to="device" data-edge-label="读写设备" data-edge-key="1" data-edge-id="use-device" data-composition-points="480,120;480,190" d="M 480 120 L 480 190" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path data-edge-from="application" data-edge-to="system" data-edge-label="公共服务" data-edge-key="2" data-edge-id="use-system" data-composition-points="615,80;815,80;815,190" d="M 615 80 L 807 80 Q 815 80 815 88 L 815 190" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="device" data-edge-to="bsp" data-edge-label="通信与采集" data-edge-key="3" data-edge-id="device-bsp" data-composition-points="480,270;480,330" d="M 480 270 L 480 330" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path data-edge-from="system" data-edge-to="rtos" data-edge-label="调度与同步" data-edge-key="4" data-edge-id="system-rtos" data-composition-points="815,270;815,330" d="M 815 270 L 815 330" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="bsp" data-edge-to="platform" data-edge-label="HAL 驱动" data-edge-key="5" data-edge-id="bsp-platform" data-composition-points="480,410;480,470" d="M 480 410 L 480 470" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="hardware" data-edge-to="hal" data-edge-label="寄存器 / IRQ / DMA" data-edge-key="0" data-edge-id="hardware_hal" data-composition-points="200,371;245,371" d="M 200 371 L 245 371" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="hal" data-edge-to="bsp" data-edge-label="HAL Handle 与回调" data-edge-key="1" data-edge-id="hal_bsp" data-composition-points="410,371;455,371" d="M 410 371 L 455 371" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="bsp" data-edge-to="device" data-edge-label="收发、缓冲与资源绑定" data-edge-key="2" data-edge-id="bsp_device" data-composition-points="650,371;710,371" d="M 650 371 L 710 371" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="device" data-edge-to="application" data-edge-label="状态反馈 / 直接控制" data-edge-key="3" data-edge-id="device_app" data-composition-points="915,371;1040,371" d="M 915 371 L 1040 371" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="hal" data-edge-to="callbacks" data-edge-label="完成 / 错误 / EXTI" data-edge-key="4" data-edge-id="hal_callback" data-composition-points="327.5,330;327.5,306;431,306;431,141;455,141" d="M 327.5 330 L 327.5 314 Q 327.5 306 335.5 306 L 423 306 Q 431 306 431 298 L 431 149 Q 431 141 439 141 L 455 141" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="callbacks" data-edge-to="bsp" data-edge-key="5" data-edge-id="callback_bsp" data-composition-points="552.5,177;552.5,330" d="M 552.5 177 L 552.5 330" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="callbacks" data-edge-to="tasks" data-edge-label="线程标志" data-edge-key="6" data-edge-id="callback_tasks" data-composition-points="650,141;710,141" d="M 650 141 L 710 141" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="tasks" data-edge-to="device" data-edge-label="采样、发送、检查" data-edge-key="7" data-edge-id="tasks_device" data-composition-points="812.5,177;812.5,330" d="M 812.5 177 L 812.5 330" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="tasks" data-edge-to="application" data-edge-label="1 kHz 调度" data-edge-key="8" data-edge-id="tasks_app" data-composition-points="915,141;1147.5,141;1147.5,330" d="M 915 141 L 1139.5 141 Q 1147.5 141 1147.5 149 L 1147.5 330" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="algorithms" data-edge-to="device" data-edge-label="估计与信号处理" data-edge-key="9" data-edge-id="alg_device" data-composition-points="552.5,555;552.5,483.5;805.5,483.5;805.5,412" d="M 552.5 555 L 552.5 491.5 Q 552.5 483.5 560.5 483.5 L 797.5 483.5 Q 805.5 483.5 805.5 475.5 L 805.5 412" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="algorithms" data-edge-to="application" data-edge-label="控制与轨迹" data-edge-key="10" data-edge-id="alg_app" data-composition-points="552.5,631;552.5,700;1280,700;1280,371;1255,371" d="M 552.5 631 L 552.5 692 Q 552.5 700 560.5 700 L 1272 700 Q 1280 700 1280 692 L 1280 379 Q 1280 371 1272 371 L 1255 371" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="system" data-edge-to="device" data-edge-label="初始化、时间与在线状态" data-edge-key="11" data-edge-id="system_device" data-composition-points="819.5,555;819.5,412" d="M 819.5 555 L 819.5 412" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="system" data-edge-to="message_center" data-edge-label="INS_State 发布" data-edge-key="12" data-edge-id="system_messages" data-composition-points="915,593;1015,593" d="M 915 593 L 1015 593" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="message_center" data-edge-to="application" data-edge-label="Latest Value / FIFO Event" data-edge-key="13" data-edge-id="messages_app" data-composition-points="1135,535;1135,511;1163.5,511;1163.5,436;1147.5,436;1147.5,412" d="M 1135 535 L 1135 519 Q 1135 511 1143 511 L 1155.5 511 Q 1163.5 511 1163.5 503 L 1163.5 444 Q 1163.5 436 1155.5 436 L 1155.5 436 Q 1147.5 436 1147.5 428 L 1147.5 412" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="memory" data-edge-to="bsp" data-edge-label="DMA 可达性与链接布局" data-edge-key="14" data-edge-id="memory_bsp" data-composition-points="327.5,555;327.5,483.5;552.5,483.5;552.5,412" d="M 327.5 555 L 327.5 491.5 Q 327.5 483.5 335.5 483.5 L 544.5 483.5 Q 552.5 483.5 552.5 475.5 L 552.5 412" class="a-security" stroke-width="1.5" marker-end="url(#arrowhead-security)"/>
 
         <!-- Components -->
-        <g id="node-application" data-node-id="application" data-node-label="Task / Application" tabindex="0" role="button" aria-label="聚焦Task / Application，周期任务 · 控制入口 · 遥测, 架构组件" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="周期任务 · 控制入口 · 遥测" data-node-context="架构组件">
-          <title>Task / Application · 周期任务 · 控制入口 · 遥测 · 架构组件</title>
-          <rect x="345" y="40" width="270" height="80" rx="6" class="c-mask"/>
-          <rect x="345" y="40" width="270" height="80" rx="6" class="c-frontend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(351 46) scale(0.6875)">
+        <g id="node-hardware" data-node-id="hardware" data-node-label="板卡与外设" tabindex="0" role="button" aria-label="聚焦板卡与外设，MC02 外设总线, 架构组件" aria-pressed="false" data-node-kind="external" data-node-sublabel="MC02 外设总线" data-node-context="架构组件">
+          <title>板卡与外设 · MC02 外设总线 · 架构组件</title>
+          <rect x="45" y="330" width="155" height="82" rx="6" class="c-mask"/>
+          <rect x="45" y="330" width="155" height="82" rx="6" class="c-external" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(51 336) scale(0.6875)">
+            <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
+            <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
+          </g>
+          <text data-node-label="" x="122.5" y="369" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">板卡与外设</text>
+        <text x="122.5" y="385" class="t-muted" font-size="9" text-anchor="middle">MC02 外设总线</text>
+        </g>
+
+        <g id="node-hal" data-node-id="hal" data-node-label="STM32 HAL / CMSIS" tabindex="0" role="button" aria-label="聚焦STM32 HAL / CMSIS，CubeMX 生成层, STM32H723 Firmware" aria-pressed="false" data-node-kind="backend" data-node-sublabel="CubeMX 生成层" data-node-context="STM32H723 Firmware">
+          <title>STM32 HAL / CMSIS · CubeMX 生成层 · STM32H723 Firmware</title>
+          <rect x="245" y="330" width="165" height="82" rx="6" class="c-mask"/>
+          <rect x="245" y="330" width="165" height="82" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(251 336) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-node-label="" x="327.5" y="369" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">STM32 HAL / CMSIS</text>
+        <text x="327.5" y="385" class="t-muted" font-size="9" text-anchor="middle">CubeMX 生成层</text>
+        </g>
+
+        <g id="node-bsp" data-node-id="bsp" data-node-label="Middleware / BSP" tabindex="0" role="button" aria-label="聚焦Middleware / BSP，总线、缓冲与回调, STM32H723 Firmware" aria-pressed="false" data-node-kind="backend" data-node-sublabel="总线、缓冲与回调" data-node-tag="资源管理与 DMA" data-node-context="STM32H723 Firmware">
+          <title>Middleware / BSP · 总线、缓冲与回调 · STM32H723 Firmware · 资源管理与 DMA</title>
+          <rect x="455" y="330" width="195" height="82" rx="6" class="c-mask"/>
+          <rect x="455" y="330" width="195" height="82" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(461 336) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-node-label="" x="552.5" y="369" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Middleware / BSP</text>
+        <text x="552.5" y="385" class="t-muted" font-size="9" text-anchor="middle">总线、缓冲与回调</text>
+        <text x="552.5" y="404" class="t-backend" font-size="7" text-anchor="middle">资源管理与 DMA</text>
+        </g>
+
+        <g id="node-device" data-node-id="device" data-node-label="Device" tabindex="0" role="button" aria-label="聚焦Device，电机 · BMI088 · Flash, STM32H723 Firmware" aria-pressed="false" data-node-kind="backend" data-node-sublabel="电机 · BMI088 · Flash" data-node-context="STM32H723 Firmware">
+          <title>Device · 电机 · BMI088 · Flash · STM32H723 Firmware</title>
+          <rect x="710" y="330" width="205" height="82" rx="6" class="c-mask"/>
+          <rect x="710" y="330" width="205" height="82" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(716 336) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-node-label="" x="812.5" y="369" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Device</text>
+        <text x="812.5" y="385" class="t-muted" font-size="9" text-anchor="middle">电机 · BMI088 · Flash</text>
+        </g>
+
+        <g id="node-application" data-node-id="application" data-node-label="Application" tabindex="0" role="button" aria-label="聚焦Application，RobotCmd 与控制应用, STM32H723 Firmware" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="RobotCmd 与控制应用" data-node-tag="1 kHz 控制" data-node-context="STM32H723 Firmware">
+          <title>Application · RobotCmd 与控制应用 · STM32H723 Firmware · 1 kHz 控制</title>
+          <rect x="1040" y="330" width="215" height="82" rx="6" class="c-mask"/>
+          <rect x="1040" y="330" width="215" height="82" rx="6" class="c-frontend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(1046 336) scale(0.6875)">
             <rect x="2" y="3" width="12" height="10" rx="2"/>
             <path d="M2 6.5h12"/>
             <circle cx="4.1" cy="4.8" r=".7" class="sigil-fill"/>
             <circle cx="6.3" cy="4.8" r=".7" class="sigil-fill"/>
           </g>
-          <text data-node-label="" x="480" y="78" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Task / Application</text>
-        <text x="480" y="94" class="t-muted" font-size="9" text-anchor="middle">周期任务 · 控制入口 · 遥测</text>
+          <text data-node-label="" x="1147.5" y="369" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Application</text>
+        <text x="1147.5" y="385" class="t-muted" font-size="9" text-anchor="middle">RobotCmd 与控制应用</text>
+        <text x="1147.5" y="404" class="t-frontend" font-size="7" text-anchor="middle">1 kHz 控制</text>
         </g>
 
-        <g id="node-algorithm" data-node-id="algorithm" data-node-label="Algorithm · 算法库" tabindex="0" role="button" aria-label="聚焦Algorithm · 算法库，控制 · 观测 · 滤波 · 数学, 架构组件" aria-pressed="false" data-node-kind="backend" data-node-sublabel="控制 · 观测 · 滤波 · 数学" data-node-context="架构组件">
-          <title>Algorithm · 算法库 · 控制 · 观测 · 滤波 · 数学 · 架构组件</title>
-          <rect x="25" y="190" width="240" height="80" rx="6" class="c-mask"/>
-          <rect x="25" y="190" width="240" height="80" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(31 196) scale(0.6875)">
+        <g id="node-callbacks" data-node-id="callbacks" data-node-label="Callback 分发" tabindex="0" role="button" aria-label="聚焦Callback 分发，HAL ISR → BSP / Device, STM32H723 Firmware" aria-pressed="false" data-node-kind="backend" data-node-sublabel="HAL ISR → BSP / Device" data-node-context="STM32H723 Firmware">
+          <title>Callback 分发 · HAL ISR → BSP / Device · STM32H723 Firmware</title>
+          <rect x="455" y="105" width="195" height="72" rx="6" class="c-mask"/>
+          <rect x="455" y="105" width="195" height="72" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(461 111) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
-          <text data-node-label="" x="145" y="228" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Algorithm · 算法库</text>
-        <text x="145" y="244" class="t-muted" font-size="9" text-anchor="middle">控制 · 观测 · 滤波 · 数学</text>
+          <text data-node-label="" x="552.5" y="139" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Callback 分发</text>
+        <text x="552.5" y="155" class="t-muted" font-size="9" text-anchor="middle">HAL ISR → BSP / Device</text>
         </g>
 
-        <g id="node-device" data-node-id="device" data-node-label="Device · 设备层" tabindex="0" role="button" aria-label="聚焦Device · 设备层，电机 · 板载设备 · 外接协议, 架构组件" aria-pressed="false" data-node-kind="backend" data-node-sublabel="电机 · 板载设备 · 外接协议" data-node-context="架构组件">
-          <title>Device · 设备层 · 电机 · 板载设备 · 外接协议 · 架构组件</title>
-          <rect x="345" y="190" width="270" height="80" rx="6" class="c-mask"/>
-          <rect x="345" y="190" width="270" height="80" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(351 196) scale(0.6875)">
+        <g id="node-tasks" data-node-id="tasks" data-node-label="FreeRTOS Tasks" tabindex="0" role="button" aria-label="聚焦FreeRTOS Tasks，INS · CAN · Status · Control, STM32H723 Firmware" aria-pressed="false" data-node-kind="cloud" data-node-sublabel="INS · CAN · Status · Control" data-node-context="STM32H723 Firmware">
+          <title>FreeRTOS Tasks · INS · CAN · Status · Control · STM32H723 Firmware</title>
+          <rect x="710" y="105" width="205" height="72" rx="6" class="c-mask"/>
+          <rect x="710" y="105" width="205" height="72" rx="6" class="c-cloud" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="cloud" class="semantic-sigil s-cloud" transform="translate(716 111) scale(0.6875)">
+            <path d="M4.3 12.5h7.3a2.4 2.4 0 0 0 .2-4.8 4 4 0 0 0-7.5-1.3A3.1 3.1 0 0 0 4.3 12.5Z"/>
+          </g>
+          <text data-node-label="" x="812.5" y="139" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">FreeRTOS Tasks</text>
+        <text x="812.5" y="155" class="t-muted" font-size="9" text-anchor="middle">INS · CAN · Status · Control</text>
+        </g>
+
+        <g id="node-system" data-node-id="system" data-node-label="System Services" tabindex="0" role="button" aria-label="聚焦System Services，Init · IMU · Daemon · Debug, STM32H723 Firmware" aria-pressed="false" data-node-kind="backend" data-node-sublabel="Init · IMU · Daemon · Debug" data-node-context="STM32H723 Firmware">
+          <title>System Services · Init · IMU · Daemon · Debug · STM32H723 Firmware</title>
+          <rect x="710" y="555" width="205" height="76" rx="6" class="c-mask"/>
+          <rect x="710" y="555" width="205" height="76" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(716 561) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
-          <text data-node-label="" x="480" y="228" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Device · 设备层</text>
-        <text x="480" y="244" class="t-muted" font-size="9" text-anchor="middle">电机 · 板载设备 · 外接协议</text>
+          <text data-node-label="" x="812.5" y="591" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">System Services</text>
+        <text x="812.5" y="607" class="t-muted" font-size="9" text-anchor="middle">Init · IMU · Daemon · Debug</text>
         </g>
 
-        <g id="node-system" data-node-id="system" data-node-label="System · 系统服务" tabindex="0" role="button" aria-label="聚焦System · 系统服务，初始化 · 回调 · 时间戳 · 诊断, 架构组件" aria-pressed="false" data-node-kind="backend" data-node-sublabel="初始化 · 回调 · 时间戳 · 诊断" data-node-context="架构组件">
-          <title>System · 系统服务 · 初始化 · 回调 · 时间戳 · 诊断 · 架构组件</title>
-          <rect x="695" y="190" width="240" height="80" rx="6" class="c-mask"/>
-          <rect x="695" y="190" width="240" height="80" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(701 196) scale(0.6875)">
-            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+        <g id="node-message_center" data-node-id="message_center" data-node-label="Message Center" tabindex="0" role="button" aria-label="聚焦Message Center，Topic&lt;T&gt; + EventQueue&lt;T,N&gt;, STM32H723 Firmware" aria-pressed="false" data-node-kind="messagebus" data-node-sublabel="Topic&lt;T&gt; + EventQueue&lt;T,N&gt;" data-node-tag="静态 · 类型安全" data-node-context="STM32H723 Firmware">
+          <title>Message Center · Topic&lt;T&gt; + EventQueue&lt;T,N&gt; · STM32H723 Firmware · 静态 · 类型安全</title>
+          <rect x="1015" y="535" width="240" height="96" rx="6" class="c-mask"/>
+          <rect x="1015" y="535" width="240" height="96" rx="6" class="c-messagebus" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="messagebus" class="semantic-sigil s-messagebus" transform="translate(1021 541) scale(0.6875)">
+            <path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/>
+            <circle cx="5" cy="4.5" r="1" class="sigil-fill"/>
+            <circle cx="10.5" cy="8" r="1" class="sigil-fill"/>
+            <circle cx="7" cy="11.5" r="1" class="sigil-fill"/>
           </g>
-          <text data-node-label="" x="815" y="228" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">System · 系统服务</text>
-        <text x="815" y="244" class="t-muted" font-size="9" text-anchor="middle">初始化 · 回调 · 时间戳 · 诊断</text>
+          <text data-node-label="" x="1135" y="581" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Message Center</text>
+        <text x="1135" y="597" class="t-muted" font-size="9" text-anchor="middle">Topic&lt;T&gt; + EventQueue&lt;T,N&gt;</text>
+        <text x="1135" y="623" class="t-messagebus" font-size="7" text-anchor="middle">静态 · 类型安全</text>
         </g>
 
-        <g id="node-bsp" data-node-id="bsp" data-node-label="BSP · 外设接口" tabindex="0" role="button" aria-label="聚焦BSP · 外设接口，CAN · UART · SPI · ADC · OSPI · USB, 架构组件" aria-pressed="false" data-node-kind="backend" data-node-sublabel="CAN · UART · SPI · ADC · OSPI · USB" data-node-context="架构组件">
-          <title>BSP · 外设接口 · CAN · UART · SPI · ADC · OSPI · USB · 架构组件</title>
-          <rect x="345" y="330" width="270" height="80" rx="6" class="c-mask"/>
-          <rect x="345" y="330" width="270" height="80" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(351 336) scale(0.6875)">
-            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+        <g id="node-algorithms" data-node-id="algorithms" data-node-label="Algorithm" tabindex="0" role="button" aria-label="聚焦Algorithm，PID · 滤波 · VQF · 轨迹 · 数学, STM32H723 Firmware" aria-pressed="false" data-node-kind="database" data-node-sublabel="PID · 滤波 · VQF · 轨迹 · 数学" data-node-context="STM32H723 Firmware">
+          <title>Algorithm · PID · 滤波 · VQF · 轨迹 · 数学 · STM32H723 Firmware</title>
+          <rect x="455" y="555" width="195" height="76" rx="6" class="c-mask"/>
+          <rect x="455" y="555" width="195" height="76" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(461 561) scale(0.6875)">
+            <ellipse cx="8" cy="4" rx="5" ry="2"/>
+            <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
           </g>
-          <text data-node-label="" x="480" y="368" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">BSP · 外设接口</text>
-        <text x="480" y="384" class="t-muted" font-size="9" text-anchor="middle">CAN · UART · SPI · ADC · OSPI · USB</text>
+          <text data-node-label="" x="552.5" y="591" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Algorithm</text>
+        <text x="552.5" y="607" class="t-muted" font-size="9" text-anchor="middle">PID · 滤波 · VQF · 轨迹 · 数学</text>
         </g>
 
-        <g id="node-rtos" data-node-id="rtos" data-node-label="FreeRTOS" tabindex="0" role="button" aria-label="聚焦FreeRTOS，CMSIS-RTOS V2 · 任务与同步, 架构组件" aria-pressed="false" data-node-kind="external" data-node-sublabel="CMSIS-RTOS V2 · 任务与同步" data-node-context="架构组件">
-          <title>FreeRTOS · CMSIS-RTOS V2 · 任务与同步 · 架构组件</title>
-          <rect x="695" y="330" width="240" height="80" rx="6" class="c-mask"/>
-          <rect x="695" y="330" width="240" height="80" rx="6" class="c-external" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(701 336) scale(0.6875)">
-            <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
-            <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
+        <g id="node-memory" data-node-id="memory" data-node-label="内存与构建约束" tabindex="0" role="button" aria-label="聚焦内存与构建约束，MPU · DMA · Linker, STM32H723 Firmware" aria-pressed="false" data-node-kind="security" data-node-sublabel="MPU · DMA · Linker" data-node-context="STM32H723 Firmware">
+          <title>内存与构建约束 · MPU · DMA · Linker · STM32H723 Firmware</title>
+          <rect x="245" y="555" width="165" height="76" rx="6" class="c-mask"/>
+          <rect x="245" y="555" width="165" height="76" rx="6" class="c-security" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(251 561) scale(0.6875)">
+            <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
+            <path d="m5.8 8 1.5 1.5 3-3"/>
           </g>
-          <text data-node-label="" x="815" y="368" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">FreeRTOS</text>
-        <text x="815" y="384" class="t-muted" font-size="9" text-anchor="middle">CMSIS-RTOS V2 · 任务与同步</text>
-        </g>
-
-        <g id="node-platform" data-node-id="platform" data-node-label="HAL / 芯片外设" tabindex="0" role="button" aria-label="聚焦HAL / 芯片外设，STM32H723VG · Cortex-M7, 架构组件" aria-pressed="false" data-node-kind="external" data-node-sublabel="STM32H723VG · Cortex-M7" data-node-context="架构组件">
-          <title>HAL / 芯片外设 · STM32H723VG · Cortex-M7 · 架构组件</title>
-          <rect x="345" y="470" width="270" height="80" rx="6" class="c-mask"/>
-          <rect x="345" y="470" width="270" height="80" rx="6" class="c-external" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(351 476) scale(0.6875)">
-            <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
-            <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
-          </g>
-          <text data-node-label="" x="480" y="508" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">HAL / 芯片外设</text>
-        <text x="480" y="524" class="t-muted" font-size="9" text-anchor="middle">STM32H723VG · Cortex-M7</text>
+          <text data-node-label="" x="327.5" y="591" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">内存与构建约束</text>
+        <text x="327.5" y="607" class="t-muted" font-size="9" text-anchor="middle">MPU · DMA · Linker</text>
         </g>
 
         <!-- Connection labels -->
-        <g data-edge-from="application" data-edge-to="algorithm" data-edge-label="计算" data-edge-key="0" data-edge-id="use-algorithm">
-          <rect x="130" y="115" width="30" height="14" rx="3" class="c-mask"/>
-          <text x="145" y="125" class="t-muted" font-size="8" text-anchor="middle">计算</text>
+        <g data-edge-from="hardware" data-edge-to="hal" data-edge-label="寄存器 / IRQ / DMA" data-edge-key="0" data-edge-id="hardware_hal">
+          <rect x="174.8" y="316" width="96.39999999999999" height="14" rx="3" class="c-mask"/>
+          <text x="223" y="326" class="t-backend" font-size="8" text-anchor="middle">寄存器 / IRQ / DMA</text>
         </g>
-        <g data-edge-from="application" data-edge-to="device" data-edge-label="读写设备" data-edge-key="1" data-edge-id="use-device">
-          <rect x="455.8" y="145" width="48.4" height="14" rx="3" class="c-mask"/>
-          <text x="480" y="155" class="t-backend" font-size="8" text-anchor="middle">读写设备</text>
+        <g data-edge-from="hal" data-edge-to="bsp" data-edge-label="HAL Handle 与回调" data-edge-key="1" data-edge-id="hal_bsp">
+          <rect x="387.2" y="316" width="91.6" height="14" rx="3" class="c-mask"/>
+          <text x="433" y="326" class="t-muted" font-size="8" text-anchor="middle">HAL Handle 与回调</text>
         </g>
-        <g data-edge-from="application" data-edge-to="system" data-edge-label="公共服务" data-edge-key="2" data-edge-id="use-system">
-          <rect x="790.8" y="115" width="48.4" height="14" rx="3" class="c-mask"/>
-          <text x="815" y="125" class="t-muted" font-size="8" text-anchor="middle">公共服务</text>
+        <g data-edge-from="bsp" data-edge-to="device" data-edge-label="收发、缓冲与资源绑定" data-edge-key="2" data-edge-id="bsp_device">
+          <rect x="627" y="316" width="106" height="14" rx="3" class="c-mask"/>
+          <text x="680" y="326" class="t-muted" font-size="8" text-anchor="middle">收发、缓冲与资源绑定</text>
         </g>
-        <g data-edge-from="device" data-edge-to="bsp" data-edge-label="通信与采集" data-edge-key="3" data-edge-id="device-bsp">
-          <rect x="451" y="290" width="58" height="14" rx="3" class="c-mask"/>
-          <text x="480" y="300" class="t-backend" font-size="8" text-anchor="middle">通信与采集</text>
+        <g data-edge-from="device" data-edge-to="application" data-edge-label="状态反馈 / 直接控制" data-edge-key="3" data-edge-id="device_app">
+          <rect x="926.9" y="351" width="101.2" height="14" rx="3" class="c-mask"/>
+          <text x="977.5" y="361" class="t-backend" font-size="8" text-anchor="middle">状态反馈 / 直接控制</text>
         </g>
-        <g data-edge-from="system" data-edge-to="rtos" data-edge-label="调度与同步" data-edge-key="4" data-edge-id="system-rtos">
-          <rect x="786" y="290" width="58" height="14" rx="3" class="c-mask"/>
-          <text x="815" y="300" class="t-muted" font-size="8" text-anchor="middle">调度与同步</text>
+        <g data-edge-from="hal" data-edge-to="callbacks" data-edge-label="完成 / 错误 / EXTI" data-edge-key="4" data-edge-id="hal_callback">
+          <rect x="331.05" y="286" width="96.39999999999999" height="14" rx="3" class="c-mask"/>
+          <text x="379.25" y="296" class="t-muted" font-size="8" text-anchor="middle">完成 / 错误 / EXTI</text>
         </g>
-        <g data-edge-from="bsp" data-edge-to="platform" data-edge-label="HAL 驱动" data-edge-key="5" data-edge-id="bsp-platform">
-          <rect x="455.8" y="430" width="48.4" height="14" rx="3" class="c-mask"/>
-          <text x="480" y="440" class="t-backend" font-size="8" text-anchor="middle">HAL 驱动</text>
+
+        <g data-edge-from="callbacks" data-edge-to="tasks" data-edge-label="线程标志" data-edge-key="6" data-edge-id="callback_tasks">
+          <rect x="655.8" y="121" width="48.4" height="14" rx="3" class="c-mask"/>
+          <text x="680" y="131" class="t-muted" font-size="8" text-anchor="middle">线程标志</text>
+        </g>
+        <g data-edge-from="tasks" data-edge-to="device" data-edge-label="采样、发送、检查" data-edge-key="7" data-edge-id="tasks_device">
+          <rect x="769.6" y="181" width="86.8" height="14" rx="3" class="c-mask"/>
+          <text x="813" y="191" class="t-muted" font-size="8" text-anchor="middle">采样、发送、检查</text>
+        </g>
+        <g data-edge-from="tasks" data-edge-to="application" data-edge-label="1 kHz 调度" data-edge-key="8" data-edge-id="tasks_app">
+          <rect x="1118.5" y="215.5" width="58" height="14" rx="3" class="c-mask"/>
+          <text x="1147.5" y="225.5" class="t-backend" font-size="8" text-anchor="middle">1 kHz 调度</text>
+        </g>
+        <g data-edge-from="algorithms" data-edge-to="device" data-edge-label="估计与信号处理" data-edge-key="9" data-edge-id="alg_device">
+          <rect x="640.4" y="463.5" width="77.2" height="14" rx="3" class="c-mask"/>
+          <text x="679" y="473.5" class="t-muted" font-size="8" text-anchor="middle">估计与信号处理</text>
+        </g>
+        <g data-edge-from="algorithms" data-edge-to="application" data-edge-label="控制与轨迹" data-edge-key="10" data-edge-id="alg_app">
+          <rect x="887.25" y="680" width="58" height="14" rx="3" class="c-mask"/>
+          <text x="916.25" y="690" class="t-muted" font-size="8" text-anchor="middle">控制与轨迹</text>
+        </g>
+        <g data-edge-from="system" data-edge-to="device" data-edge-label="初始化、时间与在线状态" data-edge-key="11" data-edge-id="system_device">
+          <rect x="761.7" y="535" width="115.6" height="14" rx="3" class="c-mask"/>
+          <text x="819.5" y="545" class="t-muted" font-size="8" text-anchor="middle">初始化、时间与在线状态</text>
+        </g>
+        <g data-edge-from="system" data-edge-to="message_center" data-edge-label="INS_State 发布" data-edge-key="12" data-edge-id="system_messages">
+          <rect x="926.4" y="573" width="77.2" height="14" rx="3" class="c-mask"/>
+          <text x="965" y="583" class="t-muted" font-size="8" text-anchor="middle">INS_State 发布</text>
+        </g>
+        <g data-edge-from="message_center" data-edge-to="application" data-edge-label="Latest Value / FIFO Event" data-edge-key="13" data-edge-id="messages_app">
+          <rect x="1084.25" y="491" width="130" height="14" rx="3" class="c-mask"/>
+          <text x="1149.25" y="501" class="t-backend" font-size="8" text-anchor="middle">Latest Value / FIFO Event</text>
+        </g>
+        <g data-edge-from="memory" data-edge-to="bsp" data-edge-label="DMA 可达性与链接布局" data-edge-key="14" data-edge-id="memory_bsp">
+          <rect x="387" y="463.5" width="106" height="14" rx="3" class="c-mask"/>
+          <text x="440" y="473.5" class="t-security" font-size="8" text-anchor="middle">DMA 可达性与链接布局</text>
         </g>
 
         <!-- Boundary labels (foreground masks keep routes out of titles) -->
-
+        <g data-graph-role="structural-frame-label" data-composition-frame-id="0" data-composition-frame-kind="region" data-composition-frame-label="STM32H723 Firmware">
+          <rect data-graph-role="structural-frame-label-mask" x="225" y="85" width="107.2" height="16" rx="3" class="c-mask"/>
+          <text data-boundary-label="" x="229" y="98" class="t-cloud" font-size="9" font-weight="600">STM32H723 Firmware</text>
+        </g>
 
         <!-- Legend -->
         <g data-legend="">
-          <text x="40" y="574" class="t-primary" font-size="12" font-weight="650">图例</text>
-          <g data-legend-semantic-kind="frontend" data-legend-x="40" data-legend-baseline="594" data-legend-width="83">
-            <rect x="40" y="585" width="16" height="10" rx="2.5" class="c-frontend" stroke-width="1"/>
-            <text x="62" y="594" class="t-muted" font-size="10" font-weight="500">应用接入</text>
+          <text x="40" y="724" class="t-primary" font-size="12" font-weight="650">图例</text>
+          <g data-legend-semantic-kind="frontend" data-legend-x="40" data-legend-baseline="744" data-legend-width="63">
+            <rect x="40" y="735" width="16" height="10" rx="2.5" class="c-frontend" stroke-width="1"/>
+            <text x="62" y="744" class="t-muted" font-size="10" font-weight="500">前端</text>
           </g>
-          <g data-legend-semantic-kind="backend" data-legend-x="145" data-legend-baseline="594" data-legend-width="83">
-            <rect x="145" y="585" width="16" height="10" rx="2.5" class="c-backend" stroke-width="1"/>
-            <text x="167" y="594" class="t-muted" font-size="10" font-weight="500">框架组件</text>
+          <g data-legend-semantic-kind="backend" data-legend-x="125" data-legend-baseline="744" data-legend-width="63">
+            <rect x="125" y="735" width="16" height="10" rx="2.5" class="c-backend" stroke-width="1"/>
+            <text x="147" y="744" class="t-muted" font-size="10" font-weight="500">后端</text>
           </g>
-          <g data-legend-semantic-kind="external" data-legend-x="250" data-legend-baseline="594" data-legend-width="83">
-            <rect x="250" y="585" width="16" height="10" rx="2.5" class="c-external" stroke-width="1"/>
-            <text x="272" y="594" class="t-muted" font-size="10" font-weight="500">平台基础</text>
+          <g data-legend-semantic-kind="database" data-legend-x="210" data-legend-baseline="744" data-legend-width="73">
+            <rect x="210" y="735" width="16" height="10" rx="2.5" class="c-database" stroke-width="1"/>
+            <text x="232" y="744" class="t-muted" font-size="10" font-weight="500">数据库</text>
+          </g>
+          <g data-legend-semantic-kind="cloud" data-legend-x="305" data-legend-baseline="744" data-legend-width="73">
+            <rect x="305" y="735" width="16" height="10" rx="2.5" class="c-cloud" stroke-width="1"/>
+            <text x="327" y="744" class="t-muted" font-size="10" font-weight="500">云服务</text>
+          </g>
+          <g data-legend-semantic-kind="security" data-legend-x="400" data-legend-baseline="744" data-legend-width="63">
+            <rect x="400" y="735" width="16" height="10" rx="2.5" class="c-security" stroke-width="1"/>
+            <text x="422" y="744" class="t-muted" font-size="10" font-weight="500">安全</text>
+          </g>
+          <g data-legend-semantic-kind="messagebus" data-legend-x="485" data-legend-baseline="744" data-legend-width="83">
+            <rect x="485" y="735" width="16" height="10" rx="2.5" class="c-messagebus" stroke-width="1"/>
+            <text x="507" y="744" class="t-muted" font-size="10" font-weight="500">消息总线</text>
+          </g>
+          <g data-legend-semantic-kind="external" data-legend-x="590" data-legend-baseline="744" data-legend-width="83">
+            <rect x="590" y="735" width="16" height="10" rx="2.5" class="c-external" stroke-width="1"/>
+            <text x="612" y="744" class="t-muted" font-size="10" font-weight="500">外部系统</text>
           </g>
         </g>
       </svg>
