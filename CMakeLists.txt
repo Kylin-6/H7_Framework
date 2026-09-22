@@ -163,6 +163,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Middleware/Algorithm/CRC/crc8.c
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Middleware/Algorithm/CRC/crc16.c
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Device/Peripheral/Remote/remote_control.c
+        ${CMAKE_CURRENT_LIST_DIR}/User_File/Device/Peripheral/Remote/sbus.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Device/Peripheral/Referee/crc_ref.c
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Device/Peripheral/Referee/referee_26.c
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Device/Peripheral/Referee/referee_UI_26.c

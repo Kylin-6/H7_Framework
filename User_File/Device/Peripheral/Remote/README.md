@@ -1,4 +1,41 @@
-remote_control
+# Remote 遥控接收驱动
+
+本目录同时保留两种互不兼容的协议驱动：
+
+- `remote_control.c/.h`：DJI DT7/DR16 使用的 18 字节 DBUS 协议。
+- `sbus.cpp/.h`：标准 25 字节 S.BUS 协议，可用于 FlySky FS-i6X + FS-iA6B。
+
+不要把 DBUS 数据交给 S.BUS 驱动，也不要把 S.BUS 数据交给 `remote_control`。
+
+## FlySky FS-i6X + FS-iA6B
+
+在发射机/接收机设置中，将 FS-iA6B 的 `SERVO` 串行输出切换为 S.BUS。接收机的串行信号线连接到所选 UART 的 RX，引脚地与控制器共地；接收机供电应符合其 4.0--8.4 V 规格。连接前还应确认控制器 RX 引脚允许的信号电平。
+
+UART 必须配置为 100000 baud、8 个数据位、偶校验、2 个停止位、仅接收，并配置 RX DMA。在 STM32 HAL 中，“8 数据位 + parity”对应 `UART_WORDLENGTH_9B`。当前 UART5 已满足这些配置，驱动本身不绑定 UART5，也不修改 CubeMX 生成文件。
+
+```cpp
+#include "sbus.h"
+
+if (!SBUS_Init(&huart5))
+{
+    // UART 配置不符合 S.BUS 要求
+}
+
+Struct_SBUS_Frame frame;
+if (SBUS_ReadLatest(&frame) && SBUS_IsHealthy())
+{
+    // frame.channels[0..15] 的范围是 -1024..1023
+}
+```
+
+驱动始终解码 16 路 11-bit 模拟通道以及 CH17、CH18。i6X 的 6/10 通道设置只决定实际使用哪些通道，不改变 S.BUS 帧结构。驱动不加入死区、缩放、极性、用途映射，也不发布 Topic 或生成 RobotCmd。
+
+`SBUS_IsOnline()` 表示最近 100 ms 内收到过结构合法的完整帧；`SBUS_IsHealthy()` 还要求最新帧未设置 frame-lost 或 failsafe 标志。IDLE+DMA 回调可以任意拆分或合并数据，驱动会跨回调保存半帧并在垃圾字节或丢字节后重新同步。
+
+产品资料：[FS-i6X](https://www.flyskytech.com/products_detail/37.html)、[FS-iA6B](https://www.flyskytech.com/parts_detail/42.html)。
+
+## DJI DBUS 参考
+
 <p align='right'>neozng1@hnu.edu.cn</p>
 ```
 /*************************发射机DT7***************************
@@ -83,4 +120,3 @@ remote_control
 - 上:弹舱开
 - 中:底盘云台分离(底盘不旋转,全向移动)
 - 下:底盘跟随云台
-
