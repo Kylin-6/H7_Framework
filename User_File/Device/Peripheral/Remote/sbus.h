@@ -44,10 +44,10 @@ typedef struct
 
 bool SBUS_Init(UART_HandleTypeDef *huart);
 bool SBUS_ReadLatest(Struct_SBUS_Frame *frame);
-bool SBUS_IsEnabled(void);
-bool SBUS_IsOnline(void);
-bool SBUS_IsDataValid(void);
-bool SBUS_IsHealthy(void);
+bool SBUS_IsEnabled(void);   ///< 已绑定 UART；S.BUS 接收机没有协议使能态。
+bool SBUS_IsOnline(void);    ///< 最近 100 ms 内收到过结构合法的完整帧。
+bool SBUS_IsDataValid(void); ///< 当前等价于 Online。
+bool SBUS_IsHealthy(void);   ///< 在线且最新帧未报告 frame-lost/failsafe。
 void SBUS_GetDiagnostics(Struct_SBUS_Diagnostics *diagnostics);
 void SBUS_RxCallback(uint8_t *buffer, uint16_t length);
 

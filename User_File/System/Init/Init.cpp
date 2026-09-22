@@ -20,7 +20,7 @@
 #include "sys_timestamp.h"
 #include "usart.h"
 
-// 全局初始化完成标志位
+// 兼容既有任务的“初始化流程已结束”标志；不等同于 SYSTEM_INIT_READY。
 volatile bool init_finished = false;
 static volatile Enum_System_Init_State system_init_state = SYSTEM_INIT_READY;
 static volatile uint32_t system_init_failure_mask = SYSTEM_INIT_FAILURE_NONE;
@@ -28,6 +28,7 @@ static volatile uint32_t system_init_failure_mask = SYSTEM_INIT_FAILURE_NONE;
 static void System_Init_RecordFailure(uint32_t failure,
                                       Enum_System_Init_State severity)
 {
+    // 保留全部失败来源，同时只允许总体严重级别单向升级。
     system_init_failure_mask |= failure;
     if (severity > system_init_state)
     {
@@ -48,6 +49,7 @@ extern "C" uint32_t System_Init_GetFailureMask(void)
 
 extern "C" void System_Init(void)
 {
+    // 支持调试阶段重复进入时重新生成一份完整的初始化结果。
     init_finished = false;
     system_init_state = SYSTEM_INIT_READY;
     system_init_failure_mask = SYSTEM_INIT_FAILURE_NONE;
@@ -87,6 +89,7 @@ extern "C" void System_Init(void)
     }
     if (system_init_state == SYSTEM_INIT_FATAL)
     {
+        // TIM4/TIM5 是控制调度与统一时间戳的基础，失败时不继续启动设备链路。
         init_finished = true;
         return;
     }
@@ -94,6 +97,7 @@ extern "C" void System_Init(void)
     const bool bmi088_initialized = BSP_BMI088.Init();
     if (!bmi088_initialized)
     {
+        // IMU、Flash 和 ADC 均为可降级设备；分别置位，便于诊断层精确上报。
         System_Init_RecordFailure(SYSTEM_INIT_FAILURE_BMI088,
                                   SYSTEM_INIT_DEGRADED);
     }
@@ -114,6 +118,7 @@ extern "C" void System_Init(void)
     EricTool_USB.Init();
     if (bmi088_initialized)
     {
+        // 只有完整通过芯片 ID 与配置回读后才允许启动 FIFO/姿态数据链路。
         BSP_BMI088.BMI088_Gyro.Start_FIFO_Acquisition();
     }
     

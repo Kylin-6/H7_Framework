@@ -125,7 +125,11 @@ void Class_DMMotor::FeedbackCallback(FDCAN_HandleTypeDef *callback_hfdcan,
     motor->feedback_daemon.Feed();
 }
 
-/** @brief Daemon 首次判定掉线时快速提交一帧使能命令。 */
+/**
+ * @brief Daemon 首次判定掉线时快速提交一帧使能命令。
+ * @note 回调只在 Online -> Offline 跃迁执行一次，不做周期重试；入队失败也不会
+ *       在同一离线阶段重复提交，避免离线设备持续占用命令队列。
+ */
 void Class_DMMotor::OfflineCallback(void *owner)
 {
     Class_DMMotor *motor = static_cast<Class_DMMotor *>(owner);

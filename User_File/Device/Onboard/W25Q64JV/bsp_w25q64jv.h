@@ -41,6 +41,10 @@ enum Enum_W25Q64JV_Mode
 class Class_W25Q64JV
 {
 public:
+    /**
+     * @brief 最多尝试 5 次读取 JEDEC ID，并按需进入内存映射模式。
+     * @return 芯片识别且所选模式配置成功时返回 true；失败后读写接口保持禁用。
+     */
     bool Init(const Enum_W25Q64JV_Mode &__Flash_Mode = W25Q64JV_Mode_Normal);
 
     void Enable_Quad_Mode();
@@ -59,8 +63,10 @@ public:
 
     inline bool Set_Buffer(const uint8_t *Buffer, const uint32_t &Address, const uint16_t &Length);
 
+    /** @brief 已初始化且当前没有 OSPI 操作或超时恢复待处理。 */
     bool Is_Ready() { return Initialized && !Is_Busy(); }
 
+    /** @brief 仅表示初始化成功，不表示器件当前空闲。 */
     bool Is_Initialized() const { return Initialized; }
 
     uint32_t Get_Auto_Polling_Error_Count() { return Auto_Polling_Error_Count; }

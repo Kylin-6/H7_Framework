@@ -99,10 +99,10 @@ bool QD4310_SetZeroAngle(QD4310_t *motor);
 bool QD4310_SendCommand(QD4310_t *motor, QD4310_Command_t cmd, int16_t value);
 
 void QD4310_Init(QD4310_t* motor, uint8_t id, FDCAN_HandleTypeDef* hfdcan);
-bool QD4310_IsOnline(const QD4310_t *motor);
-bool QD4310_IsEnabled(const QD4310_t *motor);
-bool QD4310_IsDataValid(const QD4310_t *motor);
-bool QD4310_IsHealthy(const QD4310_t *motor);
+bool QD4310_IsOnline(const QD4310_t *motor);    ///< 最近 100 ms 内收到过反馈。
+bool QD4310_IsEnabled(const QD4310_t *motor);   ///< 最近反馈报告电机已使能。
+bool QD4310_IsDataValid(const QD4310_t *motor); ///< 当前等价于 IsOnline。
+bool QD4310_IsHealthy(const QD4310_t *motor);   ///< 在线且已使能。
 
 // 数学常数定义
 #define QD4310_PI (3.14159265358979323846f)

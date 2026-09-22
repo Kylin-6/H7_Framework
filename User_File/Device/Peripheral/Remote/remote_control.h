@@ -127,8 +127,8 @@ RC_ctrl_t *RemoteControlInit(UART_HandleTypeDef *rc_usart_handle);
  * @return uint8_t 1:在线 0:离线
  */
 uint8_t RemoteControlIsOnline();
-uint8_t RemoteControlIsEnabled(void);
-uint8_t RemoteControlIsDataValid(void);
-uint8_t RemoteControlIsHealthy(void);
+uint8_t RemoteControlIsEnabled(void);   ///< 驱动已完成串口绑定；被动设备没有协议使能态。
+uint8_t RemoteControlIsDataValid(void); ///< 当前等价于 Online。
+uint8_t RemoteControlIsHealthy(void);   ///< 已初始化且当前数据在线。
 
 #endif

@@ -57,10 +57,10 @@ typedef struct
 
 typedef struct
 {
-    uint32_t submit_queue_full_count;
-    uint32_t periodic_slot_full_count;
-    uint32_t hardware_fifo_full_count;
-    uint32_t hal_send_error_count;
+    uint32_t submit_queue_full_count;  /*!< 命令 FIFO 无空位导致的提交失败次数。 */
+    uint32_t periodic_slot_full_count; /*!< 新周期键无可用槽位的次数。 */
+    uint32_t hardware_fifo_full_count; /*!< 发送时硬件 Tx FIFO 暂时无空位的次数。 */
+    uint32_t hal_send_error_count;     /*!< HAL 拒绝发送且原因不是 FIFO 满的次数。 */
 } Struct_CAN_Tx_Stats;
 
 /**
@@ -121,6 +121,11 @@ void BSP_CAN_SendAsync(void);
  */
 bool BSP_CAN_SendPer(void);
 
+/**
+ * @brief 原子复制当前 CAN 发送统计快照。
+ * @param stats 输出位置；传入 NULL 时不执行任何操作。
+ * @note 计数器采用饱和累加，不会在溢出后回绕；本接口不会清零统计。
+ */
 void BSP_CAN_GetTxStats(Struct_CAN_Tx_Stats *stats);
 
 #ifdef __cplusplus

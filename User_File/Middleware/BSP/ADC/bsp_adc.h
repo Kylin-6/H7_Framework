@@ -44,6 +44,10 @@ extern struct Struct_ADC_Manage_Object ADC3_Manage_Object;
 
 /* Exported function declarations --------------------------------------------*/
 
+/**
+ * @brief 校准 ADC 并启动指定通道数的 DMA 循环采样。
+ * @return 参数、校准、DMA 启动任一失败时返回 false；调用方可据此降级启动。
+ */
 bool ADC_Init(ADC_HandleTypeDef *hadc, uint16_t Sample_Number);
 
 #endif

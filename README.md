@@ -6,7 +6,7 @@
 
 > **打开 `H7_BSP.ioc` 遇到版本迁移提示时，选择 Continue，不要选择 Migrate。** 迁移并重新生成可能使 `Middlewares/` 中的 FreeRTOS 与现有 SystemView 适配不兼容。请保持项目原有固件包，详见 [CubeMX 与构建边界](#cubemx-与构建边界)。
 
-[整体架构](#整体架构) · [通信与外设](#通信与外设-bsp) · [设备层](#设备层) · [算法层](#算法层) · [系统服务](#系统服务) · [接入方式](#接入方式) · [构建与调试](#构建与调试) · [主机回归](#主机回归)
+[整体架构](#整体架构) · [通信与外设](#通信与外设-bsp) · [设备层](#设备层) · [算法层](#算法层) · [系统服务](#系统服务) · [可靠性与降级边界](#可靠性与降级边界) · [接入方式](#接入方式) · [构建与调试](#构建与调试) · [主机回归](#主机回归)
 
 核心专篇：[BSP 开发指南](User_File/Middleware/BSP/README.md) · [Message Center](User_File/System/MessageCenter/README.md) · [Application 开发指南](User_File/Application/README.md)
 
@@ -89,6 +89,8 @@ CAN 接收回调在中断上下文执行。UART 的 DMA 接收须同时具备 Cu
 
 达妙动作/模式请求及 QDrive 命令接口返回 `bool`，表示是否成功提交到软件发送通道。提交失败时保留相应状态，调用方可据此重试；达妙置零仅在提交成功后重置位置展开状态。返回成功不代表电机已经执行或确认命令。
 
+达妙反馈以 `(FDCAN, master_id)` 注册接收入口，并继续用反馈首字节低四位匹配 `can_id`；电机 ID 支持 `0x00~0xFF`，不要把高 ID 截断为四位。只有总线、ID、DLC 和节点号全部合法的运动反馈才刷新在线状态，参数应答不会喂在线守护器。在线电机连续 100 ms 无合法反馈时，Daemon 的离线跃迁回调会尝试提交**一帧**使能命令；同一离线阶段不持续重发，提交失败也不代表已经恢复，应用仍须依据 `IsHealthy()` 决定是否输出。
+
 ### 板载设备与外接工具
 
 | 组件 | 功能 |
@@ -168,6 +170,42 @@ Daemon 只负责在线状态判断，不负责掉线后的停机、安全策略�
 Application 作为独立机器人业务层维护，不在 BSP 总览展开具体控制实现。当前模块、
 Control_Task 调度顺序、RobotCmd 所有权、Gimbal/Chassis/Shoot 行为和新应用接入规范见
 [Application 开发指南](User_File/Application/README.md)。
+
+## 可靠性与降级边界
+
+### 启动状态
+
+`System_Init()` 不用单一成功标志掩盖部分设备失败，而是同时公开总体状态与失败位图：
+
+| 状态 | 含义 | 当前处理 |
+| --- | --- | --- |
+| `SYSTEM_INIT_READY` | 必需与可选模块全部初始化成功 | 正常启动控制任务 |
+| `SYSTEM_INIT_DEGRADED` | BMI088、W25Q64 或 ADC1 等可选设备失败 | 其余模块继续运行；失败功能保持禁用 |
+| `SYSTEM_INIT_FATAL` | TIM4/TIM5 等控制时基失败 | `Control_Task` 不进入控制循环 |
+
+失败来源通过 `System_Init_GetFailureMask()` 的 `TIM4 / TIM5 / BMI088 / W25Q64 / ADC1` 位读取。`init_finished` 仅表示初始化流程已经结束，不表示所有模块均可用。BMI088 只有在 Accel/Gyro 芯片 ID 与配置回读均成功后才启动 FIFO；W25Q64 的 JEDEC ID 最多尝试 5 次，识别失败后读写和内存映射保持禁用，避免缺件时无限阻塞上电。
+
+### 设备状态语义
+
+设备层统一使用四个维度，应用不应把“收到过反馈”直接当作“允许输出”：
+
+| 查询 | 语义 |
+| --- | --- |
+| `Online` | 在设备规定的超时窗口内收到过合法反馈 |
+| `Enabled` | 主动设备处于协议/本地使能状态；遥控器、S.BUS、裁判系统等被动设备表示驱动已初始化 |
+| `DataValid` | 当前反馈可供上层使用；现有驱动通常要求 Online |
+| `Healthy` | 当前设备满足业务使用的最小条件，通常为 Enabled 且 DataValid |
+
+`Daemon` 只负责时间窗、在线/离线跃迁和可选离线回调。设备收到完整合法反馈后自行 `Feed()`，`StatusTask` 每 10 ms 统一 `CheckAll()`。它不自动实现全车停机、云台 DISABLE、消息路由或故障上报；这些安全动作必须在拥有设备的 Application 中显式处理，并用实机拔线验证时限。
+
+### 数据新鲜度、发送与可观测性
+
+- `Topic<T>::ReadFresh()` 用发布时间戳拒绝过期数据。云台对 INS 使用 10 ms 新鲜度门限；失效时 Yaw 输出零电流、Pitch 保持最后内部位置，恢复新鲜数据后再继续闭环。
+- 连续控制目标走 `CAN_Tx_Perform()`，同一 `(FDCAN, ID)` 只保留最新值；使能、失能、清错和模式设置走 `CAN_Tx_Submit()` FIFO。软件接收成功、写入硬件 FIFO 和设备实际执行是三个不同阶段。
+- `BSP_CAN_GetTxStats()` 提供命令队列满、周期槽满、硬件 FIFO 满和 HAL 发送失败的饱和计数快照。计数只提供证据，不自动改变调度或执行安全策略。
+- 主机测试可以确认协议编解码、ID/DLC 隔离、超时边界、队列溢出和数据新鲜度；真实波特率/采样点、终端电阻、总线仲裁、供电时序、电机参数和 EMC 必须在目标板上确认。
+
+当前框架尚未启用独立 IWDG，也没有通用的 Daemon→安全策略联动和复位原因遥测。接入整机前至少应完成遥控器失联互锁、关键设备拔线、上电仲裁、跌压重启和长跑水位检查，不能把主机回归通过等同于整机安全验收。
 
 ## 接入方式
 
@@ -249,12 +287,15 @@ cmake --build --preset Release
 | [Boundary](Tests/Boundary) | PID 积分/死区/D 低通、KF 连续缺测、电机命令失败返回、EricTool 有界解析、UART DMA 发送寿命及忙/失败路径，共 5 组 |
 | [Trajectory](Tests/Trajectory/README.md) | 输入契约、6 万组随机初态、1657 组边界初态、10 万次逐周期改目标、连续信号跟随及分段连续性，共 5 组 |
 | [FilterPolynomial](Tests/FilterPolynomial/README.md) | 0～3 阶独立系数、流式卷积、解析导数、生命周期及配置失败状态保留，共 5 组 |
+| [CAN](Tests/CAN) | 命令 FIFO、周期发送槽、HAL/FIFO 失败统计及回调注册边界 |
+| [Topic](Tests/Topic) | Latest-Value 发布读取、元信息一致性和 `ReadFresh()` 时间边界 |
+| [SBUS](Tests/SBUS) | 分片/合帧解析、重同步、在线超时以及 failsafe 健康状态 |
 
 在仓库根目录运行下列 PowerShell 命令；将 `g++` 替换为本机主机编译器路径：
 
 ```powershell
-foreach ($suite in @("Fuzzy", "Boundary", "Trajectory", "FilterPolynomial")) {
-    cmake -S "Tests/$suite" -B "build/Tests_$suite" -G Ninja -DCMAKE_CXX_COMPILER=g++ -DCMAKE_BUILD_TYPE=Release
+foreach ($suite in @("Fuzzy", "Boundary", "Trajectory", "FilterPolynomial", "CAN", "Topic", "SBUS")) {
+    cmake -S "Tests/$suite" -B "build/Tests_$suite" -G Ninja -DCMAKE_CXX_COMPILER=g++ -DCMAKE_BUILD_TYPE=Debug
     if ($LASTEXITCODE -ne 0) { throw "$suite 配置失败" }
     cmake --build "build/Tests_$suite"
     if ($LASTEXITCODE -ne 0) { throw "$suite 构建失败" }
@@ -263,7 +304,7 @@ foreach ($suite in @("Fuzzy", "Boundary", "Trajectory", "FilterPolynomial")) {
 }
 ```
 
-2026-09-19 的功能与边界修复已进行主机验证及 MC02 Debug 编译链接。主机测试不代替实际 DMA/CAN 通信、电机闭环和实时性验证；新增算法仍需由应用接入，Trajectory 尚未测量板上的最坏重规划耗时。
+可靠性修改应至少运行 Boundary、CAN、Topic 与 SBUS；算法修改再运行对应算法套件。主机测试不代替实际 DMA/CAN 通信、电机闭环和实时性验证；新增算法仍需由应用接入，Trajectory 尚未测量板上的最坏重规划耗时。
 
 ### 烧录与观察
 

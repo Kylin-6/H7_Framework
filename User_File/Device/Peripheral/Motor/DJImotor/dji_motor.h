@@ -133,10 +133,10 @@ public:
     void Set_Outer_Loop(Enum_DJIMotor_Loop loop);
     bool Set_Feedback_Source(Enum_DJIMotor_Loop loop, Enum_DJIMotor_Feedback source,
                              const float *feedback = nullptr);
-    bool IsOnline();
-    bool IsEnabled() const;
-    bool IsDataValid();
-    bool IsHealthy();
+    bool IsOnline();      ///< 反馈未超过超时门限。
+    bool IsEnabled() const; ///< 驱动已初始化且本地输出开关已使能。
+    bool IsDataValid();   ///< 驱动已初始化且反馈在线。
+    bool IsHealthy();     ///< Enabled 与 DataValid 同时成立。
     uint64_t Get_Last_Feedback_Timestamp_Us() const;
 
     // 接收中断更新运动反馈，Control 更新 PID 状态；整个结构不是原子快照。

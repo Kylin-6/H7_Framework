@@ -75,8 +75,14 @@ public:
      * @note 必须在Init()之前调用；初始化完成后的设置不会生效。
      */
     void Set_VQF_Config(const Struct_BMI088_VQF_Config &__Config);
+    /**
+     * @brief 有界初始化 Accel、Gyro 与 VQF。
+     * @return 两个传感器均通过芯片 ID 和配置回读时返回 true。
+     * @note false 时不会启动 FIFO，也不应发布 INS 或进入姿态闭环。
+     */
     bool Init();
 
+    /** @brief 返回完整初始化结果，不表示最近一次采样仍然新鲜。 */
     inline bool Is_Initialized() const { return Init_Finished_Flag; }
     void Calculate();
 

@@ -67,9 +67,9 @@ void RefereeSend(uint8_t *send, uint16_t tx_len);
 
 /** @brief Parse one DMA receive block without registering a UART. */
 void RefereeReceiveData(uint8_t *data, uint16_t length);
-uint8_t RefereeIsEnabled(void);
-uint8_t RefereeIsOnline(void);
-uint8_t RefereeIsDataValid(void);
-uint8_t RefereeIsHealthy(void);
+uint8_t RefereeIsEnabled(void);   ///< 已完成 UART 注册；裁判系统没有协议使能态。
+uint8_t RefereeIsOnline(void);    ///< 最近 500 ms 内解析到过 CRC 合法帧。
+uint8_t RefereeIsDataValid(void); ///< 当前等价于 Online。
+uint8_t RefereeIsHealthy(void);   ///< 已初始化且当前数据在线。
 
 #endif // !REFEREE_26_H
