@@ -198,10 +198,20 @@ extern "C" bool SBUS_IsOnline(void)
     return available && (HAL_GetTick() - timestamp_ms <= SBUS_RX_TIMEOUT_MS);
 }
 
+extern "C" bool SBUS_IsEnabled(void)
+{
+    return sbus_uart != nullptr;
+}
+
+extern "C" bool SBUS_IsDataValid(void)
+{
+    return SBUS_IsOnline();
+}
+
 extern "C" bool SBUS_IsHealthy(void)
 {
     Struct_SBUS_Frame frame{};
-    return SBUS_ReadLatest(&frame) && SBUS_IsOnline() &&
+    return SBUS_IsEnabled() && SBUS_ReadLatest(&frame) && SBUS_IsDataValid() &&
            frame.frame_lost == 0U && frame.failsafe == 0U;
 }
 

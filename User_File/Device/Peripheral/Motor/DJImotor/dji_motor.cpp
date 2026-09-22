@@ -354,6 +354,27 @@ void Class_DJIMotor::Enable()
     enabled = true;
 }
 
+bool Class_DJIMotor::IsOnline()
+{
+    Check_Feedback_Timeout();
+    return online;
+}
+
+bool Class_DJIMotor::IsEnabled() const
+{
+    return initialized && enabled;
+}
+
+bool Class_DJIMotor::IsDataValid()
+{
+    return initialized && IsOnline();
+}
+
+bool Class_DJIMotor::IsHealthy()
+{
+    return IsEnabled() && IsDataValid();
+}
+
 /**
  * @brief 切换到开环入口或已配置的单个控制环，保留目标值和 PID 状态。
  * @note 不转换已有目标的单位；切换后应按新入口重新设置目标。

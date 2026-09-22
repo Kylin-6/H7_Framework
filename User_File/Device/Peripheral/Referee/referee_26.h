@@ -67,5 +67,9 @@ void RefereeSend(uint8_t *send, uint16_t tx_len);
 
 /** @brief Parse one DMA receive block without registering a UART. */
 void RefereeReceiveData(uint8_t *data, uint16_t length);
+uint8_t RefereeIsEnabled(void);
+uint8_t RefereeIsOnline(void);
+uint8_t RefereeIsDataValid(void);
+uint8_t RefereeIsHealthy(void);
 
 #endif // !REFEREE_26_H

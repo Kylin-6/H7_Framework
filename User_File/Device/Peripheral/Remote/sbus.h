@@ -44,7 +44,9 @@ typedef struct
 
 bool SBUS_Init(UART_HandleTypeDef *huart);
 bool SBUS_ReadLatest(Struct_SBUS_Frame *frame);
+bool SBUS_IsEnabled(void);
 bool SBUS_IsOnline(void);
+bool SBUS_IsDataValid(void);
 bool SBUS_IsHealthy(void);
 void SBUS_GetDiagnostics(Struct_SBUS_Diagnostics *diagnostics);
 void SBUS_RxCallback(uint8_t *buffer, uint16_t length);

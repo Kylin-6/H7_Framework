@@ -19,6 +19,7 @@
  */
 
 #include "QD4310.h"
+#include "sys_timestamp.h"
 
 /**
  * @brief  QD4310 CAN 反馈帧统一回调入口
@@ -53,13 +54,19 @@ static void QDrive_Callback(FDCAN_HandleTypeDef* hfdcan, uint32_t id, uint8_t* d
  * @note   调用后自动注册 CAN 反馈回调
  */
 void QD4310_Init(QD4310_t *motor, uint8_t id, FDCAN_HandleTypeDef* hfdcan) {
+    if (motor == NULL)
+        return;
     motor->enabled = false;
+    motor->initialized = false;
+    motor->feedback_received = false;
     motor->id = id;
     motor->speed = 0.0f;
     motor->angle = 0.0f;
     motor->current = 0.0f;
+    motor->last_feedback_timestamp_us = 0U;
     motor->hfdcan = hfdcan;
-    BSP_CAN_RegisterCallback(motor->id + 0x500, hfdcan, QDrive_Callback, motor);
+    if (hfdcan != NULL)
+        motor->initialized = BSP_CAN_RegisterCallback(motor->id + 0x500, hfdcan, QDrive_Callback, motor);
 }
 
 /**
@@ -122,6 +129,8 @@ bool QD4310_SendCommand(QD4310_t *motor, QD4310_Command_t cmd, int16_t value) {
  *         - [6-7]: 角度原始值 (uint16_t, little-endian), 缩放因子 2π / UINT16_MAX
  */
 void QD4310_Update(QD4310_t *motor, const uint8_t feedback[8]) {
+    if (motor == NULL || feedback == NULL)
+        return;
     motor->enabled = feedback[0] & 0x01;
 
     int16_t current_raw = (int16_t)((feedback[3] << 8) | feedback[2]);
@@ -132,7 +141,21 @@ void QD4310_Update(QD4310_t *motor, const uint8_t feedback[8]) {
 
     uint16_t angle_raw = (uint16_t)((feedback[7] << 8) | feedback[6]);
     motor->angle = (float)angle_raw * QD4310_TWO_PI / UINT16_MAX;
+    motor->last_feedback_timestamp_us = SYS_Timestamp.Get_Now_Microsecond();
+    motor->feedback_received = true;
 }
+
+bool QD4310_IsOnline(const QD4310_t *motor) {
+    return motor != NULL && motor->initialized && motor->feedback_received &&
+           SYS_Timestamp.Get_Now_Microsecond() - motor->last_feedback_timestamp_us <= QD4310_FEEDBACK_TIMEOUT_US;
+}
+
+bool QD4310_IsEnabled(const QD4310_t *motor) {
+    return motor != NULL && motor->initialized && motor->enabled;
+}
+
+bool QD4310_IsDataValid(const QD4310_t *motor) { return QD4310_IsOnline(motor); }
+bool QD4310_IsHealthy(const QD4310_t *motor) { return QD4310_IsOnline(motor) && QD4310_IsEnabled(motor); }
 
 /**
  * @brief  使能电机驱动输出

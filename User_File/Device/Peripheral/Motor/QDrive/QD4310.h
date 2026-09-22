@@ -34,12 +34,17 @@ typedef enum
 // QD4310电机结构体
 typedef struct {
     bool enabled;
+    bool initialized;
+    bool feedback_received;
     uint8_t id;
     float speed;   // 转速，单位rpm
     float angle;   // 角度，单位弧度
     float current; // 电流，单位A
+    uint64_t last_feedback_timestamp_us;
     FDCAN_HandleTypeDef* hfdcan;
 } QD4310_t;
+
+#define QD4310_FEEDBACK_TIMEOUT_US (100000ULL)
 
 // 命令接口返回值：true 表示已提交队列或周期槽，false 表示提交失败；不代表电机已执行。
 /**
@@ -94,6 +99,10 @@ bool QD4310_SetZeroAngle(QD4310_t *motor);
 bool QD4310_SendCommand(QD4310_t *motor, QD4310_Command_t cmd, int16_t value);
 
 void QD4310_Init(QD4310_t* motor, uint8_t id, FDCAN_HandleTypeDef* hfdcan);
+bool QD4310_IsOnline(const QD4310_t *motor);
+bool QD4310_IsEnabled(const QD4310_t *motor);
+bool QD4310_IsDataValid(const QD4310_t *motor);
+bool QD4310_IsHealthy(const QD4310_t *motor);
 
 // 数学常数定义
 #define QD4310_PI (3.14159265358979323846f)

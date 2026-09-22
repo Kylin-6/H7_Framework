@@ -76,7 +76,9 @@ void TestDecodeAndLinkState()
     tick_ms = 10U;
     assert(SBUS_Init(&uart));
     assert(initialized_uart == &uart);
+    assert(SBUS_IsEnabled());
     assert(!SBUS_IsOnline());
+    assert(!SBUS_IsDataValid());
     assert(!SBUS_IsHealthy());
 
     std::array<uint16_t, SBUS_CHANNEL_COUNT> values{};
@@ -98,7 +100,7 @@ void TestDecodeAndLinkState()
     }
     assert(result.channel_17 == 1U && result.channel_18 == 1U);
     assert(result.sequence == 1U && result.timestamp_ms == 10U);
-    assert(SBUS_IsOnline() && SBUS_IsHealthy());
+    assert(SBUS_IsOnline() && SBUS_IsDataValid() && SBUS_IsHealthy());
     tick_ms = 110U;
     assert(SBUS_IsOnline());
     tick_ms = 111U;

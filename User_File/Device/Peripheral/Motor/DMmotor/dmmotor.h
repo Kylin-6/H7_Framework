@@ -67,6 +67,8 @@ public:
     bool IsOnline() const;
     /** 最近一帧合法反馈中的协议状态为“已使能”时返回 true。 */
     bool IsEnabled() const;
+    bool IsDataValid() const;
+    bool IsHealthy() const;
     /** 提供只读守护器状态，供诊断层读取离线时间和状态跃迁。 */
     const Daemon &GetDaemon() const;
 

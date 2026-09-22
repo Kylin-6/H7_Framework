@@ -19,6 +19,9 @@
 
 static UART_HandleTypeDef *referee_uart; // 裁判系统串口实例
 static referee_info_t referee_info;			  // 裁判系统数据
+static uint32_t referee_last_valid_tick;
+
+#define REFEREE_OFFLINE_TIMEOUT_MS 500U
 
 /**
  * @brief  读取裁判数据,中断中读取保证速度
@@ -64,6 +67,7 @@ static void JudgeReadData(uint8_t *buff, uint16_t length)
             if (Verify_CRC16_Check_Sum(frame, judge_length) == TRUE)
             {
                 referee_info.init_flag = 1U;
+                referee_last_valid_tick = HAL_GetTick();
                 // 2个8位拼成16位int
                 referee_info.CmdID = (frame[6] << 8 | frame[5]);
                 // 解析数据命令码,将数据拷贝到相应结构体中(注意拷贝数据的长度)
@@ -152,6 +156,7 @@ referee_info_t *RefereeInit(UART_HandleTypeDef *referee_usart_handle)
         return NULL;
 
     memset(&referee_info, 0, sizeof(referee_info));
+    referee_last_valid_tick = 0U;
     referee_uart = referee_usart_handle;
     UART_Init(referee_usart_handle, RefereeRxCallback);
 
@@ -173,3 +178,14 @@ void RefereeReceiveData(uint8_t *data, uint16_t length)
 {
     JudgeReadData(data, length);
 }
+
+uint8_t RefereeIsEnabled(void) { return referee_uart != NULL; }
+
+uint8_t RefereeIsOnline(void)
+{
+    return RefereeIsEnabled() && referee_info.init_flag &&
+           (uint32_t)(HAL_GetTick() - referee_last_valid_tick) <= REFEREE_OFFLINE_TIMEOUT_MS;
+}
+
+uint8_t RefereeIsDataValid(void) { return RefereeIsOnline(); }
+uint8_t RefereeIsHealthy(void) { return RefereeIsEnabled() && RefereeIsDataValid(); }

@@ -11,6 +11,24 @@ static uint8_t rc_init_flag = 0; // 遥控器初始化标志位
 
 // 遥控器拥有的串口实例,因为遥控器是单例,所以这里只有一个,就不封装了
 static uint32_t rc_last_rx_tick;
+static uint8_t rc_data_valid;
+
+static uint8_t RemoteControlFrameIsValid(const uint8_t *data)
+{
+    const uint16_t channels[4] = {
+        (uint16_t)((data[0] | (data[1] << 8)) & 0x07ff),
+        (uint16_t)(((data[1] >> 3) | (data[2] << 5)) & 0x07ff),
+        (uint16_t)(((data[2] >> 6) | (data[3] << 2) | (data[4] << 10)) & 0x07ff),
+        (uint16_t)(((data[4] >> 1) | (data[5] << 7)) & 0x07ff),
+    };
+    const uint8_t right = (data[5] >> 4) & 0x03U;
+    const uint8_t left = (data[5] >> 6) & 0x03U;
+    for (uint8_t i = 0U; i < 4U; ++i)
+        if (channels[i] < RC_CH_VALUE_MIN || channels[i] > RC_CH_VALUE_MAX)
+            return 0U;
+    return right >= RC_SW_UP && right <= RC_SW_MID &&
+           left >= RC_SW_UP && left <= RC_SW_MID;
+}
 
 /**
  * @brief 矫正遥控器摇杆的值,超过660或者小于-660的值都认为是无效值,置0
@@ -93,8 +111,12 @@ static void RemoteControlRxCallback(uint8_t *buffer, uint16_t length)
         return;
 
     // IDLE DMA may deliver more than one frame. Keep the newest complete frame.
-    sbus_to_rc(buffer + length - REMOTE_CONTROL_FRAME_SIZE);
+    uint8_t *frame = buffer + length - REMOTE_CONTROL_FRAME_SIZE;
+    if (!RemoteControlFrameIsValid(frame))
+        return;
+    sbus_to_rc(frame);
     rc_last_rx_tick = HAL_GetTick();
+    rc_data_valid = 1U;
 }
 
 RC_ctrl_t *RemoteControlInit(UART_HandleTypeDef *rc_usart_handle)
@@ -103,6 +125,8 @@ RC_ctrl_t *RemoteControlInit(UART_HandleTypeDef *rc_usart_handle)
         return NULL;
 
     memset(rc_ctrl, 0, sizeof(rc_ctrl));
+    rc_last_rx_tick = 0U;
+    rc_data_valid = 0U;
     UART_Init(rc_usart_handle, RemoteControlRxCallback);
 
     rc_init_flag = 1;
@@ -111,5 +135,9 @@ RC_ctrl_t *RemoteControlInit(UART_HandleTypeDef *rc_usart_handle)
 
 uint8_t RemoteControlIsOnline()
 {
-    return rc_init_flag && ((uint32_t)(HAL_GetTick() - rc_last_rx_tick) <= 100U);
+    return rc_init_flag && rc_data_valid && ((uint32_t)(HAL_GetTick() - rc_last_rx_tick) <= 100U);
 }
+
+uint8_t RemoteControlIsEnabled(void) { return rc_init_flag; }
+uint8_t RemoteControlIsDataValid(void) { return RemoteControlIsOnline(); }
+uint8_t RemoteControlIsHealthy(void) { return RemoteControlIsEnabled() && RemoteControlIsDataValid(); }

@@ -193,6 +193,16 @@ bool Class_DMMotor::IsEnabled() const
     return feedback.state == 1U;
 }
 
+bool Class_DMMotor::IsDataValid() const
+{
+    return IsOnline();
+}
+
+bool Class_DMMotor::IsHealthy() const
+{
+    return IsOnline() && IsEnabled();
+}
+
 const Daemon &Class_DMMotor::GetDaemon() const
 {
     return feedback_daemon;
