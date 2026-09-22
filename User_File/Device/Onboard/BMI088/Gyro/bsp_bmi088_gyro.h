@@ -62,7 +62,7 @@ static_assert(sizeof(Struct_BMI088_Gyro_Sample) == 32U,
 class Class_BMI088_Gyro
 {
 public:
-    void Init();
+    bool Init();
 
     void Start_FIFO_Acquisition();
 

@@ -87,6 +87,23 @@ public:
         return snapshot;
     }
 
+    bool ReadFresh(T &data, uint64_t max_age_us) const
+    {
+        const TopicSnapshot<T> snapshot = ReadWithMeta();
+        if (!snapshot.valid)
+        {
+            return false;
+        }
+        const uint64_t now_us = SYS_Timestamp_Get_Microsecond();
+        if (now_us < snapshot.timestamp_us ||
+            now_us - snapshot.timestamp_us > max_age_us)
+        {
+            return false;
+        }
+        data = snapshot.data;
+        return true;
+    }
+
     uint32_t Sequence() const
     {
         const uint32_t primask = __get_PRIMASK();

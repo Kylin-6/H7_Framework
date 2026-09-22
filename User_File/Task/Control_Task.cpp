@@ -10,12 +10,21 @@
 #include "Gimbal.h"
 #include "RobotCmd.h"
 #include "Shoot.h"
+#include "Init.h"
 #include "user_task.h"
 
 extern "C" void Control_Task(void* argument)
 {
     // 在每个 1 kHz CAN 发送周期前生成最新目标；BMI088 High2 任务仍优先处理传感器数据。
     osThreadSetPriority(osThreadGetId(), osPriorityHigh1);
+
+    if (System_Init_GetState() == SYSTEM_INIT_FATAL)
+    {
+        for (;;)
+        {
+            osDelay(1000U);
+        }
+    }
 
 #if GIMBAL
     Gimbal_Init();

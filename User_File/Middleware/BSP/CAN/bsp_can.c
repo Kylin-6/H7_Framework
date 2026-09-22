@@ -67,6 +67,19 @@ static uint16_t Can_TxRoundRobin;
 static osMessageQueueId_t Can_TxQueue;
 static Struct_CAN_Tx_Msg Can_TxPendingMessage;
 static uint8_t Can_TxPending;
+static Struct_CAN_Tx_Stats Can_TxStats;
+
+static void BSP_CAN_SaturatingIncrement(uint32_t *counter)
+{
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    if (*counter != UINT32_MAX)
+    {
+        (*counter)++;
+    }
+    __DMB();
+    __set_PRIMASK(primask);
+}
 
 /* Private function declarations ---------------------------------------------*/
 
@@ -176,6 +189,7 @@ void BSP_CAN_ConfigInit(void)
     Can_TxRoundRobin = 0;
     memset(&Can_TxPendingMessage, 0, sizeof(Can_TxPendingMessage));
     Can_TxPending = 0;
+    memset(&Can_TxStats, 0, sizeof(Can_TxStats));
 
     if (Can_TxQueue == NULL)
     {
@@ -308,7 +322,12 @@ bool CAN_Tx_Submit(const Struct_CAN_Tx_Msg *tx_msg)
         return false;
     }
 
-    return osMessageQueuePut(Can_TxQueue, tx_msg, 0, 0) == osOK;
+    if (osMessageQueuePut(Can_TxQueue, tx_msg, 0, 0) != osOK)
+    {
+        BSP_CAN_SaturatingIncrement(&Can_TxStats.submit_queue_full_count);
+        return false;
+    }
+    return true;
 }
 
 /**
@@ -360,6 +379,7 @@ bool CAN_Tx_Perform(const Struct_CAN_Tx_Msg *tx_msg)
 
     if (slot_index < 0)
     {
+        BSP_CAN_SaturatingIncrement(&Can_TxStats.periodic_slot_full_count);
         BSP_CAN_ExitCritical(primask);
         return false;
     }
@@ -399,9 +419,13 @@ static bool BSP_CAN_SendMsg(const Struct_CAN_Tx_Msg *message)
 {
     FDCAN_TxHeaderTypeDef tx_header = {0};
 
-    if (!BSP_CAN_MessageIsValid(message) ||
-        HAL_FDCAN_GetTxFifoFreeLevel(message->hfdcan) == 0)
+    if (!BSP_CAN_MessageIsValid(message))
     {
+        return false;
+    }
+    if (HAL_FDCAN_GetTxFifoFreeLevel(message->hfdcan) == 0)
+    {
+        BSP_CAN_SaturatingIncrement(&Can_TxStats.hardware_fifo_full_count);
         return false;
     }
 
@@ -415,9 +439,26 @@ static bool BSP_CAN_SendMsg(const Struct_CAN_Tx_Msg *message)
     tx_header.TxEventFifoControl = FDCAN_NO_TX_EVENTS;
     tx_header.MessageMarker = 0;
 
-    return HAL_FDCAN_AddMessageToTxFifoQ(message->hfdcan,
-                                         &tx_header,
-                                         message->data) == HAL_OK;
+    if (HAL_FDCAN_AddMessageToTxFifoQ(message->hfdcan,
+                                      &tx_header,
+                                      message->data) != HAL_OK)
+    {
+        BSP_CAN_SaturatingIncrement(&Can_TxStats.hal_send_error_count);
+        return false;
+    }
+    return true;
+}
+
+void BSP_CAN_GetTxStats(Struct_CAN_Tx_Stats *stats)
+{
+    uint32_t primask;
+    if (stats == NULL)
+    {
+        return;
+    }
+    primask = BSP_CAN_EnterCritical();
+    *stats = Can_TxStats;
+    BSP_CAN_ExitCritical(primask);
 }
 
 /**

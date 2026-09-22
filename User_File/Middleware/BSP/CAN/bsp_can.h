@@ -55,6 +55,14 @@ typedef struct
     uint8_t len;                     /*!< 有效数据长度，取值范围为 1~8。 */
 } Struct_CAN_Tx_Msg;
 
+typedef struct
+{
+    uint32_t submit_queue_full_count;
+    uint32_t periodic_slot_full_count;
+    uint32_t hardware_fifo_full_count;
+    uint32_t hal_send_error_count;
+} Struct_CAN_Tx_Stats;
+
 /**
  * @brief 初始化三条 FDCAN 总线、插入队列和周期发送槽，清除待重试插入消息。
  * @note 应在 RTOS 内核初始化完成后、创建 CAN 发送任务前调用一次。
@@ -112,6 +120,8 @@ void BSP_CAN_SendAsync(void);
  * @note 通常由 CAN 发送任务周期调用。
  */
 bool BSP_CAN_SendPer(void);
+
+void BSP_CAN_GetTxStats(Struct_CAN_Tx_Stats *stats);
 
 #ifdef __cplusplus
 }

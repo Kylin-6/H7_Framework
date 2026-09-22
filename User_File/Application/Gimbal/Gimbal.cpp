@@ -3,8 +3,8 @@
 
 static INS_State Gimbal_INS_State;
 static bool Gimbal_INS_Valid = false;
+static constexpr uint64_t GIMBAL_INS_MAX_AGE_US = 10000U;
 static GimbalCmd Gimbal_Command;
-static Subscriber<INS_State> Gimbal_INS_Subscriber(MessageCenter::INS_State_Topic);
 static Subscriber<GimbalCmd> Gimbal_Command_Subscriber(
     MessageCenter::Gimbal_Command_Topic);
 static Publisher<GimbalFeedback> Gimbal_Feedback_Publisher(
@@ -291,10 +291,22 @@ void Gimbal_Update(void)
 {
     /* 高频姿态走静态 Topic，云台无需感知底层具体使用哪一种 IMU。 */
     INS_State ins_state;
-    if (Gimbal_INS_Subscriber.Read(ins_state))
+    if (MessageCenter::INS_State_Topic.ReadFresh(ins_state,
+                                                  GIMBAL_INS_MAX_AGE_US))
     {
         Gimbal_INS_State = ins_state;
         Gimbal_INS_Valid = true;
+    }
+    else
+    {
+        Gimbal_INS_Valid = false;
+#if GIMBAL
+        if (Gimbal_Command.mode != GimbalMode::DISABLED &&
+            Gimbal.Gimbal_FSM.Get_Now_Status_Serial() == Gimbal_Status_READY)
+        {
+            QD4310_SetCurrent(&Gimbal.Yaw_Motor, 0.0f);
+        }
+#endif
     }
 
     /* 没有新命令时继续沿用上一帧 Latest-Value。 */

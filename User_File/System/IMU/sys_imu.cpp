@@ -86,6 +86,10 @@ void System_IMU_Configure()
  */
 void System_IMU_Publish_State()
 {
+    if (!BSP_BMI088.Is_Initialized())
+    {
+        return;
+    }
     const Class_Matrix_f32<3, 1> euler = BSP_BMI088.Get_Euler_Angle();
     const Class_Matrix_f32<3, 1> gyro_body = BSP_BMI088.Get_Gyro_Body();
     const INS_State ins_state = {

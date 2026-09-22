@@ -36,25 +36,31 @@ Struct_ADC_Manage_Object ADC3_Manage_Object = {nullptr};
  * @param hadc ADC编号
  * @param Sample_Number 一周期被采样的数据数量, 通道数 * 每个通道的传输数
  */
-void ADC_Init(ADC_HandleTypeDef *hadc, uint16_t Sample_Number)
+bool ADC_Init(ADC_HandleTypeDef *hadc, uint16_t Sample_Number)
 {
-    HAL_ADCEx_Calibration_Start(hadc, ADC_CALIB_OFFSET, ADC_SINGLE_ENDED);
+    if (hadc == nullptr || Sample_Number == 0U ||
+        HAL_ADCEx_Calibration_Start(hadc, ADC_CALIB_OFFSET, ADC_SINGLE_ENDED) != HAL_OK)
+    {
+        return false;
+    }
 
+    HAL_StatusTypeDef start_status = HAL_ERROR;
     if (hadc->Instance == ADC1)
     {
         ADC1_Manage_Object.ADC_Handler = hadc;
-        HAL_ADC_Start_DMA(hadc, (uint32_t *) &ADC1_Manage_Object.ADC_Data, Sample_Number);
+        start_status = HAL_ADC_Start_DMA(hadc, (uint32_t *) &ADC1_Manage_Object.ADC_Data, Sample_Number);
     }
     else if (hadc->Instance == ADC2)
     {
         ADC2_Manage_Object.ADC_Handler = hadc;
-        HAL_ADC_Start_DMA(hadc, (uint32_t *) &ADC2_Manage_Object.ADC_Data, Sample_Number);
+        start_status = HAL_ADC_Start_DMA(hadc, (uint32_t *) &ADC2_Manage_Object.ADC_Data, Sample_Number);
     }
     else if (hadc->Instance == ADC3)
     {
         ADC3_Manage_Object.ADC_Handler = hadc;
-        HAL_ADC_Start_DMA(hadc, (uint32_t *) &ADC3_Manage_Object.ADC_Data, Sample_Number);
+        start_status = HAL_ADC_Start_DMA(hadc, (uint32_t *) &ADC3_Manage_Object.ADC_Data, Sample_Number);
     }
+    return start_status == HAL_OK;
 }
 
 /************************ COPYRIGHT(C) USTC-ROBOWALKER **************************/

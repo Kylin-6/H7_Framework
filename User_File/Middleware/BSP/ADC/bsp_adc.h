@@ -17,6 +17,7 @@
 
 #include "adc.h"
 #include "stm32h7xx_hal.h"
+#include <stdbool.h>
 
 /* Exported macros -----------------------------------------------------------*/
 
@@ -43,7 +44,7 @@ extern struct Struct_ADC_Manage_Object ADC3_Manage_Object;
 
 /* Exported function declarations --------------------------------------------*/
 
-void ADC_Init(ADC_HandleTypeDef *hadc, uint16_t Sample_Number);
+bool ADC_Init(ADC_HandleTypeDef *hadc, uint16_t Sample_Number);
 
 #endif
 

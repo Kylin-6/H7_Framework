@@ -51,7 +51,7 @@ void Class_DMMotor::FeedbackCallback(FDCAN_HandleTypeDef *callback_hfdcan,
     Class_DMMotor *motor = (Class_DMMotor *)context;
     if (motor == nullptr || data == nullptr || len < 8U ||
         motor->hfdcan != callback_hfdcan || motor->master_id != id ||
-        (data[0] & 0x0FU) != motor->can_id)
+        (data[0] & 0x0FU) != (motor->can_id & 0x0FU))
     {
         return;
     }
@@ -64,7 +64,7 @@ void Class_DMMotor::FeedbackCallback(FDCAN_HandleTypeDef *callback_hfdcan,
 
     /** 参数应答与运动反馈共用接收入口，先识别 0x55 写入操作和 0x0A 模式参数。 */
     if (motor->requested_mode != 0 && len == 8 &&
-        data[0] == motor->can_id && data[1] == 0 &&
+        (data[0] & 0x0FU) == (motor->can_id & 0x0FU) && data[1] == 0 &&
         data[2] == 0x55 && data[3] == 0x0A)
     {
         uint32_t returned_mode;
@@ -155,7 +155,7 @@ bool Class_DMMotor::Init(FDCAN_HandleTypeDef *motor_hfdcan,
                          float motor_velocity_max,
                          float motor_torque_max)
 {
-    if (motor_hfdcan == nullptr || motor_can_id > 0x0FU || motor_master_id > 0x7FFU)
+    if (motor_hfdcan == nullptr || motor_master_id > 0x7FFU)
     {
         return false;
     }

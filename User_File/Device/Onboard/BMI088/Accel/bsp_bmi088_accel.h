@@ -58,7 +58,7 @@ public:
     // 温控PID
     Class_PID PID_Temperature;
 
-    void Init(const bool &__Heater_Enable = false);
+    bool Init(const bool &__Heater_Enable = false);
 
     inline float Get_Now_Temperature() const;
 

@@ -75,7 +75,9 @@ public:
      * @note 必须在Init()之前调用；初始化完成后的设置不会生效。
      */
     void Set_VQF_Config(const Struct_BMI088_VQF_Config &__Config);
-    void Init();
+    bool Init();
+
+    inline bool Is_Initialized() const { return Init_Finished_Flag; }
     void Calculate();
 
     void SPI_RxCpltCallback();

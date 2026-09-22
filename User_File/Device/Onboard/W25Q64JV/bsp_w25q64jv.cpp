@@ -33,8 +33,10 @@ Class_W25Q64JV BSP_W25Q64JV;
  *
  * @param __Flash_Mode 工作模式（Normal / MemoryMapped）
  */
-void Class_W25Q64JV::Init(const Enum_W25Q64JV_Mode &__Flash_Mode)
+bool Class_W25Q64JV::Init(const Enum_W25Q64JV_Mode &__Flash_Mode)
 {
+    constexpr uint8_t JEDEC_RETRY_COUNT = 5U;
+    Initialized = false;
     OSPI_Manage_Object = &OSPI2_Manage_Object;
     Flash_Mode = __Flash_Mode;
 
@@ -46,10 +48,17 @@ void Class_W25Q64JV::Init(const Enum_W25Q64JV_Mode &__Flash_Mode)
     Command = COMMAND_DEFAULT_CONFIG;
     Command.DataMode = HAL_OSPI_DATA_1_LINE;
     Command.NbData = 3;
-    while (*reinterpret_cast<uint32_t *>(OSPI_Manage_Object->Rx_Buffer) != 0x001740EF)
+    for (uint8_t retry = 0U;
+         retry < JEDEC_RETRY_COUNT &&
+         *reinterpret_cast<uint32_t *>(OSPI_Manage_Object->Rx_Buffer) != 0x001740EF;
+         ++retry)
     {
         OSPI_Command_Receive_Data(OSPI_Manage_Object->OSPI_Handler, &Command);
         Namespace_SYS_Timestamp::Delay_Millisecond(100);
+    }
+    if (*reinterpret_cast<uint32_t *>(OSPI_Manage_Object->Rx_Buffer) != 0x001740EF)
+    {
+        return false;
     }
 
     if (__Flash_Mode == W25Q64JV_Mode_MemoryMapped)
@@ -64,8 +73,14 @@ void Class_W25Q64JV::Init(const Enum_W25Q64JV_Mode &__Flash_Mode)
         Namespace_SYS_Timestamp::Delay_Millisecond(100);
 
         OSPI_MemoryMappedTypeDef tmp_config = {0};
-        HAL_OSPI_MemoryMapped(OSPI_Manage_Object->OSPI_Handler, &tmp_config);
+        if (HAL_OSPI_MemoryMapped(OSPI_Manage_Object->OSPI_Handler,
+                                  &tmp_config) != HAL_OK)
+        {
+            return false;
+        }
     }
+    Initialized = true;
+    return true;
 }
 
 /**
@@ -75,6 +90,10 @@ void Class_W25Q64JV::Init(const Enum_W25Q64JV_Mode &__Flash_Mode)
  */
 void Class_W25Q64JV::Enable_Quad_Mode()
 {
+    if (!Initialized)
+    {
+        return;
+    }
     SEGGER_RTT_printf(0, "QE start\n");
 
     // 硬件复位 Flash（确保干净状态）
@@ -193,6 +212,10 @@ void Class_W25Q64JV::Enable_Quad_Mode()
  */
 void Class_W25Q64JV::OSPI_StatusMatchCallback()
 {
+    if (!Initialized)
+    {
+        return;
+    }
     SEGGER_RTT_printf(0, "StatMatch Busy=%d Instr=%02X\n", Busy_Flag, Current_Instruction);
 
     Busy_Flag = false;
@@ -210,6 +233,10 @@ void Class_W25Q64JV::OSPI_StatusMatchCallback()
  */
 void Class_W25Q64JV::OSPI_RxCallback()
 {
+    if (!Initialized)
+    {
+        return;
+    }
     if (!Suppress_AutoPolling)
         Auto_Polling_With_Timeout();
 }
@@ -220,6 +247,10 @@ void Class_W25Q64JV::OSPI_RxCallback()
  */
 void Class_W25Q64JV::OSPI_TxCallback()
 {
+    if (!Initialized)
+    {
+        return;
+    }
     if (!Suppress_AutoPolling)
         Auto_Polling_With_Timeout();
 }
@@ -230,6 +261,10 @@ void Class_W25Q64JV::OSPI_TxCallback()
  */
 void Class_W25Q64JV::TIM_1ms_AutoPollingTimeout_PeriodElapsedCallback()
 {
+    if (!Initialized)
+    {
+        return;
+    }
     if (Busy_Flag && (SYS_Timestamp.Get_Current_Timestamp() - OSPI_Manage_Object->Auto_Polling_Timestamp > Current_Auto_Polling_Timeout))
     {
         Busy_Flag = false;

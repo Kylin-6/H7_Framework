@@ -64,6 +64,9 @@ extern "C" void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 
   if (GPIO_Pin == BMI088_ACCEL__INTERRUPT_Pin ||
       GPIO_Pin == BMI088_GYRO__INTERRUPT_Pin) {
+    if (!BSP_BMI088.Is_Initialized()) {
+      return;
+    }
     BSP_BMI088.EXTI_Flag_Callback(GPIO_Pin);
   }
 }
@@ -90,6 +93,9 @@ extern "C" void TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim)
 
 extern "C" void SPI2_Callback(uint8_t *Tx_Buffer, uint8_t *Rx_Buffer, uint16_t Tx_Length,
                               uint16_t Rx_Length) {
+  if (!BSP_BMI088.Is_Initialized()) {
+    return;
+  }
   if ((SPI2_Manage_Object.Activate_GPIOx == BMI088_ACCEL__SPI_CS_GPIO_Port &&
        SPI2_Manage_Object.Activate_GPIO_Pin == BMI088_ACCEL__SPI_CS_Pin) ||
       (SPI2_Manage_Object.Activate_GPIOx == BMI088_GYRO__SPI_CS_GPIO_Port &&

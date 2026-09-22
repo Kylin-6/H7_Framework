@@ -228,12 +228,17 @@ void Class_BMI088::Set_VQF_Config(const Struct_BMI088_VQF_Config &__Config)
  * @brief 初始化BMI088
  *
  */
-void Class_BMI088::Init()
+bool Class_BMI088::Init()
 {
     SPI_Manage_Object = &SPI2_Manage_Object;
+    Init_Finished_Flag = false;
 
-    BMI088_Accel.Init(true);
-    BMI088_Gyro.Init();
+    const bool accel_initialized = BMI088_Accel.Init(true);
+    const bool gyro_initialized = BMI088_Gyro.Init();
+    if (!accel_initialized || !gyro_initialized)
+    {
+        return false;
+    }
     Filter_VQF.Init(VQF_Config.Parameter,
                     VQF_Config.Gyro_D_T,
                     VQF_Config.Accel_D_T);
@@ -242,6 +247,7 @@ void Class_BMI088::Init()
     Vector_Euler_Angle[0][0] = 0.0f;
 
     Init_Finished_Flag = true;
+    return true;
 }
 
 void Class_BMI088::SPI_RxCpltCallback()
@@ -361,6 +367,7 @@ void Class_BMI088::EXTI_Flag_Callback(uint16_t GPIO_Pin)
  */
 void Class_BMI088::TIM_128ms_Calculate_PeriodElapsedCallback()
 {
+    if (!Init_Finished_Flag) return;
     uint64_t now_timestamp = SYS_Timestamp.Get_Now_Microsecond();
 
     BMI088_Status_Mark_Ready(Temperature_Status, now_timestamp);
@@ -370,6 +377,7 @@ void Class_BMI088::TIM_128ms_Calculate_PeriodElapsedCallback()
 
 void Class_BMI088::TIM_1ms_Service_PeriodElapsedCallback()
 {
+    if (!Init_Finished_Flag) return;
     const uint64_t now_timestamp = SYS_Timestamp.Get_Now_Microsecond();
     if ((now_timestamp - BMI088_Gyro.Get_FIFO_Last_Interrupt_Timestamp_Us()) >= 2000U &&
         (now_timestamp - Gyro_FIFO_Last_Fallback_Poll_Timestamp) >= 1000U)
@@ -620,6 +628,7 @@ void Class_BMI088::BMI088_Service_Transfer_Locked(const bool &Allow_Recovery)
  */
 void Class_BMI088::Calculate()
 {
+    if (!Init_Finished_Flag) return;
     const uint64_t calculate_start_timestamp = SYS_Timestamp.Get_Now_Microsecond();
     Struct_BMI088_Gyro_Sample gyro_sample = {};
     if (!BMI088_Gyro.Pop_Sample(gyro_sample))
