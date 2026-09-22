@@ -457,12 +457,16 @@ static void TestCommands()
 
     Class_DMMotor high_id_motor;
     CHECK(high_id_motor.Init(&bus, 0x50, 0x102, Enum_DMMotor_Mode::MIT));
+    CHECK(!high_id_motor.IsOnline());
+    CHECK(!high_id_motor.IsEnabled());
     uint8_t mismatched_feedback[8] = {0x11, 0x80, 0, 0x80, 0, 0x80, 20, 21};
     rx_callback(&bus, 0x102, mismatched_feedback, 8, rx_context);
     CHECK(high_id_motor.feedback.state == 0U);
     uint8_t high_id_feedback[8] = {0x10, 0x80, 0, 0x80, 0, 0x80, 20, 21};
     rx_callback(&bus, 0x102, high_id_feedback, 8, rx_context);
     CHECK(high_id_motor.feedback.state == 1U);
+    CHECK(high_id_motor.IsOnline());
+    CHECK(high_id_motor.IsEnabled());
     CHECK(isfinite(high_id_motor.feedback.position));
     CHECK(fabsf(high_id_motor.feedback.position) < 0.001f);
     submit_ok = true;
@@ -473,6 +477,10 @@ static void TestCommands()
     rx_callback(&bus, 0x102, high_id_mode_feedback, 8, rx_context);
     CHECK(high_id_motor.Enable());
     CHECK(last_message.id == 0x250U);
+    high_id_feedback[0] = 0x20;
+    rx_callback(&bus, 0x102, high_id_feedback, 8, rx_context);
+    CHECK(high_id_motor.IsOnline());
+    CHECK(!high_id_motor.IsEnabled());
 
     QD4310_t qd{};
     QD4310_Init(&qd, 2, &bus);

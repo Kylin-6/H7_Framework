@@ -188,6 +188,11 @@ bool Class_DMMotor::IsOnline() const
     return feedback_daemon.IsOnline();
 }
 
+bool Class_DMMotor::IsEnabled() const
+{
+    return feedback.state == 1U;
+}
+
 const Daemon &Class_DMMotor::GetDaemon() const
 {
     return feedback_daemon;

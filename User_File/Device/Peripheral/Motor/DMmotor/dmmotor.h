@@ -65,6 +65,8 @@ public:
 
     /** 最近 100 ms 内收到过合法反馈时返回 true。 */
     bool IsOnline() const;
+    /** 最近一帧合法反馈中的协议状态为“已使能”时返回 true。 */
+    bool IsEnabled() const;
     /** 提供只读守护器状态，供诊断层读取离线时间和状态跃迁。 */
     const Daemon &GetDaemon() const;
 
