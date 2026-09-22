@@ -12,7 +12,8 @@ enum class DaemonTransition : uint8_t
 class Daemon
 {
 public:
-    explicit Daemon(uint32_t) {}
+    using OfflineCallback = void (*)(void *owner);
+    explicit Daemon(uint32_t, OfflineCallback = nullptr, void * = nullptr) {}
     void Feed() { online_ = true; }
     DaemonTransition Check() { return DaemonTransition::None; }
     bool IsOnline() const { return online_; }

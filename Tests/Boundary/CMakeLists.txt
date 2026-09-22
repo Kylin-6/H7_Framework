@@ -5,6 +5,7 @@ project(H7_BSP_Boundary_Tests LANGUAGES CXX)
 get_filename_component(BSP_ROOT "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
 set(ALGORITHM "${BSP_ROOT}/User_File/Middleware/Algorithm")
 set(PERIPHERAL "${BSP_ROOT}/User_File/Device/Peripheral")
+set(SYSTEM "${BSP_ROOT}/User_File/System")
 
 add_executable(boundary_tests
     boundary_tests.cpp
@@ -15,9 +16,11 @@ add_executable(boundary_tests
     ${PERIPHERAL}/EricTool/dvc_erictool.cpp
     ${PERIPHERAL}/Motor/DMmotor/dmmotor.cpp
     ${PERIPHERAL}/Motor/QDrive/QD4310.cpp
+    ${SYSTEM}/Daemon/daemon.cpp
 )
 target_compile_features(boundary_tests PRIVATE cxx_std_17)
 target_include_directories(boundary_tests PRIVATE
+    ${SYSTEM}/Daemon
     stubs
     ${ALGORITHM}/Basic
     ${ALGORITHM}/Matrix

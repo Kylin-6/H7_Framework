@@ -23,12 +23,21 @@ enum class DaemonTransition : uint8_t
  * @brief 单个设备的非阻塞在线状态监视器。
  * @note 新建对象在收到第一帧合法数据前保持 Offline。
  * @note Feed() 可以在 ISR 或任务中调用；Check() 由低频 StatusTask 调用。
+ * @note 离线回调在 Check() 调用者上下文且临界区外执行，必须保持非阻塞。
  */
 class Daemon
 {
 public:
-    /** @param timeout_ms 设备从最后一次合法反馈开始允许的最大静默时间。 */
-    explicit Daemon(uint32_t timeout_ms);
+    using OfflineCallback = void (*)(void *owner);
+
+    /**
+     * @param timeout_ms 设备从最后一次合法反馈开始允许的最大静默时间。
+     * @param offline_callback Online -> Offline 跃迁时调用一次的可选回调。
+     * @param owner 原样传递给 offline_callback 的设备对象指针。
+     */
+    explicit Daemon(uint32_t timeout_ms,
+                    OfflineCallback offline_callback = nullptr,
+                    void *owner = nullptr);
 
     /** @brief 收到一帧确认有效的数据后喂狗，并立即把设备标记为在线。 */
     void Feed();
@@ -58,6 +67,8 @@ private:
     bool online_ = false; ///< 当前在线状态。
     bool online_transition_pending_ = false; ///< 等待 Check() 报告上线跃迁。
     DaemonTransition last_transition_ = DaemonTransition::None; ///< 最近检查结果。
+    OfflineCallback offline_callback_ = nullptr; ///< 离线跃迁回调，不包含设备协议。
+    void *owner_ = nullptr; ///< 由设备层注册的回调上下文。
 };
 
 /**

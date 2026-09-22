@@ -49,7 +49,7 @@ void Class_DMMotor::FeedbackCallback(FDCAN_HandleTypeDef *callback_hfdcan,
                                      void *context)
 {
     Class_DMMotor *motor = (Class_DMMotor *)context;
-    if (motor == nullptr || data == nullptr || len < 8U ||
+    if (motor == nullptr || data == nullptr || len != 8U ||
         motor->hfdcan != callback_hfdcan || motor->master_id != id ||
         (data[0] & 0x0FU) != (motor->can_id & 0x0FU))
     {
@@ -63,23 +63,23 @@ void Class_DMMotor::FeedbackCallback(FDCAN_HandleTypeDef *callback_hfdcan,
     }
 
     /** 参数应答与运动反馈共用接收入口，先识别 0x55 写入操作和 0x0A 模式参数。 */
-    if (motor->requested_mode != 0 && len == 8 &&
-        (data[0] & 0x0FU) == (motor->can_id & 0x0FU) && data[1] == 0 &&
-        data[2] == 0x55 && data[3] == 0x0A)
+    if (motor->requested_mode != 0U &&
+        data[1] == 0U && data[2] == 0x55U && data[3] == 0x0AU)
     {
         uint32_t returned_mode;
         memcpy(&returned_mode, &data[4], sizeof(returned_mode));
         if (returned_mode >= 1 && returned_mode <= 4)
         {
-            /** 只有未超时且值匹配的应答才更新本地模式；合法的旧应答不作为运动反馈解码。 */
+            /** 只有未超时且值匹配的应答才更新本地模式。 */
             if (motor->mode_pending && returned_mode == motor->requested_mode)
             {
                 motor->mode = (Enum_DMMotor_Mode)returned_mode;
                 __DMB();
                 motor->mode_pending = false;
             }
-            return;
         }
+        /** 参数应答无论是否过期或值合法，都不作为运动反馈解码或喂狗。 */
+        return;
     }
 
     /** 运动反馈布局：状态/ID 各 4 位，位置 16 位，速度与转矩各 12 位，末尾为两路温度。 */
@@ -123,6 +123,16 @@ void Class_DMMotor::FeedbackCallback(FDCAN_HandleTypeDef *callback_hfdcan,
     motor->feedback.rotor_temperature = data[7];
     /* 只有完整通过 ID、长度和节点校验的反馈帧才能刷新在线状态。 */
     motor->feedback_daemon.Feed();
+}
+
+/** @brief Daemon 首次判定掉线时快速提交一帧使能命令。 */
+void Class_DMMotor::OfflineCallback(void *owner)
+{
+    Class_DMMotor *motor = static_cast<Class_DMMotor *>(owner);
+    if (motor != nullptr)
+    {
+        (void)motor->Enable();
+    }
 }
 
 /**

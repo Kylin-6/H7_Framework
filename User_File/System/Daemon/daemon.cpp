@@ -43,8 +43,12 @@ void DaemonExitCritical(uint32_t primask)
 }
 }
 
-Daemon::Daemon(uint32_t timeout_ms)
-    : timeout_ms_(timeout_ms)
+Daemon::Daemon(uint32_t timeout_ms,
+               OfflineCallback offline_callback,
+               void *owner)
+    : timeout_ms_(timeout_ms),
+      offline_callback_(offline_callback),
+      owner_(owner)
 {
 }
 
@@ -71,6 +75,8 @@ DaemonTransition Daemon::Check()
     const uint32_t now_ms = DaemonNowMs();
     const uint32_t primask = DaemonEnterCritical();
     DaemonTransition transition = DaemonTransition::None;
+    OfflineCallback callback = nullptr;
+    void *owner = nullptr;
 
     // 无符号减法天然支持 uint32_t 毫秒计数器回绕。
     if (online_ && (now_ms - last_feed_ms_) >= timeout_ms_)
@@ -79,6 +85,8 @@ DaemonTransition Daemon::Check()
         online_transition_pending_ = false;
         offline_since_ms_ = now_ms;
         transition = DaemonTransition::OnlineToOffline;
+        callback = offline_callback_;
+        owner = owner_;
     }
     else if (online_transition_pending_)
     {
@@ -89,6 +97,12 @@ DaemonTransition Daemon::Check()
 
     last_transition_ = transition;
     DaemonExitCritical(primask);
+
+    // 设备恢复策略在临界区外执行，避免关中断时调用 RTOS/CAN 接口。
+    if (callback != nullptr)
+    {
+        callback(owner);
+    }
     return transition;
 }
 

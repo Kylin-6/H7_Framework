@@ -27,6 +27,7 @@ static bool Near(float actual, float expected)
 
 uint32_t test_irq_mask;
 uint64_t test_timestamp_us;
+extern "C" uint64_t SYS_Timestamp_Get_Microsecond(void) { return test_timestamp_us; }
 Class_Timestamp SYS_Timestamp;
 Struct_UART_Manage_Object USART1_Manage_Object{}, USART2_Manage_Object{},
     USART3_Manage_Object{}, UART5_Manage_Object{}, USART6_Manage_Object{},
@@ -381,6 +382,124 @@ static void TestKalman()
 }
 
 static FDCAN_HandleTypeDef bus{1};
+
+struct OfflineCallbackProbe
+{
+    unsigned calls = 0U;
+    uint32_t irq_mask = 1U;
+};
+
+static void RecordOfflineCallback(void *owner)
+{
+    OfflineCallbackProbe *probe = static_cast<OfflineCallbackProbe *>(owner);
+    if (probe != nullptr)
+    {
+        ++probe->calls;
+        probe->irq_mask = test_irq_mask;
+    }
+}
+
+static void TestDaemonTransitions()
+{
+    test_timestamp_us = 0U;
+    test_irq_mask = 0U;
+    OfflineCallbackProbe probe;
+    Daemon daemon(100U, RecordOfflineCallback, &probe);
+
+    CHECK(!daemon.IsOnline());
+    CHECK(daemon.Check() == DaemonTransition::None);
+    CHECK(probe.calls == 0U);
+
+    daemon.Feed();
+    CHECK(daemon.IsOnline());
+    CHECK(daemon.Check() == DaemonTransition::OfflineToOnline);
+    test_timestamp_us = 99000U;
+    CHECK(daemon.Check() == DaemonTransition::None);
+    CHECK(probe.calls == 0U);
+
+    test_timestamp_us = 100000U;
+    CHECK(daemon.Check() == DaemonTransition::OnlineToOffline);
+    CHECK(!daemon.IsOnline());
+    CHECK(probe.calls == 1U && probe.irq_mask == 0U);
+    test_timestamp_us = 200000U;
+    CHECK(daemon.Check() == DaemonTransition::None);
+    CHECK(probe.calls == 1U);
+
+    daemon.Feed();
+    CHECK(daemon.Check() == DaemonTransition::OfflineToOnline);
+    test_timestamp_us = 300000U;
+    CHECK(daemon.Check() == DaemonTransition::OnlineToOffline);
+    CHECK(probe.calls == 2U);
+
+    Daemon without_callback(10U);
+    without_callback.Feed();
+    test_timestamp_us = 310000U;
+    CHECK(without_callback.Check() == DaemonTransition::OnlineToOffline);
+}
+
+static void TestDMMotorOfflineRecovery()
+{
+    static Class_DMMotor motor;
+    test_timestamp_us = 0U;
+    test_irq_mask = 0U;
+    submit_ok = false;
+    perform_ok = true;
+    CHECK(motor.Init(&bus, 3U, 0x120U, Enum_DMMotor_Mode::SPEED));
+
+    submit_ok = true;
+    CHECK(motor.SetMode(Enum_DMMotor_Mode::SPEED));
+    submit_ok = false;
+
+    const unsigned submit_before = submit_calls;
+    DaemonManager::CheckAll();
+    CHECK(submit_calls == submit_before && !motor.IsOnline());
+
+    uint8_t feedback[8] = {0x13U, 0x80U, 0U, 0x80U, 0U, 0x80U, 20U, 21U};
+    FDCAN_HandleTypeDef other_bus{2};
+    rx_callback(&other_bus, 0x120U, feedback, 8U, rx_context);
+    rx_callback(&bus, 0x121U, feedback, 8U, rx_context);
+    feedback[0] = 0x14U;
+    rx_callback(&bus, 0x120U, feedback, 8U, rx_context);
+    feedback[0] = 0x13U;
+    rx_callback(&bus, 0x120U, feedback, 7U, rx_context);
+    uint8_t mode_response[8] = {0x13U, 0U, 0x55U, 0x0AU, 3U, 0U, 0U, 0U};
+    rx_callback(&bus, 0x120U, mode_response, 8U, rx_context);
+    test_timestamp_us = 200000U;
+    DaemonManager::CheckAll();
+    CHECK(submit_calls == submit_before && !motor.IsOnline());
+
+    rx_callback(&bus, 0x120U, feedback, 8U, rx_context);
+    CHECK(motor.IsOnline());
+    DaemonManager::CheckAll();
+    test_timestamp_us = 299000U;
+    DaemonManager::CheckAll();
+    CHECK(submit_calls == submit_before);
+
+    test_timestamp_us = 300000U;
+    DaemonManager::CheckAll();
+    CHECK(!motor.IsOnline() && submit_calls == submit_before + 1U);
+    CHECK(last_message.hfdcan == &bus && last_message.id == 0x203U && last_message.len == 8U);
+    for (int index = 0; index < 7; ++index) CHECK(last_message.data[index] == 0xFFU);
+    CHECK(last_message.data[7] == 0xFCU);
+    test_timestamp_us = 500000U;
+    DaemonManager::CheckAll();
+    CHECK(submit_calls == submit_before + 1U);
+
+    submit_ok = true;
+    rx_callback(&bus, 0x120U, feedback, 8U, rx_context);
+    DaemonManager::CheckAll();
+    test_timestamp_us = 600000U;
+    DaemonManager::CheckAll();
+    CHECK(submit_calls == submit_before + 2U);
+
+    const unsigned perform_before = perform_calls;
+    motor.SetSpeed(1.0f);
+    CHECK(perform_calls == perform_before + 1U);
+    DaemonManager::CheckAll();
+    CHECK(submit_calls == submit_before + 2U);
+    test_timestamp_us = 0U;
+}
+
 static void PositionFeedback(uint16_t position)
 {
     uint8_t frame[8] = {0x11, (uint8_t)(position >> 8), (uint8_t)position, 0, 0, 0, 20, 21};
@@ -394,6 +513,9 @@ static void ModeFeedback(Enum_DMMotor_Mode mode)
 
 static void TestCommands()
 {
+    TestDaemonTransitions();
+    TestDMMotorOfflineRecovery();
+
     Class_DMMotor motor;
     CHECK(motor.Init(&bus, 1, 0x101, Enum_DMMotor_Mode::MIT));
     for (int accepted = 0; accepted <= 1; ++accepted)
