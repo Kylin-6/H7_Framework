@@ -46,3 +46,6 @@ Debug.jdebug.user
 # 操作系统级缓存
 .DS_Store
 Thumbs.db
+
+# WorkBuddy 会话临时缓存（memory/ 工作日志保留入库）
+.workbuddy/tmp/
