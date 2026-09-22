@@ -47,5 +47,7 @@ Debug.jdebug.user
 .DS_Store
 Thumbs.db
 
-# WorkBuddy 会话临时缓存（memory/ 工作日志保留入库）
-.workbuddy/tmp/
+# 本地工作记录与 WorkBuddy 缓存
+/框架可靠性验证方案.md
+/框架修复清单.md
+/.workbuddy/
