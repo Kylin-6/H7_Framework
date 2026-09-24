@@ -9,7 +9,7 @@
  *          包括 GPIO 外部中断(EXTI)、定时器(TIM)周期中断与 SPI 完成回调，
  *          按外设实例路由到对应的设备层处理函数
  *
- * @note    使用前请确保相关外设已正确初始化，且 init_finished 已置位
+ * @note    BMI088 的 SPI 完成回调需要在整机初始化期间处理寄存器读数
  *
  * @copyright Copyright (c) 2024
  */
@@ -93,9 +93,6 @@ extern "C" void TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim)
 
 extern "C" void SPI2_Callback(uint8_t *Tx_Buffer, uint8_t *Rx_Buffer, uint16_t Tx_Length,
                               uint16_t Rx_Length) {
-  if (!BSP_BMI088.Is_Initialized()) {
-    return;
-  }
   if ((SPI2_Manage_Object.Activate_GPIOx == BMI088_ACCEL__SPI_CS_GPIO_Port &&
        SPI2_Manage_Object.Activate_GPIO_Pin == BMI088_ACCEL__SPI_CS_Pin) ||
       (SPI2_Manage_Object.Activate_GPIOx == BMI088_GYRO__SPI_CS_GPIO_Port &&
