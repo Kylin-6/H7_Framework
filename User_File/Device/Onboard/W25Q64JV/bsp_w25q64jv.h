@@ -142,7 +142,7 @@ public:
 
     // 当前指令对应的轮询超时
     volatile uint64_t Current_Auto_Polling_Timeout = AUTOPOLLING_DEFAULT_TIMEOUT;
-    // 轮询超时错误计数
+    // 传输提交失败及轮询超时错误计数
     volatile uint32_t Auto_Polling_Error_Count = 0;
     // 抑制 Tx/Rx 回调中的自动轮询（Enable_Quad_Mode 手动轮询 WIP 时使用）
     volatile bool Suppress_AutoPolling = false;
@@ -164,7 +164,20 @@ public:
         return false;
     }
 
-    void Auto_Polling_With_Timeout();
+    bool Check_Transfer_Status(HAL_StatusTypeDef status)
+    {
+        if (status == HAL_OK)
+        {
+            return true;
+        }
+        Busy_Flag = false;
+        Write_Enable_Activated_Flag = false;
+        Suppress_AutoPolling = false;
+        Auto_Polling_Error_Count++;
+        return false;
+    }
+
+    bool Auto_Polling_With_Timeout();
 };
 
 /* Exported variables ---------------------------------------------------------*/
@@ -198,8 +211,7 @@ inline bool Class_W25Q64JV::Get_Buffer(const uint32_t &Address, const uint16_t &
     Command.NbData = Length;
     Current_Instruction = W25Q64JV_Command_FAST_READ_QUAD_IO;
     Current_Auto_Polling_Timeout = AUTOPOLLING_DEFAULT_TIMEOUT;
-    OSPI_Command_Receive_Data(OSPI_Manage_Object->OSPI_Handler, &Command);
-    return true;
+    return Check_Transfer_Status(OSPI_Command_Receive_Data(OSPI_Manage_Object->OSPI_Handler, &Command));
 }
 
 /**
@@ -219,9 +231,11 @@ inline bool Class_W25Q64JV::Set_Write_Enable()
     Command.Instruction = W25Q64JV_Command_WRITE_ENABLE;
     Current_Instruction = W25Q64JV_Command_WRITE_ENABLE;
     Current_Auto_Polling_Timeout = AUTOPOLLING_DEFAULT_TIMEOUT;
-    OSPI_Command(OSPI_Manage_Object->OSPI_Handler, &Command);
-    Auto_Polling_With_Timeout();
-    return true;
+    if (!Check_Transfer_Status(OSPI_Command(OSPI_Manage_Object->OSPI_Handler, &Command)))
+    {
+        return false;
+    }
+    return Auto_Polling_With_Timeout();
 }
 
 /**
@@ -255,9 +269,11 @@ inline bool Class_W25Q64JV::Set_Sector_Erased(const uint32_t &Address)
     Command.AddressMode = HAL_OSPI_ADDRESS_1_LINE;
     Current_Instruction = W25Q64JV_Command_SECTOR_ERASE;
     Current_Auto_Polling_Timeout = AUTOPOLLING_SECTOR_ERASED_TIMEOUT;
-    OSPI_Command(OSPI_Manage_Object->OSPI_Handler, &Command);
-    Auto_Polling_With_Timeout();
-    return true;
+    if (!Check_Transfer_Status(OSPI_Command(OSPI_Manage_Object->OSPI_Handler, &Command)))
+    {
+        return false;
+    }
+    return Auto_Polling_With_Timeout();
 }
 
 /**
@@ -289,7 +305,10 @@ inline void Class_W25Q64JV::Set_Bolck_Erased_32K(const uint32_t &Address)
     Command.Instruction = W25Q64JV_Command_BLOCK_ERASE_32K;
     Command.Address = Address;
     Command.AddressMode = HAL_OSPI_ADDRESS_1_LINE;
-    OSPI_Command(OSPI_Manage_Object->OSPI_Handler, &Command);
+    if (!Check_Transfer_Status(OSPI_Command(OSPI_Manage_Object->OSPI_Handler, &Command)))
+    {
+        return;
+    }
 
     Current_Instruction = W25Q64JV_Command_BLOCK_ERASE_32K;
     Current_Auto_Polling_Timeout = AUTOPOLLING_BLOCK_ERASED_32K_TIMEOUT;
@@ -325,7 +344,10 @@ inline void Class_W25Q64JV::Set_Bolck_Erased_64K(const uint32_t &Address)
     Command.Instruction = W25Q64JV_Command_BLOCK_ERASE_64K;
     Command.Address = Address;
     Command.AddressMode = HAL_OSPI_ADDRESS_1_LINE;
-    OSPI_Command(OSPI_Manage_Object->OSPI_Handler, &Command);
+    if (!Check_Transfer_Status(OSPI_Command(OSPI_Manage_Object->OSPI_Handler, &Command)))
+    {
+        return;
+    }
 
     Current_Instruction = W25Q64JV_Command_BLOCK_ERASE_64K;
     Current_Auto_Polling_Timeout = AUTOPOLLING_BLOCK_ERASED_64K_TIMEOUT;
@@ -353,7 +375,10 @@ inline void Class_W25Q64JV::Set_Chip_Erased()
 
     Command = COMMAND_DEFAULT_CONFIG;
     Command.Instruction = W25Q64JV_Command_CHIP_ERASE;
-    OSPI_Command(OSPI_Manage_Object->OSPI_Handler, &Command);
+    if (!Check_Transfer_Status(OSPI_Command(OSPI_Manage_Object->OSPI_Handler, &Command)))
+    {
+        return;
+    }
 
     Current_Instruction = W25Q64JV_Command_CHIP_ERASE;
     Current_Auto_Polling_Timeout = AUTOPOLLING_CHIP_ERASED_TIMEOUT;
@@ -400,8 +425,7 @@ inline bool Class_W25Q64JV::Set_Buffer(const uint8_t *Buffer, const uint32_t &Ad
     memcpy(OSPI_Manage_Object->Tx_Buffer, Buffer, Length);
     Current_Instruction = W25Q64JV_Command_QUAD_INPUT_PAGE_PROGRAM;
     Current_Auto_Polling_Timeout = AUTOPOLLING_DEFAULT_TIMEOUT;
-    OSPI_Command_Transmit_Data(OSPI_Manage_Object->OSPI_Handler, &Command);
-    return true;
+    return Check_Transfer_Status(OSPI_Command_Transmit_Data(OSPI_Manage_Object->OSPI_Handler, &Command));
 }
 
 /**

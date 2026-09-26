@@ -148,7 +148,7 @@ static void BSP_CAN_ExitCritical(uint32_t primask)
 /**
  * @brief 配置并启动一条 FDCAN 总线的接收功能。
  * @param hfdcan 要配置的 FDCAN 总线句柄。
- * @details 标准帧全部进入 RX FIFO0，扩展帧和未匹配帧被拒绝，
+ * @details 标准数据帧进入 RX FIFO0，远程帧、扩展帧和未匹配帧被拒绝，
  *          随后启用 FIFO0 新消息中断并启动外设。
  */
 static void BSP_CAN_ConfigBus(FDCAN_HandleTypeDef *hfdcan)
@@ -166,8 +166,8 @@ static void BSP_CAN_ConfigBus(FDCAN_HandleTypeDef *hfdcan)
         HAL_FDCAN_ConfigGlobalFilter(hfdcan,
                                      FDCAN_REJECT,
                                      FDCAN_REJECT,
-                                     FDCAN_FILTER_REMOTE,
-                                     FDCAN_FILTER_REMOTE) != HAL_OK ||
+                                     FDCAN_REJECT_REMOTE,
+                                     FDCAN_REJECT_REMOTE) != HAL_OK ||
         HAL_FDCAN_ActivateNotification(hfdcan,
                                        FDCAN_IT_RX_FIFO0_NEW_MESSAGE,
                                        0) != HAL_OK ||
@@ -274,7 +274,10 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan,
                                uint32_t RxFifo0ITs)
 {
     FDCAN_RxHeaderTypeDef rx_header;
-    uint8_t rx_data[FDCAN_MAX_PAYLOAD];
+    /* 当前 HAL 按 DLC 表复制，Classic DLC 9..15 也可能复制 12..64 字节。
+     * 必须先容纳 HAL 的最大写入，再按 Classic 语义向设备层提供最多 8 字节。 */
+    uint8_t rx_data[64];
+    uint32_t rx_length;
     uint16_t index;
 
     if ((RxFifo0ITs & FDCAN_IT_RX_FIFO0_NEW_MESSAGE) == 0)
@@ -292,6 +295,15 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan,
             break;
         }
 
+        if (rx_header.IdType != FDCAN_STANDARD_ID ||
+            rx_header.RxFrameType != FDCAN_DATA_FRAME ||
+            rx_header.FDFormat != FDCAN_CLASSIC_CAN)
+        {
+            continue;
+        }
+        rx_length = rx_header.DataLength <= FDCAN_MAX_PAYLOAD ?
+                    rx_header.DataLength : FDCAN_MAX_PAYLOAD;
+
         for (index = 0; index < MAX_CAN_CALLBACKS; index++)
         {
             if (Can_RxCallbacks[index].is_used != 0 &&
@@ -301,7 +313,7 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan,
                 Can_RxCallbacks[index].func(hfdcan,
                                             rx_header.Identifier,
                                             rx_data,
-                                            rx_header.DataLength,
+                                            rx_length,
                                             Can_RxCallbacks[index].context);
                 break;
             }

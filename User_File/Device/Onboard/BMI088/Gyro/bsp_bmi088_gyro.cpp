@@ -138,7 +138,9 @@ bool Class_BMI088_Gyro::Init()
 
     for (uint8_t i = 0; i < BMI088_GYRO_INIT_INSTRUCTION_NUM; i++)
     {
-        ((uint8_t *) (&Register))[BMI088_GYRO_REGISTER_CONFIG[i][0]] = 0x00;
+        // 强制执行写入与回读，目标值为 0 时也不能跳过校验。
+        ((uint8_t *) (&Register))[BMI088_GYRO_REGISTER_CONFIG[i][0]] =
+            (uint8_t) ~BMI088_GYRO_REGISTER_CONFIG[i][1];
         for (uint8_t retry = 0U;
              retry < INIT_RETRY_COUNT &&
              ((uint8_t *) (&Register))[BMI088_GYRO_REGISTER_CONFIG[i][0]] !=

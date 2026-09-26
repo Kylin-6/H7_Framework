@@ -32,6 +32,23 @@ Struct_OSPI_Manage_Object OSPI2_Manage_Object = {nullptr};
 
 /* Function prototypes -------------------------------------------------------*/
 
+static Struct_OSPI_Manage_Object *OSPI_Get_Manage_Object(OSPI_HandleTypeDef *hospi)
+{
+    if (hospi == nullptr)
+    {
+        return nullptr;
+    }
+    if (hospi->Instance == OCTOSPI1)
+    {
+        return &OSPI1_Manage_Object;
+    }
+    if (hospi->Instance == OCTOSPI2)
+    {
+        return &OSPI2_Manage_Object;
+    }
+    return nullptr;
+}
+
 /**
  * @brief 初始化OSPI
  *
@@ -64,16 +81,13 @@ void OSPI_Init(OSPI_HandleTypeDef *hospi, OSPI_Status_Match_Callback Auto_Pollin
  * @brief 自动轮询
  *
  */
-void OSPI_Auto_Polling(OSPI_HandleTypeDef *hospi, OSPI_AutoPollingTypeDef *Config)
+HAL_StatusTypeDef OSPI_Auto_Polling(OSPI_HandleTypeDef *hospi, OSPI_AutoPollingTypeDef *Config)
 {
-    if (hospi->Instance == OCTOSPI1)
+    if (OSPI_Get_Manage_Object(hospi) == nullptr || Config == nullptr)
     {
-        HAL_OSPI_AutoPolling_IT(hospi, Config);
+        return HAL_ERROR;
     }
-    else if (hospi->Instance == OCTOSPI2)
-    {
-        HAL_OSPI_AutoPolling_IT(hospi, Config);
-    }
+    return HAL_OSPI_AutoPolling_IT(hospi, Config);
 }
 
 /**
@@ -81,16 +95,13 @@ void OSPI_Auto_Polling(OSPI_HandleTypeDef *hospi, OSPI_AutoPollingTypeDef *Confi
  *
  * @param hospi OSPI编号
  */
-void OSPI_Command(OSPI_HandleTypeDef *hospi, OSPI_RegularCmdTypeDef *Command)
+HAL_StatusTypeDef OSPI_Command(OSPI_HandleTypeDef *hospi, OSPI_RegularCmdTypeDef *Command)
 {
-    if (hospi->Instance == OCTOSPI1)
+    if (OSPI_Get_Manage_Object(hospi) == nullptr || Command == nullptr)
     {
-        HAL_OSPI_Command(hospi, Command, HAL_OSPI_TIMEOUT_DEFAULT_VALUE);
+        return HAL_ERROR;
     }
-    else if (hospi->Instance == OCTOSPI2)
-    {
-        HAL_OSPI_Command(hospi, Command, HAL_OSPI_TIMEOUT_DEFAULT_VALUE);
-    }
+    return HAL_OSPI_Command(hospi, Command, HAL_OSPI_TIMEOUT_DEFAULT_VALUE);
 }
 
 /**
@@ -98,18 +109,20 @@ void OSPI_Command(OSPI_HandleTypeDef *hospi, OSPI_RegularCmdTypeDef *Command)
  *
  * @param hospi OSPI编号
  */
-void OSPI_Command_Transmit_Data(OSPI_HandleTypeDef *hospi, OSPI_RegularCmdTypeDef *Command)
+HAL_StatusTypeDef OSPI_Command_Transmit_Data(OSPI_HandleTypeDef *hospi, OSPI_RegularCmdTypeDef *Command)
 {
-    if (hospi->Instance == OCTOSPI1)
+    Struct_OSPI_Manage_Object *manage = OSPI_Get_Manage_Object(hospi);
+    if (manage == nullptr || Command == nullptr || Command->DataMode == HAL_OSPI_DATA_NONE ||
+        Command->NbData == 0 || Command->NbData > OSPI_BUFFER_SIZE)
     {
-        HAL_OSPI_Command(hospi, Command, HAL_OSPI_TIMEOUT_DEFAULT_VALUE);
-        HAL_OSPI_Transmit_DMA(hospi, OSPI1_Manage_Object.Tx_Buffer);
+        return HAL_ERROR;
     }
-    else if (hospi->Instance == OCTOSPI2)
+    HAL_StatusTypeDef status = OSPI_Command(hospi, Command);
+    if (status != HAL_OK)
     {
-        HAL_OSPI_Command(hospi, Command, HAL_OSPI_TIMEOUT_DEFAULT_VALUE);
-        HAL_OSPI_Transmit_DMA(hospi, OSPI2_Manage_Object.Tx_Buffer);
+        return status;
     }
+    return HAL_OSPI_Transmit_DMA(hospi, manage->Tx_Buffer);
 }
 
 /**
@@ -117,18 +130,20 @@ void OSPI_Command_Transmit_Data(OSPI_HandleTypeDef *hospi, OSPI_RegularCmdTypeDe
  *
  * @param hospi OSPI编号
  */
-void OSPI_Command_Receive_Data(OSPI_HandleTypeDef *hospi, OSPI_RegularCmdTypeDef *Command)
+HAL_StatusTypeDef OSPI_Command_Receive_Data(OSPI_HandleTypeDef *hospi, OSPI_RegularCmdTypeDef *Command)
 {
-    if (hospi->Instance == OCTOSPI1)
+    Struct_OSPI_Manage_Object *manage = OSPI_Get_Manage_Object(hospi);
+    if (manage == nullptr || Command == nullptr || Command->DataMode == HAL_OSPI_DATA_NONE ||
+        Command->NbData == 0 || Command->NbData > OSPI_BUFFER_SIZE)
     {
-        HAL_OSPI_Command(hospi, Command, HAL_OSPI_TIMEOUT_DEFAULT_VALUE);
-        HAL_OSPI_Receive_DMA(hospi, OSPI1_Manage_Object.Rx_Buffer);
+        return HAL_ERROR;
     }
-    else if (hospi->Instance == OCTOSPI2)
+    HAL_StatusTypeDef status = OSPI_Command(hospi, Command);
+    if (status != HAL_OK)
     {
-        HAL_OSPI_Command(hospi, Command, HAL_OSPI_TIMEOUT_DEFAULT_VALUE);
-        HAL_OSPI_Receive_DMA(hospi, OSPI2_Manage_Object.Rx_Buffer);
+        return status;
     }
+    return HAL_OSPI_Receive_DMA(hospi, manage->Rx_Buffer);
 }
 
 /**
@@ -136,20 +151,13 @@ void OSPI_Command_Receive_Data(OSPI_HandleTypeDef *hospi, OSPI_RegularCmdTypeDef
  *
  * @param hospi OSPI编号
  */
-void OSPI_Command_Transmit_Receive_Data(OSPI_HandleTypeDef *hospi, OSPI_RegularCmdTypeDef *Command)
+HAL_StatusTypeDef OSPI_Command_Transmit_Receive_Data(OSPI_HandleTypeDef *hospi, OSPI_RegularCmdTypeDef *Command)
 {
-    if (hospi->Instance == OCTOSPI1)
-    {
-        HAL_OSPI_Command(hospi, Command, HAL_OSPI_TIMEOUT_DEFAULT_VALUE);
-        HAL_OSPI_Transmit_DMA(hospi, OSPI1_Manage_Object.Tx_Buffer);
-        HAL_OSPI_Receive_DMA(hospi, OSPI1_Manage_Object.Rx_Buffer);
-    }
-    else if (hospi->Instance == OCTOSPI2)
-    {
-        HAL_OSPI_Command(hospi, Command, HAL_OSPI_TIMEOUT_DEFAULT_VALUE);
-        HAL_OSPI_Transmit_DMA(hospi, OSPI2_Manage_Object.Tx_Buffer);
-        HAL_OSPI_Receive_DMA(hospi, OSPI2_Manage_Object.Rx_Buffer);
-    }
+    // 不能在同一指令上紧接着启动 TX DMA 和 RX DMA；后者会遇到 BUSY_TX。
+    // 调用者必须分别提交写/读指令，并在完成回调后切换方向。
+    (void)hospi;
+    (void)Command;
+    return HAL_ERROR;
 }
 
 /**

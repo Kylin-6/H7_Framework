@@ -33,8 +33,9 @@ extern "C"
  * @param hfdcan 实际收到该帧的 FDCAN 句柄。
  * @param id 接收到的标准帧 ID。
  * @param data 接收数据，只在本次回调执行期间有效。
- * @param len 接收数据长度。
+ * @param len Classic CAN 数据字节数（0..8），DLC 9..15 按 8 字节处理。
  * @param context 注册时保存的设备实例或用户数据。
+ * @note 只分发标准 Classic 数据帧，远程帧不进入设备回调。
  * @note 回调运行在 FDCAN 接收中断中，不应阻塞。
  */
 typedef void (*CAN_RxCallback_t)(FDCAN_HandleTypeDef *hfdcan,

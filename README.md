@@ -288,13 +288,15 @@ cmake --build --preset Release
 | [Trajectory](Tests/Trajectory/README.md) | 输入契约、6 万组随机初态、1657 组边界初态、10 万次逐周期改目标、连续信号跟随及分段连续性，共 5 组 |
 | [FilterPolynomial](Tests/FilterPolynomial/README.md) | 0～3 阶独立系数、流式卷积、解析导数、生命周期及配置失败状态保留，共 5 组 |
 | [CAN](Tests/CAN) | 命令 FIFO、周期发送槽、HAL/FIFO 失败统计及回调注册边界 |
+| [Communication](Tests/Communication/README.md) | CAN 接收边界、USB 缓冲所有权与重连、OSPI 提交失败，共 17 组 |
+| [Initialization](Tests/Initialization/README.md) | BMI088/Flash 初始化、Flash 失败传播和启动分级，共 7 组 |
 | [Topic](Tests/Topic) | Latest-Value 发布读取、元信息一致性和 `ReadFresh()` 时间边界 |
 | [SBUS](Tests/SBUS) | 分片/合帧解析、重同步、在线超时以及 failsafe 健康状态 |
 
 在仓库根目录运行下列 PowerShell 命令；将 `g++` 替换为本机主机编译器路径：
 
 ```powershell
-foreach ($suite in @("Fuzzy", "Boundary", "Trajectory", "FilterPolynomial", "CAN", "Topic", "SBUS")) {
+foreach ($suite in @("Fuzzy", "Boundary", "Trajectory", "FilterPolynomial", "CAN", "Topic", "SBUS", "Communication", "Initialization")) {
     cmake -S "Tests/$suite" -B "build/Tests_$suite" -G Ninja -DCMAKE_CXX_COMPILER=g++ -DCMAKE_BUILD_TYPE=Debug
     if ($LASTEXITCODE -ne 0) { throw "$suite 配置失败" }
     cmake --build "build/Tests_$suite"
@@ -304,7 +306,7 @@ foreach ($suite in @("Fuzzy", "Boundary", "Trajectory", "FilterPolynomial", "CAN
 }
 ```
 
-可靠性修改应至少运行 Boundary、CAN、Topic 与 SBUS；算法修改再运行对应算法套件。主机测试不代替实际 DMA/CAN 通信、电机闭环和实时性验证；新增算法仍需由应用接入，Trajectory 尚未测量板上的最坏重规划耗时。
+可靠性修改应至少运行 Boundary、CAN、Topic、SBUS、Communication 与 Initialization；算法修改再运行对应算法套件。主机测试不代替实际 DMA/CAN 通信、电机闭环和实时性验证；新增算法仍需由应用接入，Trajectory 尚未测量板上的最坏重规划耗时。
 
 ### 烧录与观察
 

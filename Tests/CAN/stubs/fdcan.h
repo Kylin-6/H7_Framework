@@ -5,7 +5,7 @@ typedef struct { int instance; } FDCAN_HandleTypeDef;
 typedef struct {
     uint32_t IdType, FilterIndex, FilterType, FilterConfig, FilterID1, FilterID2;
 } FDCAN_FilterTypeDef;
-typedef struct { uint32_t Identifier, DataLength; } FDCAN_RxHeaderTypeDef;
+typedef struct { uint32_t Identifier, DataLength, IdType, RxFrameType, FDFormat; } FDCAN_RxHeaderTypeDef;
 typedef struct {
     uint32_t Identifier, IdType, TxFrameType, DataLength, ErrorStateIndicator;
     uint32_t BitRateSwitch, FDFormat, TxEventFifoControl, MessageMarker;
@@ -18,6 +18,7 @@ typedef int HAL_StatusTypeDef;
 #define FDCAN_FILTER_TO_RXFIFO0 0
 #define FDCAN_REJECT 0
 #define FDCAN_FILTER_REMOTE 0
+#define FDCAN_REJECT_REMOTE 1
 #define FDCAN_IT_RX_FIFO0_NEW_MESSAGE 1
 #define FDCAN_RX_FIFO0 0
 #define FDCAN_DATA_FRAME 0

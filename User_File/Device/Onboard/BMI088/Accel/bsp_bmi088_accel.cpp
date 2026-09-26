@@ -142,7 +142,7 @@ bool Class_BMI088_Accel::Init(const bool &__Heater_Enable)
 
     // 软重启
     res = 0xb6;
-    Write_Single_Register(offsetof(Struct_BMI088_Accel_Register, ACC_PWR_CTRL_RW), &res);
+    Write_Single_Register(offsetof(Struct_BMI088_Accel_Register, ACC_SOFTRESET_WO), &res);
     Namespace_SYS_Timestamp::Delay_Millisecond(100);
 
     // 检测通信是否正常
@@ -162,7 +162,9 @@ bool Class_BMI088_Accel::Init(const bool &__Heater_Enable)
 
     for (uint8_t i = 0; i < BMI088_ACCEL_INIT_INSTRUCTION_NUM; i++)
     {
-        ((uint8_t *) (&Register))[BMI088_ACCEL_REGISTER_CONFIG[i][0]] = 0x00;
+        // 强制执行写入与回读，目标值为 0 时也不能跳过校验。
+        ((uint8_t *) (&Register))[BMI088_ACCEL_REGISTER_CONFIG[i][0]] =
+            (uint8_t) ~BMI088_ACCEL_REGISTER_CONFIG[i][1];
         for (uint8_t retry = 0U;
              retry < INIT_RETRY_COUNT &&
              ((uint8_t *) (&Register))[BMI088_ACCEL_REGISTER_CONFIG[i][0]] !=

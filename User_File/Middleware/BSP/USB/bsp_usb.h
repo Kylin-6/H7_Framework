@@ -38,6 +38,9 @@ struct Struct_USB_Manage_Object
     uint8_t *Rx_Buffer_Active;
     uint8_t *Rx_Buffer_Ready;
 
+    // CDC 异步发送期间持有数据；当前 USB PCD 未启用 DMA。
+    uint8_t Tx_Buffer[USB_BUFFER_SIZE];
+
     uint64_t Rx_Timestamp;
 };
 
@@ -49,9 +52,10 @@ extern struct Struct_USB_Manage_Object USB0_Manage_Object;
 
 void USB_Init(USB_Callback Callback_Function);
 
+// 复制 1..USB_BUFFER_SIZE 字节；忙时立即返回 USBD_BUSY，不覆盖在途帧。
 uint8_t USB_Transmit_Data(uint8_t *Data, uint16_t Length);
 
-void USB_ReceiveCallback(uint16_t Size);
+void USB_ReceiveCallback(uint8_t *Buffer, uint16_t Size);
 
 #ifdef __cplusplus
 }

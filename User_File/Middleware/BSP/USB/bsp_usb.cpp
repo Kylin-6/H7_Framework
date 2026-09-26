@@ -56,41 +56,54 @@ void USB_Init(USB_Callback Callback_Function)
  */
 uint8_t USB_Transmit_Data(uint8_t *Data, uint16_t Length)
 {
-    if (hUsbDeviceHS.pClassData == nullptr)
+    if (Data == nullptr || Length == 0 || Length > USB_BUFFER_SIZE)
     {
         return USBD_FAIL;
     }
 
-    uint32_t timeout = 10000;
-    uint8_t result;
-    do
+    // 同时保护类句柄寿命、空闲检查和缓冲复制，避免 USB 断连中断或并发发送。
+    uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    __DMB();
+    USBD_CDC_HandleTypeDef *hcdc =
+        (USBD_CDC_HandleTypeDef *)hUsbDeviceHS.pClassData;
+    uint8_t result = USBD_FAIL;
+    if (hcdc != nullptr)
     {
-        result = CDC_Transmit_HS(Data, Length);
-        if (result != USBD_BUSY)
+        if (hcdc->TxState != 0)
         {
-            break;
+            result = USBD_BUSY;
         }
-    } while (--timeout > 0);
-
+        else
+        {
+            memcpy(USB0_Manage_Object.Tx_Buffer, Data, Length);
+            result = CDC_Transmit_HS(USB0_Manage_Object.Tx_Buffer, Length);
+        }
+    }
+    __DMB();
+    __set_PRIMASK(primask);
     return result;
 }
 
 /**
  * @brief USB CDC receive hook called from usbd_cdc_if.c
  *
+ * @param Buffer actual packet buffer supplied by the CDC stack
  * @param Size received data size
  */
-void USB_ReceiveCallback(uint16_t Size)
+void USB_ReceiveCallback(uint8_t *Buffer, uint16_t Size)
 {
-    if (!init_finished || USB0_Manage_Object.Rx_Buffer_Active == nullptr)
+    if (!init_finished || Buffer == nullptr || Size > USB_BUFFER_SIZE)
     {
+        USB0_Manage_Object.Rx_Buffer_Active = UserRxBufferHS;
         USBD_CDC_SetRxBuffer(&hUsbDeviceHS, UserRxBufferHS);
         USBD_CDC_ReceivePacket(&hUsbDeviceHS);
         return;
     }
 
-    USB0_Manage_Object.Rx_Buffer_Ready = USB0_Manage_Object.Rx_Buffer_Active;
-    if (USB0_Manage_Object.Rx_Buffer_Active == USB0_Manage_Object.Rx_Buffer_0)
+    // 重新枚举时 CDC_Init_HS 会换回 UserRxBufferHS，不能依赖旧 Active 指针。
+    USB0_Manage_Object.Rx_Buffer_Ready = Buffer;
+    if (Buffer == USB0_Manage_Object.Rx_Buffer_0)
     {
         USB0_Manage_Object.Rx_Buffer_Active = USB0_Manage_Object.Rx_Buffer_1;
     }
