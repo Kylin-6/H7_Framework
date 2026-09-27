@@ -27,7 +27,7 @@ static ShootFeedback Shoot_Feedback;
 static uint8_t Shoot_Feedback_Divider;
 
 #if SHOOT
-static constexpr float SHOOT_DEFAULT_FRICTION_SPEED_RAD_S = DegToRad(40000.0f);
+static constexpr float SHOOT_DEFAULT_FRICTION_SPEED_RAD_S = 25.0f;
 static constexpr float SHOOT_DEFAULT_RATE_HZ = 10.0f;
 static constexpr float SHOOT_ONE_BULLET_ANGLE_RAD = DegToRad(36.0f);
 static constexpr float SHOOT_REVERSE_SPEED_RAD_S = DegToRad(-360.0f);
@@ -181,6 +181,7 @@ bool Shoot_Init(void)
     Struct_DJIMotor_Init_Config friction_config{};
     friction_config.hfdcan = BoardConfig_Get().shoot_bus;
     friction_config.motor_type = Enum_DJIMotor_Type::M3508;
+    friction_config.gear_ratio = 1.0f; // 摩擦轮直驱，不使用 M3508 默认减速比 19。
     friction_config.close_loop = DJI_MOTOR_SPEED_LOOP;
     friction_config.outer_loop = DJI_MOTOR_SPEED_LOOP;
     // 速度环输入为 rad/s；增益无可信实车标定依据，启用前需重新整定。
