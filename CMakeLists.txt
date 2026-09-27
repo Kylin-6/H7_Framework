@@ -192,6 +192,7 @@ if(H7_BOARD STREQUAL "SingleBoard")
         ${H7_CHASSIS_DEVICE_SOURCES}
         User_File/Task/Control_Task.cpp
         User_File/Application/RobotCmd/RobotCmd.cpp
+        User_File/Application/Communication/Com.cpp
         User_File/Application/Gimbal/Gimbal.cpp
         User_File/Application/Chassis/Chassis.cpp
         User_File/Application/Shoot/Shoot.cpp)
@@ -203,6 +204,7 @@ elseif(H7_BOARD STREQUAL "GimbalBoard")
         User_File/System/Transport/transport_gimbal.cpp
         User_File/Task/Control_Task_Gimbal.cpp
         User_File/Application/RobotCmd/RobotCmd.cpp
+        User_File/Application/Communication/Com.cpp
         User_File/Application/Gimbal/Gimbal.cpp
         User_File/Application/Shoot/Shoot.cpp)
 else()

@@ -35,11 +35,11 @@ Application 不应：
 
 | 模块 | 职责 | 拥有/调用的主要对象 |
 | --- | --- | --- |
-| `RobotCmd` | 命令唯一所有者和发布者；当前由设置接口提供目标，尚未接入输入仲裁 | Output、Message Center Subscriber |
+| `RobotCmd` | 命令唯一所有者和发布者；输入互锁失效时立即发布安全目标 | Output、Message Center Subscriber |
 | `Gimbal` | 云台模式、目标角/速度、达妙控制和反馈 | 两轴 Class_DMMotor、Yaw PID、INS Topic |
 | `Chassis` | 四舵轮运动学、最短转向和电机目标 | 8 个 DJI 电机及电机组 |
 | `Shoot` | 摩擦轮、拨弹连续模式和离散射击动作 | 3 个 DJI 电机、ShootEvent FIFO |
-| `Communication` | 保留的通信应用骨架，当前不参与板间链路 | 无 |
+| `Communication` | UART5 S.BUS 健康去抖、旧步兵通道映射与底盘目标输入 | S.BUS、RobotCmd |
 
 单板固件的硬件路径由 `H7_APP_GIMBAL`、`H7_APP_CHASSIS`、`H7_APP_SHOOT` 控制，默认均关闭；
 双板固件由 CMake 在构建期分别选择应用和任务源码。板内命令通过 `LocalPublisher` 进入
@@ -50,10 +50,10 @@ Message Center，云台板的底盘命令通过 `RemotePublisher` 进入固定 C
 各板的 `Control_Task` 均由 1 ms 线程标志唤醒，当前初始化和更新顺序为：
 
 ```text
-SingleBoard: RobotCmd_Init → Gimbal_Init(启用时) → Chassis_Init → Shoot_Init
-             RobotCmd_Update → Gimbal_Update → Chassis_Update → Shoot_Update
-GimbalBoard: BoardTransport_Init → RobotCmd_Init → Gimbal_Init → Shoot_Init
-             BoardTransport_Poll → RobotCmd_Update → Gimbal_Update → Shoot_Update
+SingleBoard: RobotCmd_Init → Communication_Init → Gimbal_Init(启用时) → Chassis_Init → Shoot_Init
+             Communication_Update → RobotCmd_Update → Gimbal_Update → Chassis_Update → Shoot_Update
+GimbalBoard: BoardTransport_Init → RobotCmd_Init → Communication_Init → Gimbal_Init → Shoot_Init
+             BoardTransport_Poll → Communication_Update → RobotCmd_Update → Gimbal_Update → Shoot_Update
 ChassisBoard: BoardTransport_Init → Chassis_Init
               BoardTransport_Poll → Chassis_Update
 ```
@@ -75,10 +75,17 @@ bool RobotCmd_PushShootEvent(const ShootEvent &event);
 
 连续命令写入本地缓存并设置 dirty 标志，`RobotCmd_Update()` 才通过已注入的 Output
 发布；底盘命令每 10 ms 刷新。Setter 当前没有并发保护，应由 ControlTask 上下文调用，
-不能直接从 ISR/UART 回调并发修改。Remote、键鼠和 Vision 尚未进入 RobotCmd；未来应由
-各 Device/parser 将输入交给 Topic 或输入状态，再在 `RobotCmd_Update()` 中统一仲裁。
+不能直接从 ISR/UART 回调并发修改。S.BUS 驱动只在 UART 中断保存完整帧，
+Communication 在 ControlTask 中检查最新帧并调用 RobotCmd；键鼠和 Vision 尚未接入。
 
-启动默认值：
+S.BUS 使用 UART5：帧新鲜度 50 ms，frame-lost/failsafe 立即锁定；连续 200 ms 健康且
+CH1–CH4 回中后解锁。CH2/CH1 映射底盘前后/左右，CH7 为速度档，CH10 负半轴为手动旋转；
+CH5 跟随、CH3/CH4 云台与 CH6 发射暂未接入。旧步兵的 30/50 非 SI 参数不移植，
+目前调试上限为 0.5 m/s 和 1 rad/s，实车使用前须确认方向、机械零位与限幅。
+失联时清除未执行的发射事件，并立即发布 Gimbal `DISABLED`、Chassis `ZERO_FORCE`、Shoot `OFF`。
+
+RobotCmd 独立初始化时的默认值如下；ControlTask 随后初始化 UART5 输入互锁，
+在 S.BUS 解锁前把云台覆盖为 `DISABLED`：
 
 - Gimbal 为 `LOCK`，避免第一帧目标到达前跳向零点。
 - Chassis 为 `ZERO_FORCE`。

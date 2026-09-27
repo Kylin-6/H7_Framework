@@ -399,6 +399,22 @@ uint64_t Class_DJIMotor::Get_Last_Feedback_Timestamp_Us() const
     return timestamp_us;
 }
 
+Struct_DJIMotor_Motion_Snapshot Class_DJIMotor::GetMotionSnapshot() const
+{
+    const uint32_t interrupt_state = __get_PRIMASK();
+    __disable_irq();
+    __DMB();
+    Struct_DJIMotor_Motion_Snapshot snapshot{};
+    snapshot.output_total_angle = feedback.output_total_angle;
+    snapshot.output_speed = feedback.output_speed;
+    snapshot.timestamp_us = last_feedback_timestamp_us;
+    snapshot.online = online;
+    snapshot.enabled = enabled;
+    __DMB();
+    __set_PRIMASK(interrupt_state);
+    return snapshot;
+}
+
 /**
  * @brief 在 CAN 接收中断中解码反馈，更新连续角度、滤波速度和在线时间戳。
  * @note 累计角度以首帧的编码器绝对位置为起点，首帧不会自动归零。

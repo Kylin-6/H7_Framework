@@ -15,131 +15,108 @@
 #include "bsp_uart.h"
 #include "cmsis_os.h"
 
-#define RE_RX_BUFFER_SIZE 255u // 裁判系统接收缓冲区大小
+#define RE_RX_BUFFER_SIZE 320u // 覆盖当前协议最长 300 字节数据段及 9 字节包头/尾
 
 static UART_HandleTypeDef *referee_uart; // 裁判系统串口实例
 static referee_info_t referee_info;			  // 裁判系统数据
 static uint32_t referee_last_valid_tick;
+static uint8_t referee_rx_buffer[RE_RX_BUFFER_SIZE];
+static uint16_t referee_rx_length;
 
 #define REFEREE_OFFLINE_TIMEOUT_MS 500U
 
-/**
- * @brief 解析本次 UART DMA chunk 中完整的裁判帧；回调可处于中断上下文。
- * @warning 不保存跨回调半帧；按 CmdID memcpy 前未检查声明载荷是否达到固定结构长度。
- *          DataLength 的 16 位长度运算也可能回绕。CRC 通过不等于载荷可安全复制。
- *          接入生产控制链前须改为有界流式解析并补长度校验。
- */
+/* 已校验 CRC 的已知命令必须匹配该命令的固定载荷长度；未知命令只计链路在线。 */
+static uint8_t JudgeStoreFrame(const uint8_t *frame, uint16_t payload_length)
+{
+    const uint16_t command_id = (uint16_t)frame[CMD_ID_Offset] |
+                                ((uint16_t)frame[CMD_ID_Offset + 1U] << 8U);
+#define JUDGE_COPY(cmd, field, expected) \
+    case cmd: \
+        if (payload_length != (expected) || (expected) != sizeof(referee_info.field)) return FALSE; \
+        memcpy(&referee_info.field, frame + DATA_Offset, (expected)); \
+        break
+    switch (command_id)
+    {
+        JUDGE_COPY(ID_game_status, GameState, LEN_game_status);
+        JUDGE_COPY(ID_game_result, GameResult, LEN_game_result);
+        JUDGE_COPY(ID_game_robot_HP, GameRobotHP, LEN_game_robot_HP);
+        JUDGE_COPY(ID_event_data, EventData, LEN_event_data);
+        JUDGE_COPY(ID_referee_warning, RefereeWarning, LEN_referee_warning);
+        JUDGE_COPY(ID_dart_info, DartInfo, LEN_dart_info);
+        JUDGE_COPY(ID_robot_status, GameRobotState, LEN_robot_status);
+        JUDGE_COPY(ID_power_heat_data, PowerHeatData, LEN_power_heat_data);
+        JUDGE_COPY(ID_robot_pos, GameRobotPos, LEN_robot_pos);
+        JUDGE_COPY(ID_buff, BuffMusk, LEN_buff);
+        JUDGE_COPY(ID_hurt_data, RobotHurt, LEN_hurt_data);
+        JUDGE_COPY(ID_shoot_data, ShootData, LEN_shoot_data);
+        JUDGE_COPY(ID_projectile_allowance, ProjectileAllowance, LEN_projectile_allowance);
+        JUDGE_COPY(ID_rfid_status, RFIDStatus, LEN_rfid_status);
+        JUDGE_COPY(ID_dart_client_cmd, DartClientCmd, LEN_dart_client_cmd);
+        JUDGE_COPY(ID_ground_robot_position, GroundRobotPosition, LEN_ground_robot_position);
+        JUDGE_COPY(ID_radar_mark_data, RadarMarkData, LEN_radar_mark_data);
+        JUDGE_COPY(ID_sentry_info, SentryInfo, LEN_sentry_info);
+        JUDGE_COPY(ID_radar_info, RadarInfo, LEN_radar_info);
+    default:
+        break;
+    }
+#undef JUDGE_COPY
+    memcpy(&referee_info.FrameHeader, frame, LEN_HEADER);
+    referee_info.CmdID = command_id;
+    referee_info.init_flag = 1U;
+    referee_last_valid_tick = HAL_GetTick();
+    return TRUE;
+}
+
+static void JudgeDropPrefix(uint16_t count)
+{
+    referee_rx_length -= count;
+    memmove(referee_rx_buffer, referee_rx_buffer + count, referee_rx_length);
+}
+
+/** @brief 有界流式解析；UART ISR 是唯一写入者，保留跨 DMA 回调半帧。 */
 static void JudgeReadData(uint8_t *buff, uint16_t length)
 {
-    uint16_t judge_length;  // 统计一帧数据长度
-    uint16_t read_offset = 0; // 记录相对于buff起始地址的累计偏移量,用于越界保护
-    if (buff == NULL)	   // 空数据包，则不作任何处理
+    if (buff == NULL)
         return;
 
-    // 使用循环代替递归,逐帧解析缓冲区中的所有数据
-    // 避免递归调用在多帧粘包时导致栈溢出(中断上下文栈空间有限)
-    // 循环条件: 剩余空间至少能容纳一个帧头,且当前位置为有效帧起始字节
-    while (read_offset + LEN_HEADER <= length)
+    for (uint16_t index = 0U; index < length; ++index)
     {
-        uint8_t *frame = buff + read_offset; // 当前帧起始地址
-
-        if (frame[0] != REFEREE_SOF)
-        {
-            read_offset++;
+        if (referee_rx_length == 0U && buff[index] != REFEREE_SOF)
             continue;
-        }
+        if (referee_rx_length == RE_RX_BUFFER_SIZE)
+            JudgeDropPrefix(1U);
+        referee_rx_buffer[referee_rx_length++] = buff[index];
 
-        // 写入帧头数据(5-byte),用于判断是否开始存储裁判数据
-        memcpy(&referee_info.FrameHeader, frame, LEN_HEADER);
-
-        // 帧头CRC8校验
-        if (Verify_CRC8_Check_Sum(frame, LEN_HEADER) == TRUE)
+        while (referee_rx_length >= LEN_HEADER)
         {
-            // 统计一帧数据长度(byte),用于CRC16校验
-            // 注意 DataLength 为 uint16_t，必须使用完整 16 位长度
-            judge_length = (uint16_t)(referee_info.FrameHeader.DataLength + LEN_HEADER + LEN_CMDID + LEN_TAIL);
-
-            // 越界保护: 当前帧完整长度不能超出缓冲区剩余空间
-            if (read_offset + judge_length > length)
-                break;
-
-            // 帧尾CRC16校验
-            if (Verify_CRC16_Check_Sum(frame, judge_length) == TRUE)
+            if (referee_rx_buffer[0] != REFEREE_SOF ||
+                Verify_CRC8_Check_Sum(referee_rx_buffer, LEN_HEADER) != TRUE)
             {
-                referee_info.init_flag = 1U;
-                referee_last_valid_tick = HAL_GetTick();
-                // 2个8位拼成16位int
-                referee_info.CmdID = (frame[6] << 8 | frame[5]);
-                // 解析数据命令码,将数据拷贝到相应结构体中(注意拷贝数据的长度)
-                // 第8个字节开始才是数据 data=7
-                switch (referee_info.CmdID)
-                {
-                case ID_game_status: // 0x0001
-                    memcpy(&referee_info.GameState, (frame + DATA_Offset), LEN_game_status);
-                    break;
-                case ID_game_result: // 0x0002
-                    memcpy(&referee_info.GameResult, (frame + DATA_Offset), LEN_game_result);
-                    break;
-                case ID_game_robot_HP: // 0x0003
-                    memcpy(&referee_info.GameRobotHP, (frame + DATA_Offset), LEN_game_robot_HP);
-                    break;
-                case ID_event_data: // 0x0101
-                    memcpy(&referee_info.EventData, (frame + DATA_Offset), LEN_event_data);
-                    break;
-                case ID_referee_warning: // 0x0104
-                    memcpy(&referee_info.RefereeWarning, (frame + DATA_Offset), LEN_referee_warning);
-                    break;
-                case ID_dart_info: // 0x0105
-                    memcpy(&referee_info.DartInfo, (frame + DATA_Offset), LEN_dart_info);
-                    break;
-                case ID_robot_status: // 0x0201
-                    memcpy(&referee_info.GameRobotState, (frame + DATA_Offset), LEN_robot_status);
-                    break;
-                case ID_power_heat_data: // 0x0202
-                    memcpy(&referee_info.PowerHeatData, (frame + DATA_Offset), LEN_power_heat_data);
-                    break;
-                case ID_robot_pos: // 0x0203
-                    memcpy(&referee_info.GameRobotPos, (frame + DATA_Offset), LEN_robot_pos);
-                    break;
-                case ID_buff: // 0x0204
-                    memcpy(&referee_info.BuffMusk, (frame + DATA_Offset), LEN_buff);
-                    break;
-                case ID_hurt_data: // 0x0206
-                    memcpy(&referee_info.RobotHurt, (frame + DATA_Offset), LEN_hurt_data);
-                    break;
-                case ID_shoot_data: // 0x0207
-                    memcpy(&referee_info.ShootData, (frame + DATA_Offset), LEN_shoot_data);
-                    break;
-                case ID_projectile_allowance: // 0x0208
-                    memcpy(&referee_info.ProjectileAllowance, (frame + DATA_Offset), LEN_projectile_allowance);
-                    break;
-                case ID_rfid_status: // 0x0209
-                    memcpy(&referee_info.RFIDStatus, (frame + DATA_Offset), LEN_rfid_status);
-                    break;
-                case ID_dart_client_cmd: // 0x020A
-                    memcpy(&referee_info.DartClientCmd, (frame + DATA_Offset), LEN_dart_client_cmd);
-                    break;
-                case ID_ground_robot_position: // 0x020B
-                    memcpy(&referee_info.GroundRobotPosition, (frame + DATA_Offset), LEN_ground_robot_position);
-                    break;
-                case ID_radar_mark_data: // 0x020C
-                    memcpy(&referee_info.RadarMarkData, (frame + DATA_Offset), LEN_radar_mark_data);
-                    break;
-                case ID_sentry_info: // 0x020D
-                    memcpy(&referee_info.SentryInfo, (frame + DATA_Offset), LEN_sentry_info);
-                    break;
-                case ID_radar_info: // 0x020E
-                    memcpy(&referee_info.RadarInfo, (frame + DATA_Offset), LEN_radar_info);
-                    break;
-                default:
-                    break;
-                }
+                JudgeDropPrefix(1U);
+                continue;
+            }
+
+            const uint32_t payload_length = (uint32_t)referee_rx_buffer[DATA_LENGTH] |
+                                            ((uint32_t)referee_rx_buffer[DATA_LENGTH + 1U] << 8U);
+            const uint32_t frame_length = payload_length + LEN_HEADER + LEN_CMDID + LEN_TAIL;
+            if (frame_length > RE_RX_BUFFER_SIZE)
+            {
+                JudgeDropPrefix(1U);
+                continue;
+            }
+            if (referee_rx_length < frame_length)
+                break;
+            if (Verify_CRC16_Check_Sum(referee_rx_buffer, frame_length) == TRUE)
+            {
+                (void)JudgeStoreFrame(referee_rx_buffer, (uint16_t)payload_length);
+                JudgeDropPrefix((uint16_t)frame_length);
+            }
+            else
+            {
+                /* CRC 错帧按一字节滑动，仍有机会找到嵌在其中的下一个帧头。 */
+                JudgeDropPrefix(1U);
             }
         }
-        // 累计偏移量前移整帧长度,指向下一帧起始位置
-        // 无论CRC校验是否通过,都按帧头中声明的长度跳过当前帧
-        uint16_t frame_len = (uint16_t)(sizeof(xFrameHeader) + LEN_CMDID + referee_info.FrameHeader.DataLength + LEN_TAIL);
-        read_offset += frame_len;
     }
 }
 
@@ -157,6 +134,7 @@ referee_info_t *RefereeInit(UART_HandleTypeDef *referee_usart_handle)
 
     memset(&referee_info, 0, sizeof(referee_info));
     referee_last_valid_tick = 0U;
+    referee_rx_length = 0U;
     referee_uart = referee_usart_handle;
     UART_Init(referee_usart_handle, RefereeRxCallback);
 

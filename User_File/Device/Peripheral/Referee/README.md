@@ -6,9 +6,9 @@
 
 ## 协议解析与 UART 接入
 
-调用 `RefereeInit(UART_HandleTypeDef*)` 才会注册 `RefereeRxCallback()`；传入的 UART 需已具备 ReceiveToIdle RX DMA。BSP 回调参数是一段 DMA chunk，可能包含半帧、多帧或杂字节。`JudgeReadData()` 在同一 chunk 内搜索 `0xA5`，验证帧头 CRC8 和整帧 CRC16，然后按 CmdID 复制到 `referee_info_t`。`RefereeReceiveData()` 也调用相同解析器。VTM 使用本目录的独立解析入口。
+调用 `RefereeInit(UART_HandleTypeDef*)` 才会注册 `RefereeRxCallback()`；传入的 UART 需已具备 ReceiveToIdle RX DMA。BSP 回调参数是一段 DMA chunk，可能包含半帧、多帧或杂字节。`JudgeReadData()` 用 320 字节静态缓存跨 chunk 重组帧，验证帧头 CRC8 和整帧 CRC16，然后按 CmdID 复制到 `referee_info_t`。`RefereeReceiveData()` 也调用相同解析器。VTM 使用本目录的独立解析入口。
 
-解析器**不保留跨回调半帧**。当前仅检查声明帧长是否位于本次 chunk，未在固定结构体 `memcpy` 前核对对应 CmdID 的载荷长度；极端 `DataLength` 还可能在 16 位长度计算中回绕。CRC 正确不能证明载荷复制安全。接入生产控制链前需要有界流式重组、各 CmdID 精确长度检查和异常长度回归测试。
+已知固定长度命令要求声明长度、协议常量和目标结构大小完全一致；超长帧被拒绝，CRC 错帧逐字节重同步。解析状态由 UART 回调持有；`RefereeReceiveData()` 不应与 UART 中断并发调用。
 
 ## 在线状态与发送
 
@@ -16,8 +16,7 @@
 
 ## Known Issues
 
-- 无跨 UART chunk 的拼帧与重同步状态，拆包会丢帧。
-- 固定结构复制缺少载荷长度校验，异常长度存在越界风险；目前尚未修复。
+- `referee_info_t` 仍由中断更新，任务直接读取多个字段可能跨帧；消费前需增加业务快照。
 - 数据尚未进入本地 Topic、Chassis 或 Shoot；没有当前固件的 `refereeUItask`。
 - UI 发送的 115 ms 延时需要单独的低优先级调度和实机速率验证。
 

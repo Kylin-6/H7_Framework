@@ -27,6 +27,8 @@ static ShootFeedback Shoot_Feedback;
 /* 云台和发射按变化发布；底盘命令按 10 ms 刷新以提供失联时效。 */
 static bool Gimbal_Command_Dirty;
 static bool Shoot_Command_Dirty;
+static bool Chassis_Command_Dirty;
+static bool Input_Armed;
 static bool Gimbal_Feedback_Valid;
 static bool Shoot_Feedback_Valid;
 static uint8_t RobotCmd_Feedback_Divider;
@@ -53,6 +55,8 @@ bool RobotCmd_Init(Output<GimbalCmd> gimbal_output,
     Gimbal_Command.mode = GimbalMode::LOCK;
     Gimbal_Command_Dirty = true;
     Shoot_Command_Dirty = true;
+    Chassis_Command_Dirty = false;
+    Input_Armed = true;
     Gimbal_Feedback_Valid = false;
     Shoot_Feedback_Valid = false;
     RobotCmd_Feedback_Divider = 0U;
@@ -88,9 +92,10 @@ void RobotCmd_Update(void)
         Gimbal_Command_Dirty = false;
     }
     // Continuous command refresh doubles as the receiver's freshness source.
-    if (chassis_publish_due)
+    if (chassis_publish_due || Chassis_Command_Dirty)
     {
         Chassis_Command_Output.Publish(Chassis_Command);
+        Chassis_Command_Dirty = false;
     }
     if (Shoot_Command_Dirty)
     {
@@ -99,26 +104,49 @@ void RobotCmd_Update(void)
     }
 }
 
+void RobotCmd_SetInputArmed(bool armed)
+{
+    if (armed == Input_Armed)
+    {
+        return;
+    }
+    Input_Armed = armed;
+    if (!armed)
+    {
+        Gimbal_Command = {};
+        Chassis_Command = {};
+        Shoot_Command = {};
+        Gimbal_Command_Dirty = true;
+        Chassis_Command_Dirty = true;
+        Shoot_Command_Dirty = true;
+        ShootEvent discarded{};
+        while (MessageCenter::Shoot_Event_Queue.Pop(discarded)) {}
+    }
+}
+
 void RobotCmd_SetGimbal(const GimbalCmd &command)
 {
+    if (!Input_Armed) return;
     Gimbal_Command = command;
     Gimbal_Command_Dirty = true;
 }
 
 void RobotCmd_SetChassis(const ChassisCmd &command)
 {
+    if (!Input_Armed) return;
     Chassis_Command = command;
 }
 
 void RobotCmd_SetShoot(const ShootCmd &command)
 {
+    if (!Input_Armed) return;
     Shoot_Command = command;
     Shoot_Command_Dirty = true;
 }
 
 bool RobotCmd_PushShootEvent(const ShootEvent &event)
 {
-    return MessageCenter::Shoot_Event_Queue.Push(event);
+    return Input_Armed && MessageCenter::Shoot_Event_Queue.Push(event);
 }
 
 bool RobotCmd_GetGimbalFeedback(GimbalFeedback &feedback)

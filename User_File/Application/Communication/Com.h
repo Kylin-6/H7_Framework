@@ -1,20 +1,9 @@
 #ifndef COM_H
 #define COM_H
 
-#include <stdbool.h>
-
-#include "cmsis_os2.h"
-#include "bsp_uart.h"
-
-typedef struct
-{
-    uint8_t Header;
-    uint16_t Length;
-    uint8_t* Data;
-    uint16_t Checksum;
-} Frame_t;
-
-
-void Communication_Callback(uint8_t* Buffer, uint16_t Length);
+/** 在 RobotCmd_Init 后绑定 UART5 S.BUS，失败时输入互锁保持关闭。 */
+bool Communication_Init(void);
+/** ControlTask 先调用本函数，再运行 RobotCmd_Update。 */
+void Communication_Update(void);
 
 #endif // COM_H

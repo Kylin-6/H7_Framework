@@ -42,6 +42,8 @@ static constexpr float Chassis_Steer_Offset_Rad[4] = {
 
 static Class_DJIMotor Chassis_Wheel_Motor[4];
 static Class_DJIMotor Chassis_Steer_Motor[4];
+static Struct_DJIMotor_Motion_Snapshot Chassis_Wheel_Snapshot[4];
+static Struct_DJIMotor_Motion_Snapshot Chassis_Steer_Snapshot[4];
 static Class_DJIMotor_Group Chassis_Wheel_Group;
 static Class_DJIMotor_Group Chassis_Steer_Group;
 static bool Chassis_Initialized;
@@ -106,7 +108,7 @@ static void Chassis_CalculateTargets(float wheel_target_rad_s[4],
         const float velocity_m_s = std::sqrt(wheel_vx[index] * wheel_vx[index] +
                                             wheel_vy[index] * wheel_vy[index]);
         const float current_angle_rad =
-            Chassis_Steer_Motor[index].feedback.output_total_angle;
+            Chassis_Steer_Snapshot[index].output_total_angle;
         if (velocity_m_s < CHASSIS_STOP_SPEED_M_S)
         {
             wheel_target_rad_s[index] = 0.0f;
@@ -148,15 +150,15 @@ static void Chassis_UpdateFeedback(void)
     for (uint8_t index = 0; index < 4; ++index)
     {
         const float heading_rad =
-            Chassis_Steer_Motor[index].feedback.output_total_angle -
+            Chassis_Steer_Snapshot[index].output_total_angle -
             Chassis_Steer_Offset_Rad[index];
         const float linear_speed_m_s =
-            Chassis_Wheel_Motor[index].feedback.output_speed *
+            Chassis_Wheel_Snapshot[index].output_speed *
             CHASSIS_WHEEL_RADIUS_M;
         wheel_vx[index] = linear_speed_m_s * std::cos(heading_rad);
         wheel_vy[index] = linear_speed_m_s * std::sin(heading_rad);
-        online = online && Chassis_Wheel_Motor[index].online &&
-                 Chassis_Steer_Motor[index].online;
+        online = online && Chassis_Wheel_Snapshot[index].online &&
+                 Chassis_Steer_Snapshot[index].online;
     }
 
     const float vx = (wheel_vx[0] + wheel_vx[1] + wheel_vx[2] + wheel_vx[3]) * 0.25f;
@@ -248,6 +250,11 @@ void Chassis_Update(void)
 #if CHASSIS
     if (Chassis_Initialized)
     {
+        for (uint8_t index = 0U; index < 4U; ++index)
+        {
+            Chassis_Wheel_Snapshot[index] = Chassis_Wheel_Motor[index].GetMotionSnapshot();
+            Chassis_Steer_Snapshot[index] = Chassis_Steer_Motor[index].GetMotionSnapshot();
+        }
         const bool enabled = Chassis_Command.mode != ChassisMode::ZERO_FORCE;
         Chassis_SetEnabled(enabled);
         if (enabled)

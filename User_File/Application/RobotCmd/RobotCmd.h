@@ -10,8 +10,10 @@ bool RobotCmd_Init(Output<GimbalCmd> gimbal_output,
                    Output<ShootCmd> shoot_output);
 /** 周期读取模块反馈；底盘命令每 10 ms 刷新。 */
 void RobotCmd_Update(void);
+/** 输入互锁由 ControlTask 上下文设置；失联立即清除缓存目标并发布安全命令。 */
+void RobotCmd_SetInputArmed(bool armed);
 
-/** 设置接口应由 ControlTask 上下文调用；缓存/dirty 标志无同步保护，不可从 ISR/UART 回调并发调用。遥控/视觉仲裁尚未接入。 */
+/** 设置接口应由 ControlTask 上下文调用；缓存/dirty 标志无同步保护，不可从 ISR/UART 回调并发调用。 */
 void RobotCmd_SetGimbal(const GimbalCmd &command);
 void RobotCmd_SetChassis(const ChassisCmd &command);
 void RobotCmd_SetShoot(const ShootCmd &command);

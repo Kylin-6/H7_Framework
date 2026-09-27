@@ -37,6 +37,9 @@ static constexpr float SHOOT_REVERSE_SPEED_RAD_S = DegToRad(-360.0f);
 static Class_DJIMotor Shoot_Friction_Left;
 static Class_DJIMotor Shoot_Friction_Right;
 static Class_DJIMotor Shoot_Loader;
+static Struct_DJIMotor_Motion_Snapshot Shoot_Friction_Left_Snapshot;
+static Struct_DJIMotor_Motion_Snapshot Shoot_Friction_Right_Snapshot;
+static Struct_DJIMotor_Motion_Snapshot Shoot_Loader_Snapshot;
 static Class_DJIMotor_Group Shoot_Friction_Group;
 static Class_DJIMotor_Group Shoot_Loader_Group;
 static bool Shoot_Initialized;
@@ -129,7 +132,7 @@ static void Shoot_ApplyCommand(void)
             if (!Shoot_Event_Angle_Active)
             {
                 Shoot_Loader_Angle_Target_Rad =
-                    Shoot_Loader.feedback.output_total_angle;
+                    Shoot_Loader_Snapshot.output_total_angle;
             }
             const float bullet_count =
                 event.type == ShootEventType::ShootTriple ? 3.0f : 1.0f;
@@ -162,15 +165,15 @@ static void Shoot_ApplyCommand(void)
 static void Shoot_UpdateFeedback(void)
 {
     Shoot_Feedback.friction_left_speed_rad_s =
-        Shoot_Friction_Left.feedback.output_speed;
+        Shoot_Friction_Left_Snapshot.output_speed;
     Shoot_Feedback.friction_right_speed_rad_s =
-        Shoot_Friction_Right.feedback.output_speed;
-    Shoot_Feedback.loader_angle_rad = Shoot_Loader.feedback.output_total_angle;
-    Shoot_Feedback.loader_speed_rad_s = Shoot_Loader.feedback.output_speed;
+        Shoot_Friction_Right_Snapshot.output_speed;
+    Shoot_Feedback.loader_angle_rad = Shoot_Loader_Snapshot.output_total_angle;
+    Shoot_Feedback.loader_speed_rad_s = Shoot_Loader_Snapshot.output_speed;
     Shoot_Feedback.enabled = Shoot_Output_Enabled;
-    Shoot_Feedback.online = Shoot_Friction_Left.online &&
-                            Shoot_Friction_Right.online &&
-                            Shoot_Loader.online;
+    Shoot_Feedback.online = Shoot_Friction_Left_Snapshot.online &&
+                            Shoot_Friction_Right_Snapshot.online &&
+                            Shoot_Loader_Snapshot.online;
 }
 #endif
 
@@ -249,6 +252,9 @@ void Shoot_Update(void)
 #if SHOOT
     if (Shoot_Initialized)
     {
+        Shoot_Friction_Left_Snapshot = Shoot_Friction_Left.GetMotionSnapshot();
+        Shoot_Friction_Right_Snapshot = Shoot_Friction_Right.GetMotionSnapshot();
+        Shoot_Loader_Snapshot = Shoot_Loader.GetMotionSnapshot();
         Shoot_ApplyCommand();
         Shoot_UpdateFeedback();
     }

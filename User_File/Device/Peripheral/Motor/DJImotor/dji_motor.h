@@ -119,6 +119,16 @@ struct Struct_DJIMotor_Feedback
     Struct_DJIMotor_PID_Feedback pid;
 };
 
+/** CAN 中断写入的运动反馈与在线标志在一次短临界区内读取。 */
+struct Struct_DJIMotor_Motion_Snapshot
+{
+    float output_total_angle = 0.0f;
+    float output_speed = 0.0f;
+    uint64_t timestamp_us = 0U;
+    bool online = false;
+    bool enabled = false;
+};
+
 class Class_DJIMotor
 {
 public:
@@ -138,6 +148,7 @@ public:
     bool IsDataValid();   ///< 驱动已初始化且反馈在线。
     bool IsHealthy();     ///< Enabled 与 DataValid 同时成立。
     uint64_t Get_Last_Feedback_Timestamp_Us() const;
+    Struct_DJIMotor_Motion_Snapshot GetMotionSnapshot() const;
 
     // 接收中断更新运动反馈，Control 更新 PID 状态；整个结构不是原子快照。
     Struct_DJIMotor_Feedback feedback;

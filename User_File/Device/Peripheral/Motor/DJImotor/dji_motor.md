@@ -133,8 +133,9 @@ gimbal.Control_Degree(yaw_deg, pitch_deg); // 位置环：deg；速度环：deg/
 - `last_feedback_timestamp_us`：最近反馈的 64 位系统微秒时间戳；任务中读取时使用
   `Get_Last_Feedback_Timestamp_Us()`，由接口保护 32 位 MCU 上的完整快照。
 
-上述 degree 显示字段不进入正式控制链。反馈由 CAN RX 中断写入，任务直接读取多个
-公开字段不保证来自同一帧；当前 DJI 驱动没有完整的 `GetFeedbackSnapshot()` 接口。
+上述 degree 显示字段不进入正式控制链。反馈由 CAN RX 中断写入，任务需要同周期的
+输出轴角度、速度、时间戳和在线标志时调用 `GetMotionSnapshot()`；该接口用短临界区
+复制这些字段。公开的 `feedback.pid` 调试区由控制任务写入，不包含在运动快照里。
 
 反向配置作用于角度、速度以及控制输出的逻辑方向；`feedback.encoder` 和 `feedback.current_raw` 始终保留
 协议原始值。内部电流环会根据反向配置转换 `feedback.current_raw` 的符号。
