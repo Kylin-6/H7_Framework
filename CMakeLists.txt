@@ -193,6 +193,8 @@ if(H7_BOARD STREQUAL "SingleBoard")
         User_File/Task/Control_Task.cpp
         User_File/Application/RobotCmd/RobotCmd.cpp
         User_File/Application/Communication/Com.cpp
+        User_File/Application/Communication/input_state.cpp
+        User_File/Application/Communication/source_arbitration.cpp
         User_File/Application/Gimbal/Gimbal.cpp
         User_File/Application/Chassis/Chassis.cpp
         User_File/Application/Shoot/Shoot.cpp)
@@ -205,6 +207,8 @@ elseif(H7_BOARD STREQUAL "GimbalBoard")
         User_File/Task/Control_Task_Gimbal.cpp
         User_File/Application/RobotCmd/RobotCmd.cpp
         User_File/Application/Communication/Com.cpp
+        User_File/Application/Communication/input_state.cpp
+        User_File/Application/Communication/source_arbitration.cpp
         User_File/Application/Gimbal/Gimbal.cpp
         User_File/Application/Shoot/Shoot.cpp)
 else()

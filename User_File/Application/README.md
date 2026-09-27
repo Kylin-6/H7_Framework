@@ -39,7 +39,7 @@ Application 不应：
 | `Gimbal` | 云台模式、目标角/速度、达妙控制和反馈 | 两轴 Class_DMMotor、Yaw PID、INS Topic |
 | `Chassis` | 四舵轮运动学、最短转向和电机目标 | 8 个 DJI 电机及电机组 |
 | `Shoot` | 摩擦轮、拨弹连续模式和离散射击动作 | 3 个 DJI 电机、ShootEvent FIFO |
-| `Communication` | UART5 S.BUS 健康去抖、旧步兵通道映射与底盘目标输入 | S.BUS、RobotCmd |
+| `Communication` | UART5 S.BUS 适配、固定来源输入状态与仲裁 | S.BUS、InputState |
 
 单板固件的硬件路径由 `H7_APP_GIMBAL`、`H7_APP_CHASSIS`、`H7_APP_SHOOT` 控制，默认均关闭；
 双板固件由 CMake 在构建期分别选择应用和任务源码。板内命令通过 `LocalPublisher` 进入
@@ -64,7 +64,23 @@ Gimbal/Chassis 板间轮询复用该任务，不创建额外控制任务。
 
 ## 4. RobotCmd：命令唯一入口
 
-RobotCmd 不直接访问电机、CAN 或 IMU。上层输入模块通过以下 API 更新目标：
+RobotCmd 不直接访问电机、CAN 或 IMU。输入链现在是：
+
+```text
+UART5 S.BUS → Communication_Update → InputState(Remote)
+VTM / Keyboard / Vision → InputState_Submit*（接入接口，当前未绑定设备）
+InputState → SourceArbitration_Resolve → RobotCmd_Update → Output
+```
+
+`InputState` 是固定的四份状态，不是动态 Topic 路由。Remote 为安全许可：最近 50 ms
+内必须有健康帧且通过 200 ms 解锁去抖。默认选择 Remote；只有遥控模式切换逻辑显式
+调用 `InputState_Select()` 后，才选择 VTM 或 Keyboard。新来源必须在切换后提供新鲜
+命令（100 ms 门限），否则进入安全态，不自动回退。Vision 只有在显式允许、目标新鲜
+且当前来源允许云台控制时，才覆盖云台角目标；目标失效后云台进入 `LOCK`。
+VTM、Keyboard、Vision 当前没有绑定 UART/协议，生产固件不会自动选择或启用它们。
+
+以下设置接口保留供已有调用方使用；控制任务运行时，仲裁结果在每次
+`RobotCmd_Update()` 中覆盖缓存目标：
 
 ```cpp
 void RobotCmd_SetGimbal(const GimbalCmd &command);
@@ -76,7 +92,8 @@ bool RobotCmd_PushShootEvent(const ShootEvent &event);
 连续命令写入本地缓存并设置 dirty 标志，`RobotCmd_Update()` 才通过已注入的 Output
 发布；底盘命令每 10 ms 刷新。Setter 当前没有并发保护，应由 ControlTask 上下文调用，
 不能直接从 ISR/UART 回调并发修改。S.BUS 驱动只在 UART 中断保存完整帧，
-Communication 在 ControlTask 中检查最新帧并调用 RobotCmd；键鼠和 Vision 尚未接入。
+Communication 在 ControlTask 中读取快照并提交 Remote 输入；VTM/键鼠/Vision 的
+未来适配器同样必须在任务上下文提交状态。
 
 S.BUS 使用 UART5：帧新鲜度 50 ms，frame-lost/failsafe 立即锁定；连续 200 ms 健康且
 CH1–CH4 回中后解锁。CH2/CH1 映射底盘前后/左右，CH7 为速度档，CH10 负半轴为手动旋转；

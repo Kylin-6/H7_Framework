@@ -9,6 +9,7 @@
 #include "RobotCmd.h"
 
 #include "message_center.h"
+#include "source_arbitration.h"
 
 static Output<GimbalCmd> Gimbal_Command_Output;
 static Output<ChassisCmd> Chassis_Command_Output;
@@ -32,6 +33,27 @@ static bool Input_Armed;
 static bool Gimbal_Feedback_Valid;
 static bool Shoot_Feedback_Valid;
 static uint8_t RobotCmd_Feedback_Divider;
+static InputSource Last_Input_Source;
+static void RobotCmd_SetInputArmed(bool armed);
+
+static bool GimbalChanged(const GimbalCmd &next)
+{
+    return Gimbal_Command.mode != next.mode ||
+           Gimbal_Command.yaw_angle_rad != next.yaw_angle_rad ||
+           Gimbal_Command.pitch_angle_rad != next.pitch_angle_rad ||
+           Gimbal_Command.yaw_speed_rad_s != next.yaw_speed_rad_s ||
+           Gimbal_Command.pitch_speed_rad_s != next.pitch_speed_rad_s;
+}
+
+static bool ShootChanged(const ShootCmd &next)
+{
+    return Shoot_Command.shoot_mode != next.shoot_mode ||
+           Shoot_Command.friction_mode != next.friction_mode ||
+           Shoot_Command.loader_mode != next.loader_mode ||
+           Shoot_Command.friction_speed_rad_s != next.friction_speed_rad_s ||
+           Shoot_Command.loader_speed_rad_s != next.loader_speed_rad_s ||
+           Shoot_Command.shoot_rate_hz != next.shoot_rate_hz;
+}
 
 bool RobotCmd_Init(Output<GimbalCmd> gimbal_output,
                    Output<ChassisCmd> chassis_output,
@@ -60,11 +82,35 @@ bool RobotCmd_Init(Output<GimbalCmd> gimbal_output,
     Gimbal_Feedback_Valid = false;
     Shoot_Feedback_Valid = false;
     RobotCmd_Feedback_Divider = 0U;
+    Last_Input_Source = InputSource::Remote;
     return true;
 }
 
 void RobotCmd_Update(void)
 {
+    const InputDecision decision = SourceArbitration_Resolve(InputState_Read());
+    const bool source_changed = decision.source != Last_Input_Source;
+    RobotCmd_SetInputArmed(decision.armed);
+    if (decision.armed)
+    {
+        if (source_changed)
+        {
+            Chassis_Command_Dirty = true;
+            ShootEvent discarded{};
+            while (MessageCenter::Shoot_Event_Queue.Pop(discarded)) {}
+        }
+        if (GimbalChanged(decision.gimbal))
+        {
+            RobotCmd_SetGimbal(decision.gimbal);
+        }
+        RobotCmd_SetChassis(decision.chassis);
+        if (ShootChanged(decision.shoot))
+        {
+            RobotCmd_SetShoot(decision.shoot);
+        }
+    }
+    Last_Input_Source = decision.source;
+
     /* 应用反馈以 100 Hz 拉取，首次未收到反馈时 Valid 保持 false。 */
     if (RobotCmd_Feedback_Divider == 0U)
     {
@@ -104,7 +150,7 @@ void RobotCmd_Update(void)
     }
 }
 
-void RobotCmd_SetInputArmed(bool armed)
+static void RobotCmd_SetInputArmed(bool armed)
 {
     if (armed == Input_Armed)
     {

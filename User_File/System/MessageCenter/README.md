@@ -193,9 +193,9 @@ Gimbal_Update（Control_Task，1 kHz）
 ### 6.2 RobotCmd 与 Application
 
 ```text
-上层输入
-  └─ RobotCmd_SetGimbal / SetChassis / SetShoot
-          ↓ dirty 标志
+S.BUS / VTM / Keyboard / Vision
+  └─ InputState → 固定 SourceArbitration
+          ↓ Remote 安全许可与来源时效检查
      RobotCmd_Update
           ↓ Output::Publish 最新命令
  SingleBoard: 本地 Topic → Gimbal / Chassis / Shoot Subscriber

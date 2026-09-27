@@ -1,6 +1,6 @@
 #include "Com.h"
 
-#include "RobotCmd.h"
+#include "input_state.h"
 #include "sbus.h"
 #include "usart.h"
 
@@ -15,10 +15,6 @@ constexpr float CHANNEL_RANGE = 784.0f;
 constexpr int16_t NEUTRAL_THRESHOLD = 50;
 constexpr uint32_t FRAME_FRESH_MS = 50U;
 constexpr uint32_t RECOVERY_MS = 200U;
-
-/* 旧工程的 30/50 不使用 SI，不能直接移植；实车标定前限制调试速度。 */
-constexpr float MAX_TRANSLATION_M_S = 0.5f;
-constexpr float MAX_ROTATION_RAD_S = 1.0f;
 
 bool receiver_ready;
 bool armed;
@@ -56,7 +52,8 @@ bool Communication_Init(void)
 {
     armed = false;
     last_unhealthy_ms = HAL_GetTick();
-    RobotCmd_SetInputArmed(false);
+    InputState_Reset();
+    InputState_SetTime(last_unhealthy_ms);
     receiver_ready = SBUS_Init(&huart5);
     return receiver_ready;
 }
@@ -65,6 +62,7 @@ void Communication_Update(void)
 {
     Struct_SBUS_Frame frame{};
     const uint32_t now = HAL_GetTick();
+    InputState_SetTime(now);
     const bool healthy = receiver_ready && SBUS_ReadLatest(&frame) &&
                          now - frame.timestamp_ms <= FRAME_FRESH_MS &&
                          !frame.frame_lost && !frame.failsafe;
@@ -72,7 +70,7 @@ void Communication_Update(void)
     {
         last_unhealthy_ms = now;
         armed = false;
-        RobotCmd_SetInputArmed(false);
+        InputState_SubmitRemote({});
         return;
     }
 
@@ -81,30 +79,35 @@ void Communication_Update(void)
         if (!Neutral(frame))
         {
             last_unhealthy_ms = now;
+            InputState_SubmitRemote({});
             return;
         }
         if (now - last_unhealthy_ms < RECOVERY_MS)
         {
+            InputState_SubmitRemote({});
             return;
         }
         armed = true;
-        RobotCmd_SetInputArmed(true);
     }
 
     const float gear = Clamp((static_cast<float>(frame.channels[SPEED_GEAR]) +
                               CHANNEL_RANGE) / (2.0f * CHANNEL_RANGE), 0.0f, 1.0f);
     ChassisCmd chassis{};
-    chassis.velocity_x_m_s = Axis(frame.channels[TRANSLATE_X]) * gear * MAX_TRANSLATION_M_S;
-    chassis.velocity_y_m_s = -Axis(frame.channels[TRANSLATE_Y]) * gear * MAX_TRANSLATION_M_S;
+    chassis.velocity_x_m_s = Axis(frame.channels[TRANSLATE_X]) * gear * INPUT_MAX_TRANSLATION_M_S;
+    chassis.velocity_y_m_s = -Axis(frame.channels[TRANSLATE_Y]) * gear * INPUT_MAX_TRANSLATION_M_S;
     if (frame.channels[ROTATION] < 0)
     {
         chassis.angular_velocity_rad_s = Axis(frame.channels[ROTATION]) * gear *
-                                         MAX_ROTATION_RAD_S;
+                                         INPUT_MAX_ROTATION_RAD_S;
     }
     if (chassis.velocity_x_m_s != 0.0f || chassis.velocity_y_m_s != 0.0f ||
         chassis.angular_velocity_rad_s != 0.0f)
     {
         chassis.mode = ChassisMode::NO_FOLLOW;
     }
-    RobotCmd_SetChassis(chassis);
+    ControlInput remote{};
+    remote.chassis = chassis;
+    remote.received_ms = frame.timestamp_ms;
+    remote.valid = true;
+    InputState_SubmitRemote(remote);
 }
