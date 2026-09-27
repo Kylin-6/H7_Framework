@@ -289,7 +289,7 @@ Tests 各自独立，根工程没有统一主机测试入口，当前 .github �
 
 **验收：** 上述定向复现成为可自动回归的失败/通过用例；单位错误、停止提交失败和输入失联均能被 CI 拦截。
 
-依据：[Boundary 构建源列表](/home/kylin6/code/project/rm/opensourse/H7_BSP/Tests/Boundary/CMakeLists.txt:10)、[Topic 测试入口](/home/kylin6/code/project/rm/opensourse/H7_BSP/Tests/Topic/CMakeLists.txt:6)、[当前测试说明](/home/kylin6/code/project/rm/opensourse/H7_BSP/README.md:281)。
+依据：`RoboMaster_Test` 分支中的 `Tests/Boundary/CMakeLists.txt`、`Tests/Topic/CMakeLists.txt`、[当前测试说明](/home/kylin6/code/project/rm/opensourse/H7_BSP/README.md:281)。
 
 ### 19｜P2：诊断接口分散，尚未形成整车可观测性和资源预算
 

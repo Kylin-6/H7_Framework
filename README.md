@@ -44,7 +44,6 @@ Middlewares/                FreeRTOS、USB Device、CMSIS-DSP 等依赖
 USB_DEVICE/                 USB CDC 设备配置
 User_Config/                链接脚本、FreeRTOS 补丁与烧录配置
 SystemView/                 SEGGER SystemView 与 RTT
-Tests/                      独立主机算法与通信边界回归
 sysid/                      系统辨识数据、脚本与报告
 ```
 
@@ -130,14 +129,14 @@ EricTool 的 USB/UART 解析均只读取回调传入的缓冲区及有效长度�
 
 - **PID**：死区作用于有效误差，不修改调用者目标；积分在本周期累加后限幅，支持负 `Ki`，`Ki=0` 时清空积分。积分限幅为零表示不限制积分，积分分离和变速积分的阈值约定见头文件。
 - **D 支路滤波**：`D_Filter_Cutoff` 使用 Hz，默认 `0` 关闭；与 `D_First` 微分先行独立配置。先滤波差分速率，再乘 `Kd`；DJI 的 `PID_InitTypeDef` 配置已透传该字段。首次启用或切换微分来源时滤波状态从零开始，持续启用且来源不变时保留滤波值。PID 参数更新不自动清空全部历史状态，死区也不保证总输出为零。
-- **Trajectory**：独立于原有 Slope，一个对象管理一个轴。位置目标以零速度、零加速度到达；速度目标到达后保持匀速，设置零速度可平滑停止。目标在下一周期从当前规划的 `p/v/a` 接续，重复目标不重新规划。模块不分配堆内存、不创建任务，不保证时间最优或多轴同步；制动距离内改目标允许必要的越过与返回。接口、错误处理和接入示例见 [轨迹说明](Tests/Trajectory/README.md)。
+- **Trajectory**：独立于原有 Slope，一个对象管理一个轴。位置目标以零速度、零加速度到达；速度目标到达后保持匀速，设置零速度可平滑停止。目标在下一周期从当前规划的 `p/v/a` 接续，重复目标不重新规划。模块不分配堆内存、不创建任务，不保证时间最优或多轴同步；制动距离内改目标允许必要的越过与返回。接口、错误处理和接入示例见 `RoboMaster_Test` 分支的 `Tests/Trajectory/README.md`。
 
 ### 滤波、估计与模糊推理约定
 
 - **One Euro**：固定周期标量输入，以首帧对齐初值；最低截止频率、速率系数 `Beta` 与导数截止频率可配置。周期或参数改变时重新初始化。
-- **Polynomial**：默认二阶、支持 0～3 阶，窗口最多 33 点，在最新样本时刻求值。0 阶为移动平均；未收满窗口时原量直通、导数清零且 `Ready=false`，高于拟合阶数的导数恒为零。调用方负责等间隔新样本、量纲与角度展开，缺测后重置；接口与验证见 [多项式滤波说明](Tests/FilterPolynomial/README.md)。
+- **Polynomial**：默认二阶、支持 0～3 阶，窗口最多 33 点，在最新样本时刻求值。0 阶为移动平均；未收满窗口时原量直通、导数清零且 `Ready=false`，高于拟合阶数的导数恒为零。调用方负责等间隔新样本、量纲与角度展开，缺测后重置；接口与验证见 `RoboMaster_Test` 分支的 `Tests/FilterPolynomial/README.md`。
 - **Kalman**：每周期先预测，缺测时跳过测量更新，状态与协方差仍连续推进；恢复有效测量后再执行更新。
-- **Sugeno**：调用方提供有序节点和完整规则表，节点/规则在使用期间保持有效且只读；输入超范围时保持边界值。输入缩放、微分、规则设计及 PID 增益映射由应用负责，库中没有预设的电机或云台控制规则。使用方式与独立参考对照见 [模糊推理说明](Tests/Fuzzy/README.md)。
+- **Sugeno**：调用方提供有序节点和完整规则表，节点/规则在使用期间保持有效且只读；输入超范围时保持边界值。输入缩放、微分、规则设计及 PID 增益映射由应用负责，库中没有预设的电机或云台控制规则。使用方式与独立参考对照见 `RoboMaster_Test` 分支的 `Tests/Fuzzy/README.md`。
 
 ## 系统服务
 
@@ -279,35 +278,19 @@ cmake --build --preset Release
 
 ### 主机回归
 
-仓库内提供独立 CMake 测试工程，使用主机 C++ 编译器直接编译生产源码，按需以桩函数替换硬件接口。不要给这些工程加载固件 ARM 工具链。
+项目自有测试统一保存在 `RoboMaster_Test` 分支；`RoboMaster_H7` 不包含 `Tests/`。
+测试分支保留完整固件源码及 10 个主机测试工程（57 项测试），包括测试桩、参考数据、
+生成脚本和各套件 README。第三方 CMSIS 等依赖自带的测试文件仍随依赖保留。
 
-| 工程 | 覆盖范围 |
-| --- | --- |
-| [Fuzzy](Tests/Fuzzy/README.md) | 独立 Sugeno 参考模型、9 万个随机输入、多输出、非均匀节点及配置/输入边界 |
-| [Boundary](Tests/Boundary) | PID 积分/死区/D 低通、KF 连续缺测、电机命令失败返回、EricTool 有界解析、UART DMA 发送寿命及忙/失败路径，共 5 组 |
-| [Trajectory](Tests/Trajectory/README.md) | 输入契约、6 万组随机初态、1657 组边界初态、10 万次逐周期改目标、连续信号跟随及分段连续性，共 5 组 |
-| [FilterPolynomial](Tests/FilterPolynomial/README.md) | 0～3 阶独立系数、流式卷积、解析导数、生命周期及配置失败状态保留，共 5 组 |
-| [CAN](Tests/CAN) | 命令 FIFO、周期发送槽、HAL/FIFO 失败统计及回调注册边界 |
-| [Communication](Tests/Communication/README.md) | CAN 接收边界、USB 缓冲所有权与重连、OSPI 提交失败，共 17 组 |
-| [Gimbal](Tests/Gimbal/README.md) | 双达妙控制、配置、失能重试与自动恢复，共 14 组 |
-| [Initialization](Tests/Initialization/README.md) | BMI088/Flash 初始化、Flash 失败传播和启动分级，共 7 组 |
-| [Topic](Tests/Topic) | Latest-Value 发布读取、元信息一致性和 `ReadFresh()` 时间边界 |
-| [SBUS](Tests/SBUS) | 分片/合帧解析、重同步、在线超时以及 failsafe 健康状态 |
+需要运行回归时，在工作区干净的情况下切换到测试分支，按该分支 README 的主机回归
+步骤操作：
 
-在仓库根目录运行下列 PowerShell 命令；将 `g++` 替换为本机主机编译器路径：
-
-```powershell
-foreach ($suite in @("Fuzzy", "Boundary", "Trajectory", "FilterPolynomial", "CAN", "Topic", "SBUS", "Communication", "Initialization", "Gimbal")) {
-    cmake -S "Tests/$suite" -B "build/Tests_$suite" -G Ninja -DCMAKE_CXX_COMPILER=g++ -DCMAKE_BUILD_TYPE=Debug
-    if ($LASTEXITCODE -ne 0) { throw "$suite 配置失败" }
-    cmake --build "build/Tests_$suite"
-    if ($LASTEXITCODE -ne 0) { throw "$suite 构建失败" }
-    ctest --test-dir "build/Tests_$suite" --output-on-failure
-    if ($LASTEXITCODE -ne 0) { throw "$suite 测试失败" }
-}
+```sh
+git switch RoboMaster_Test
 ```
 
-可靠性修改应至少运行 Boundary、CAN、Topic、SBUS、Communication、Initialization 与 Gimbal；算法修改再运行对应算法套件。主机测试不代替实际 DMA/CAN 通信、电机闭环和实时性验证；新增算法仍需由应用接入，Trajectory 尚未测量板上的最坏重规划耗时。
+后续固件改动需要同步到测试分支再验证；不要把本次删除 `Tests/` 的提交同步过去，
+也不要通过合并测试分支将测试目录重新引入固件分支。主机测试不代替实机通信和实时性验证。
 
 ### 烧录与观察
 

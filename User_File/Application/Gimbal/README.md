@@ -66,7 +66,7 @@ QD4310 驱动仍作为独立设备保留，云台不再依赖它。默认 `H7_AP
 
 ## 验证
 
-[Tests/Gimbal](../../../Tests/Gimbal/README.md) 编译真实云台、达妙驱动、PID、Daemon
+`RoboMaster_Test` 分支的 `Tests/Gimbal` 编译真实云台、达妙驱动、PID、Daemon
 和消息中心，验证协议、控制、失效及恢复。固件构建覆盖默认、仅云台及三应用开启配置。
 尚未完成板测：需要验证型号/量程、方向/零位、MIT 增益、Yaw 转矩环、机械限位、
 CAN 满载、断线恢复、使能顺序及实际控制周期。
