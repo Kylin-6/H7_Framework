@@ -122,6 +122,7 @@ void Class_DMMotor::FeedbackCallback(FDCAN_HandleTypeDef *callback_hfdcan,
     motor->feedback.mos_temperature = data[6];
     motor->feedback.rotor_temperature = data[7];
     /* 只有完整通过 ID、长度和节点校验的反馈帧才能刷新在线状态。 */
+    motor->last_feedback_us = SYS_Timestamp.Get_Now_Microsecond();
     motor->feedback_daemon.Feed();
 }
 
@@ -133,7 +134,7 @@ void Class_DMMotor::FeedbackCallback(FDCAN_HandleTypeDef *callback_hfdcan,
 void Class_DMMotor::OfflineCallback(void *owner)
 {
     Class_DMMotor *motor = static_cast<Class_DMMotor *>(owner);
-    if (motor != nullptr)
+    if (motor != nullptr && motor->auto_enable_on_offline)
     {
         (void)motor->Enable();
     }
@@ -195,6 +196,22 @@ bool Class_DMMotor::Init(FDCAN_HandleTypeDef *motor_hfdcan,
     }
     /* 对象为静态生命周期，可安全交由固定容量管理器长期保存地址。 */
     return DaemonManager::Register(feedback_daemon);
+}
+
+Struct_DMMotor_Snapshot Class_DMMotor::GetFeedbackSnapshot() const
+{
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    __DMB();
+    Struct_DMMotor_Snapshot snapshot;
+    snapshot.feedback = feedback;
+    const uint64_t now = SYS_Timestamp.Get_Now_Microsecond();
+    snapshot.online = feedback_initialized && now >= last_feedback_us &&
+                      now - last_feedback_us < 100000U;
+    snapshot.enabled = snapshot.feedback.state == 1U;
+    __DMB();
+    if (primask == 0U) { __enable_irq(); }
+    return snapshot;
 }
 
 bool Class_DMMotor::IsOnline() const
@@ -321,11 +338,11 @@ bool Class_DMMotor::SetMode(Enum_DMMotor_Mode new_mode)
 
 /**
  * @brief 更新 CAN 周期发送槽，同一 (总线, ID) 只保留最新控制帧。
- * @note 此处仅发布缓冲，不等待硬件发送，也未向上层返回发布结果。
+ * @note 此处仅发布缓冲，不等待硬件发送，返回软件槽发布结果。
  */
-void Class_DMMotor::Publish(const Struct_CAN_Tx_Msg &message)
+bool Class_DMMotor::Publish(const Struct_CAN_Tx_Msg &message)
 {
-    CAN_Tx_Perform(&message);
+    return CAN_Tx_Perform(&message);
 }
 
 /**
@@ -333,7 +350,7 @@ void Class_DMMotor::Publish(const Struct_CAN_Tx_Msg &message)
  * @note 反向配置只改变位置、速度、转矩符号，kp/kd 保持非负；量程需与电机端一致。
  *       本函数直接发布 MIT 格式报文，调用者需保证电机已处于对应模式。
  */
-void Class_DMMotor::SetMIT(float position_rad,
+bool Class_DMMotor::SetMIT(float position_rad,
                            float velocity_rad_s,
                            float kp,
                            float kd,
@@ -368,7 +385,7 @@ void Class_DMMotor::SetMIT(float position_rad,
     message.data[5] = (uint8_t)(derivative >> 4);
     message.data[6] = (uint8_t)(((derivative & 0x0FU) << 4) | (torque >> 8));
     message.data[7] = (uint8_t)torque;
-    Publish(message);
+    return Publish(message);
 }
 
 /**
@@ -437,7 +454,7 @@ void Class_DMMotor::SetForcePosition(float position_rad,
 }
 
 /** @brief 复用 MIT 帧实现纯转矩目标：kp/kd 置零，仅保留转矩项，电机需处于 MIT 模式。 */
-void Class_DMMotor::SetTorque(float torque_nm)
+bool Class_DMMotor::SetTorque(float torque_nm)
 {
-    SetMIT(0.0f, 0.0f, 0.0f, 0.0f, torque_nm);
+    return SetMIT(0.0f, 0.0f, 0.0f, 0.0f, torque_nm);
 }

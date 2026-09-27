@@ -59,6 +59,9 @@ struct INS_State
     float gyro_z_rad_s = 0.0f;
 };
 
+/** 两轴目标均为 INS 姿态 rad；速度字段为 IMU 模式的 rad/s 前馈。
+ * LOCK 捕获当前姿态并忽略目标字段；自动恢复后 IMU 需发布新目标。
+ */
 struct GimbalCmd
 {
     float yaw_angle_rad = 0.0f;
@@ -86,6 +89,9 @@ struct ShootCmd
     LoaderMode loader_mode = LoaderMode::STOP;
 };
 
+/** 姿态来自 INS；enabled 表示两轴新鲜反馈均为使能，不等同于控制已 READY。
+ * gyro 轴由云台配置选择；INS 无效时姿态/速度清零，调用者须检查 ins_valid。
+ */
 struct GimbalFeedback
 {
     float yaw_rad = 0.0f;

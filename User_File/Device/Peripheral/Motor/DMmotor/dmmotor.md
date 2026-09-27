@@ -151,11 +151,18 @@ motor.feedback.rotor_temperature;
 反馈包含电机 ID 校验，并支持多圈位置累计和方向反转。
 
 MIT 的 `kp`、`kd` 是发给电机内部控制器的控制参数，不属于反馈；当前驱动没有本地 PID 对象。
-结构体仅用于数据组织，不提供跨中断的一致快照保证。
+直接读取公开 feedback 结构体不保证跨中断一致性；控制计算应使用
+`GetFeedbackSnapshot()` 一次获取运动反馈、online 和 enabled。该接口在短临界区内
+复制，online 按最近一次运动反馈的 100 ms 截止时间计算，不等待 StatusTask。
+
+`SetMIT()`、`SetTorque()` 返回软件周期槽更新结果，false 时由应用处理；不表示设备已执行。
+初始化阶段可调用 `SetAutoEnableOnOffline(false)` 关闭单次掉线使能回调，由应用管理恢复；
+其他实例默认仍保留原行为。
 
 ## 接入示例
 
-当前 [Control_Task.cpp](../../../../Task/Control_Task.cpp) 尚未创建或控制达妙电机。以下是待集成的速度控制示例，不代表工程上电后会自动执行：
+[双达妙云台](../../../../Application/Gimbal/README.md) 已由 ControlTask 接入，默认关闭
+云台编译选项。以下是独立速度模式接入示例，不是云台的 MIT 控制实现：
 
 - FDCAN1
 - CAN ID：`0x01`

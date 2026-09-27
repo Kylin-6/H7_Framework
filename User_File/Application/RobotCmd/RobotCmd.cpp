@@ -45,7 +45,7 @@ void RobotCmd_Init(void)
     Chassis_Command = {};
     Shoot_Command = {};
     /*
-     * RM 安全启动默认值：云台保持 Gimbal_Init 捕获的姿态；底盘保持零力矩，
+     * RM 安全启动默认值：云台就绪后捕获并保持当前姿态；底盘保持零力矩，
      * 发射机构保持关闭。
      */
     Gimbal_Command.mode = GimbalMode::LOCK;

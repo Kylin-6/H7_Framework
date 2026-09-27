@@ -32,6 +32,14 @@ struct Struct_DMMotor_Feedback
     float rotor_temperature = 0.0f; ///< 转子温度，摄氏度。
 };
 
+/** 同一时刻取得的运动反馈与状态；online 按最近反馈时间判定，不等待 StatusTask。 */
+struct Struct_DMMotor_Snapshot
+{
+    Struct_DMMotor_Feedback feedback{};
+    bool online = false;
+    bool enabled = false;
+};
+
 class Class_DMMotor
 {
 public:
@@ -58,9 +66,10 @@ public:
 
     /** @name 连续控制目标
      *  @brief 更新对应 CAN 周期槽；同一总线和 ID 的旧目标会被最新值覆盖。
+     *         SetMIT/SetTorque 返回是否成功更新软件槽，不代表硬件执行。
      */
     ///@{
-    void SetMIT(float position_rad,
+    bool SetMIT(float position_rad,
                 float velocity_rad_s,
                 float kp,
                 float kd,
@@ -70,8 +79,14 @@ public:
     void SetForcePosition(float position_rad,
                           float velocity_limit_rad_s,
                           float current_limit_ratio);
-    void SetTorque(float torque_nm);
+    bool SetTorque(float torque_nm);
+
     ///@}
+
+    /** 获取一致快照；enabled 是协议状态，使用前还需检查 online。 */
+    Struct_DMMotor_Snapshot GetFeedbackSnapshot() const;
+    /** 初始化阶段设置；false 时由 Application 管理掉线恢复，默认保持原自动使能行为。 */
+    void SetAutoEnableOnOffline(bool enable) { auto_enable_on_offline = enable; }
 
     /** 最近 100 ms 内收到过合法运动反馈时返回 true。 */
     bool IsOnline() const;
@@ -92,10 +107,10 @@ private:
                                  uint8_t *data,
                                  uint32_t len,
                                  void *context);
-    /** Daemon 的 Online -> Offline 跃迁回调；每次跃迁最多提交一次使能帧。 */
+    /** Daemon 的 Online -> Offline 跃迁回调；允许自动恢复时，每次跃迁最多提交一次使能帧。 */
     static void OfflineCallback(void *owner);
     bool SendModeCommand(uint8_t command);
-    void Publish(const Struct_CAN_Tx_Msg &message);
+    bool Publish(const Struct_CAN_Tx_Msg &message);
     uint32_t ControlId() const;
 
     FDCAN_HandleTypeDef *hfdcan = nullptr;
@@ -109,6 +124,8 @@ private:
     float position_max = 12.5f;
     float velocity_max = 30.0f;
     float torque_max = 10.0f;
+    bool auto_enable_on_offline = true;
+    uint64_t last_feedback_us = 0;
     bool feedback_initialized = false;
     float last_position = 0.0f;
     int32_t total_round = 0;

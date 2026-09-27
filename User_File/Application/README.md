@@ -28,7 +28,7 @@ Application 不应：
 | 模块 | 职责 | 拥有/调用的主要对象 |
 | --- | --- | --- |
 | `RobotCmd` | 统一接收上层输入、发布应用命令、汇总反馈 | Message Center Publisher/Subscriber |
-| `Gimbal` | 云台模式、目标角/速度、QD4310 控制和反馈 | Yaw/Pitch QD4310、PID、INS Topic |
+| `Gimbal` | 云台模式、目标角/速度、达妙控制和反馈 | 两轴 Class_DMMotor、Yaw PID、INS Topic |
 | `Chassis` | 四舵轮运动学、最短转向和电机目标 | 8 个 DJI 电机及电机组 |
 | `Shoot` | 摩擦轮、拨弹连续模式和离散射击动作 | 3 个 DJI 电机、ShootEvent FIFO |
 | `Communication` | 当前通信应用骨架 | 后续外部输入或传输接入点 |
@@ -93,13 +93,18 @@ RobotCmd 直接发布。
 | --- | --- |
 | `DISABLED` | 关闭 Yaw/Pitch 输出 |
 | `IMU` | 使用命令目标与 INS 状态执行闭环 |
-| `LOCK` | 锁住当前姿态或给定姿态 |
+| `LOCK` | 捕获并保持当前姿态，忽略命令目标字段 |
 
-Yaw 使用角度外环与速度内环，速度内环输出电流命令；Pitch 当前使用 QD4310 内置位置
-环。机械角限制在下发前再次约束，避免手动设置绕过范围。
+Yaw 使用 INS 角度/速度串级闭环，通过达妙 MIT 纯转矩指令输出 N·m；Pitch 将 INS
+姿态误差转换为 MIT 电机位置/速度目标，并限制机械范围。两轴预先配置为 MIT 模式。
 
-初始化最多等待电机使能 2 秒；超时保留明确错误状态并返回，不能阻塞其他 Application
-初始化。成功时读取最新 INS Yaw 和 Pitch 电机角度作为锁定目标。
+初始化仅校验配置和注册驱动。使能、两秒超时、一秒退避和自动恢复均由 Update
+非阻塞推进；恢复需反馈持续有效 100 ms，随后重置控制器并捕获当前姿态。IMU 模式
+需在恢复后发布新目标，避免旧目标重放；DISABLED 或故障时清零两轴 MIT 输出并重试失能。
+
+配置集中在 [Gimbal_Config.h](Gimbal/Gimbal_Config.h)。默认关闭云台编译选项；Yaw 转矩环
+增益全零，Pitch 增益和限位来自参考机构示例，均须实机标定。完整公式、参数来源、
+状态语义和测试见 [双达妙云台说明](Gimbal/README.md)。
 
 ### 5.3 反馈
 
@@ -189,7 +194,7 @@ void Example_Update(void);
 ### Gimbal
 
 - FDCAN 总线、节点 ID、机械范围和方向。
-- QD4310 模式、使能反馈和 Yaw/Pitch PID。
+- 两轴达妙 MIT 模式与协议量程、Yaw 转矩 PID、Pitch MIT 增益及限位。
 - INS 坐标系、角度符号和零位。
 
 ### Chassis

@@ -3,8 +3,9 @@
 Parts of the Application-layer design and control logic were adapted from:
 
 - Meta-Embedded-NG, Copyright (c) 2025 Meta-Team
+- basic_framework, Copyright (c) 2022 NeoZng
 
-Meta-Embedded-NG is distributed under the MIT License:
+Both projects are distributed under the MIT License:
 
 > Permission is hereby granted, free of charge, to any person obtaining a copy
 > of this software and associated documentation files (the "Software"), to deal

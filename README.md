@@ -200,7 +200,7 @@ Control_Task 调度顺序、RobotCmd 所有权、Gimbal/Chassis/Shoot 行为和�
 
 ### 数据新鲜度、发送与可观测性
 
-- `Topic<T>::ReadFresh()` 用发布时间戳拒绝过期数据。云台对 INS 使用 10 ms 新鲜度门限；失效时 Yaw 输出零电流、Pitch 保持最后内部位置，恢复新鲜数据后再继续闭环。
+- `Topic<T>::ReadFresh()` 用发布时间戳拒绝过期数据。云台对 INS 使用 10 ms 新鲜度门限；失效时两轴达妙清零 MIT 输出并重试失能；反馈持续有效后自动恢复并捕获当前姿态，IMU 模式等待新目标。见 [云台说明](User_File/Application/Gimbal/README.md)。
 - 连续控制目标走 `CAN_Tx_Perform()`，同一 `(FDCAN, ID)` 只保留最新值；使能、失能、清错和模式设置走 `CAN_Tx_Submit()` FIFO。软件接收成功、写入硬件 FIFO 和设备实际执行是三个不同阶段。
 - `BSP_CAN_GetTxStats()` 提供命令队列满、周期槽满、硬件 FIFO 满和 HAL 发送失败的饱和计数快照。计数只提供证据，不自动改变调度或执行安全策略。
 - 主机测试可以确认协议编解码、ID/DLC 隔离、超时边界、队列溢出和数据新鲜度；真实波特率/采样点、终端电阻、总线仲裁、供电时序、电机参数和 EMC 必须在目标板上确认。
@@ -289,6 +289,7 @@ cmake --build --preset Release
 | [FilterPolynomial](Tests/FilterPolynomial/README.md) | 0～3 阶独立系数、流式卷积、解析导数、生命周期及配置失败状态保留，共 5 组 |
 | [CAN](Tests/CAN) | 命令 FIFO、周期发送槽、HAL/FIFO 失败统计及回调注册边界 |
 | [Communication](Tests/Communication/README.md) | CAN 接收边界、USB 缓冲所有权与重连、OSPI 提交失败，共 17 组 |
+| [Gimbal](Tests/Gimbal/README.md) | 双达妙控制、配置、失能重试与自动恢复，共 14 组 |
 | [Initialization](Tests/Initialization/README.md) | BMI088/Flash 初始化、Flash 失败传播和启动分级，共 7 组 |
 | [Topic](Tests/Topic) | Latest-Value 发布读取、元信息一致性和 `ReadFresh()` 时间边界 |
 | [SBUS](Tests/SBUS) | 分片/合帧解析、重同步、在线超时以及 failsafe 健康状态 |
@@ -296,7 +297,7 @@ cmake --build --preset Release
 在仓库根目录运行下列 PowerShell 命令；将 `g++` 替换为本机主机编译器路径：
 
 ```powershell
-foreach ($suite in @("Fuzzy", "Boundary", "Trajectory", "FilterPolynomial", "CAN", "Topic", "SBUS", "Communication", "Initialization")) {
+foreach ($suite in @("Fuzzy", "Boundary", "Trajectory", "FilterPolynomial", "CAN", "Topic", "SBUS", "Communication", "Initialization", "Gimbal")) {
     cmake -S "Tests/$suite" -B "build/Tests_$suite" -G Ninja -DCMAKE_CXX_COMPILER=g++ -DCMAKE_BUILD_TYPE=Debug
     if ($LASTEXITCODE -ne 0) { throw "$suite 配置失败" }
     cmake --build "build/Tests_$suite"
@@ -306,7 +307,7 @@ foreach ($suite in @("Fuzzy", "Boundary", "Trajectory", "FilterPolynomial", "CAN
 }
 ```
 
-可靠性修改应至少运行 Boundary、CAN、Topic、SBUS、Communication 与 Initialization；算法修改再运行对应算法套件。主机测试不代替实际 DMA/CAN 通信、电机闭环和实时性验证；新增算法仍需由应用接入，Trajectory 尚未测量板上的最坏重规划耗时。
+可靠性修改应至少运行 Boundary、CAN、Topic、SBUS、Communication、Initialization 与 Gimbal；算法修改再运行对应算法套件。主机测试不代替实际 DMA/CAN 通信、电机闭环和实时性验证；新增算法仍需由应用接入，Trajectory 尚未测量板上的最坏重规划耗时。
 
 ### 烧录与观察
 
