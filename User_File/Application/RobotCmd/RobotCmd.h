@@ -4,8 +4,8 @@
 #include "message_types.h"
 #include "output.h"
 
-/** 装载机器人安全启动默认命令。 */
-void RobotCmd_Init(Output<GimbalCmd> gimbal_output,
+/** 三个输出均绑定后装载安全启动默认命令；失败时不修改原绑定。 */
+bool RobotCmd_Init(Output<GimbalCmd> gimbal_output,
                    Output<ChassisCmd> chassis_output,
                    Output<ShootCmd> shoot_output);
 /** 周期读取模块反馈；底盘命令每 10 ms 刷新。 */

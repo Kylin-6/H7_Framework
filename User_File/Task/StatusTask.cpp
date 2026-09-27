@@ -1,7 +1,7 @@
 /**
  * @file StatusTask.cpp
  * @brief 低频设备在线状态检查任务。
- * @details 本任务只调度 DaemonManager，不执行安全策略、日志或设备控制。
+ * @details 调度 DaemonManager，并在装有 DM 电机的固件上限频服务入队失败的恢复命令。
  */
 
 #include "daemon.h"

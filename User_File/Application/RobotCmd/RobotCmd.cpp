@@ -31,10 +31,15 @@ static bool Gimbal_Feedback_Valid;
 static bool Shoot_Feedback_Valid;
 static uint8_t RobotCmd_Feedback_Divider;
 
-void RobotCmd_Init(Output<GimbalCmd> gimbal_output,
+bool RobotCmd_Init(Output<GimbalCmd> gimbal_output,
                    Output<ChassisCmd> chassis_output,
                    Output<ShootCmd> shoot_output)
 {
+    if (!gimbal_output.IsBound() || !chassis_output.IsBound() ||
+        !shoot_output.IsBound())
+    {
+        return false;
+    }
     Gimbal_Command_Output = gimbal_output;
     Chassis_Command_Output = chassis_output;
     Shoot_Command_Output = shoot_output;
@@ -51,6 +56,7 @@ void RobotCmd_Init(Output<GimbalCmd> gimbal_output,
     Gimbal_Feedback_Valid = false;
     Shoot_Feedback_Valid = false;
     RobotCmd_Feedback_Divider = 0U;
+    return true;
 }
 
 void RobotCmd_Update(void)

@@ -136,7 +136,7 @@ private:
     bool feedback_initialized = false;
     float last_position = 0.0f;
     int32_t total_round = 0;
-    Daemon feedback_daemon{100U, OfflineCallback, this}; ///< 仅合法运动反馈喂狗；掉线跃迁时尝试一次使能。
+    Daemon feedback_daemon{100U, OfflineCallback, this}; ///< 仅合法运动反馈喂狗；掉线跃迁时首次尝试使能。
 };
 
 #endif

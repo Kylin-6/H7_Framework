@@ -13,9 +13,11 @@ public:
     Output() = default;
     Output(void *context, PublishFn publish) : context_(context), publish_(publish) {}
 
+    bool IsBound() const { return context_ != nullptr && publish_ != nullptr; }
+
     void Publish(const T &data) const
     {
-        if (publish_ != nullptr)
+        if (IsBound())
         {
             publish_(context_, data);
         }

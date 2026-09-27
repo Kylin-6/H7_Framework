@@ -17,12 +17,15 @@ extern "C" void Control_Task(void *)
     }
 
     BoardTransport_Init();
-    Gimbal_Init();
-    (void)Shoot_Init();
     static LocalPublisher<GimbalCmd> gimbal_output(MessageCenter::Gimbal_Command_Topic);
     static RemotePublisher<ChassisCmd> chassis_output;
     static LocalPublisher<ShootCmd> shoot_output(MessageCenter::Shoot_Command_Topic);
-    RobotCmd_Init(gimbal_output.Bind(), chassis_output.Bind(), shoot_output.Bind());
+    if (!RobotCmd_Init(gimbal_output.Bind(), chassis_output.Bind(), shoot_output.Bind()))
+    {
+        for (;;) osDelay(1000U);
+    }
+    Gimbal_Init();
+    (void)Shoot_Init();
 
     for (;;)
     {
