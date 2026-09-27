@@ -86,7 +86,6 @@ bool Class_BMI088_Gyro::Init()
     FIFO_Last_Enqueued_Timestamp_Us = 0U;
     FIFO_Sample_Period_Us = BMI088_GYRO_NOMINAL_SAMPLE_PERIOD_US;
     FIFO_Batch_Sample_Period_Us = BMI088_GYRO_NOMINAL_SAMPLE_PERIOD_US;
-    FIFO_Batch_From_Interrupt = false;
     FIFO_Overrun_Latched = false;
     FIFO_Sample_Sequence = 0U;
     FIFO_Interrupt_Count = 0U;
@@ -252,7 +251,6 @@ uint8_t Class_BMI088_Gyro::SPI_RxCallback(const uint64_t &__Ready_Timestamp_Us)
         FIFO_Batch_Total_Frame_Count = frame_count;
         FIFO_Batch_Processed_Frame_Count = 0U;
         FIFO_Batch_Anchor_Timestamp_Us = __Ready_Timestamp_Us;
-        FIFO_Batch_From_Interrupt = from_interrupt;
         FIFO_Batch_Sample_Period_Us = FIFO_Sample_Period_Us;
         if (!from_interrupt && FIFO_Last_Enqueued_Timestamp_Us != 0U &&
             __Ready_Timestamp_Us > FIFO_Last_Enqueued_Timestamp_Us)
@@ -312,10 +310,9 @@ uint8_t Class_BMI088_Gyro::SPI_RxCallback(const uint64_t &__Ready_Timestamp_Us)
             Vector_Raw_Gyro = gyro;
             Valid_Flag = valid;
 
+            // The last FIFO frame is the newest frame at the batch anchor.
             const uint8_t anchor_frame_index =
-                FIFO_Batch_From_Interrupt
-                    ? BMI088_GYRO_FIFO_WATERMARK_FRAME_COUNT - 1U
-                    : FIFO_Batch_Total_Frame_Count - 1U;
+                FIFO_Batch_Total_Frame_Count - 1U;
             const int32_t frame_offset =
                 static_cast<int32_t>(FIFO_Batch_Processed_Frame_Count) + i -
                 static_cast<int32_t>(anchor_frame_index);
@@ -340,10 +337,9 @@ uint8_t Class_BMI088_Gyro::SPI_RxCallback(const uint64_t &__Ready_Timestamp_Us)
             if (FIFO_Last_Enqueued_Timestamp_Us != 0U &&
                 sample_timestamp_us <= FIFO_Last_Enqueued_Timestamp_Us)
             {
-                const uint64_t sample_step_us = static_cast<uint64_t>(
-                    FIFO_Batch_Sample_Period_Us + 0.5f);
-                sample_timestamp_us = FIFO_Last_Enqueued_Timestamp_Us +
-                                      (sample_step_us != 0U ? sample_step_us : 1U);
+                // Preserve ordering without integrating a rounded sample period
+                // into the next batch's hardware-clock anchor.
+                sample_timestamp_us = FIFO_Last_Enqueued_Timestamp_Us + 1U;
             }
 
             if (Enqueue_Sample(gyro, sample_timestamp_us, valid))
@@ -373,7 +369,6 @@ uint8_t Class_BMI088_Gyro::SPI_RxCallback(const uint64_t &__Ready_Timestamp_Us)
             FIFO_Previous_Batch_Frame_Count = FIFO_Batch_Total_Frame_Count;
             FIFO_Batch_Total_Frame_Count = 0U;
             FIFO_Batch_Processed_Frame_Count = 0U;
-            FIFO_Batch_From_Interrupt = false;
             FIFO_Request = BMI088_GYRO_FIFO_REQUEST_STATUS;
         }
         return result;

@@ -193,7 +193,6 @@ protected:
     uint64_t FIFO_Last_Enqueued_Timestamp_Us = 0U;
     float FIFO_Sample_Period_Us = BMI088_GYRO_NOMINAL_SAMPLE_PERIOD_US;
     float FIFO_Batch_Sample_Period_Us = BMI088_GYRO_NOMINAL_SAMPLE_PERIOD_US;
-    bool FIFO_Batch_From_Interrupt = false;
     bool FIFO_Overrun_Latched = false;
     uint32_t FIFO_Sample_Sequence = 0U;
     uint32_t FIFO_Interrupt_Count = 0U;

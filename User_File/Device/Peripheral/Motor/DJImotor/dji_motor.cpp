@@ -418,6 +418,10 @@ void Class_DJIMotor::CAN_RxCpltCallback(FDCAN_HandleTypeDef *hfdcan,
 
     /** 反馈的编码器、转速和电流均为高字节在前；转速与电流按有符号 16 位数解释。 */
     uint16_t new_encoder = ((uint16_t)data[0] << 8) | data[1];
+    if (new_encoder >= 8192U)
+    {
+        return;
+    }
     if (!motor->feedback_initialized)
     {
         motor->feedback_initialized = true;
@@ -577,6 +581,10 @@ void Class_DJIMotor::Control()
     if (reverse)
     {
         output = -output;
+    }
+    if (Basic_Math_Is_Invalid_Float(output))
+    {
+        output = 0.0f;
     }
     Basic_Math_Constrain(&output, -command_limit, command_limit);
 
