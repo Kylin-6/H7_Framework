@@ -6,7 +6,7 @@
 #include <stdint.h>
 
 enum class BoardId : uint8_t { Gimbal = 1U, Chassis = 2U };
-enum class MessageId : uint8_t { ChassisCmd = 1U };
+enum class MessageId : uint8_t { ChassisCmd = 1U, ChassisFeedback = 2U };
 
 namespace TransportProtocol
 {
@@ -23,6 +23,10 @@ bool EncodeChassisCmd(const ChassisCmd &command, uint8_t sequence,
                       uint8_t (&bytes)[kPayloadSize]);
 bool DecodeChassisCmd(const uint8_t *bytes, uint32_t size,
                       ChassisCmd &command, uint8_t &sequence);
+bool EncodeChassisFeedback(const ChassisFeedback &feedback, uint8_t sequence,
+                           uint8_t (&bytes)[kPayloadSize]);
+bool DecodeChassisFeedback(const uint8_t *bytes, uint32_t size,
+                           ChassisFeedback &feedback, uint8_t &sequence);
 bool SequenceNewer(uint8_t candidate, uint8_t previous);
 }
 

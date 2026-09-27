@@ -25,6 +25,7 @@ static constexpr uint32_t DM_POSITION_SPEED_MODE_ID_OFFSET = 0x100U;
 static constexpr uint32_t DM_FORCE_POSITION_MODE_ID_OFFSET = 0x300U;
 static constexpr uint32_t DM_PARAMETER_ID = 0x7FFU;
 static constexpr uint64_t DM_MODE_TIMEOUT_US = 250000; ///< 模式切换应答等待上限，单位 us。
+static constexpr uint64_t DM_RECOVER_RETRY_US = 50000;
 static constexpr uint8_t DM_CMD_ENABLE = 0xFCU;
 static constexpr uint8_t DM_CMD_DISABLE = 0xFDU;
 static constexpr uint8_t DM_CMD_ZERO_POSITION = 0xFEU;
@@ -33,6 +34,8 @@ static constexpr float DM_KP_MIN = 0.0f;
 static constexpr float DM_KP_MAX = 500.0f;
 static constexpr float DM_KD_MIN = 0.0f;
 static constexpr float DM_KD_MAX = 5.0f;
+
+Class_DMMotor *Class_DMMotor::service_head = nullptr;
 
 /* Private function declarations ---------------------------------------------*/
 
@@ -128,15 +131,48 @@ void Class_DMMotor::FeedbackCallback(FDCAN_HandleTypeDef *callback_hfdcan,
 
 /**
  * @brief Daemon 首次判定掉线时快速提交一帧使能命令。
- * @note 回调只在 Online -> Offline 跃迁执行一次，不做周期重试；入队失败也不会
- *       在同一离线阶段重复提交，避免离线设备持续占用命令队列。
+ * @note 首次入队成功则不再重试；仅在队列已满时留给 StatusTask 限频重试。
  */
 void Class_DMMotor::OfflineCallback(void *owner)
 {
     Class_DMMotor *motor = static_cast<Class_DMMotor *>(owner);
     if (motor != nullptr && motor->auto_enable_on_offline)
     {
-        (void)motor->Enable();
+        motor->recover_pending = !motor->Enable();
+        motor->last_recover_attempt_us = SYS_Timestamp.Get_Now_Microsecond();
+    }
+}
+
+void Class_DMMotor::SetAutoEnableOnOffline(bool enable)
+{
+    auto_enable_on_offline = enable;
+    if (!enable)
+    {
+        recover_pending = false;
+    }
+}
+
+void Class_DMMotor::ServiceAll()
+{
+    const uint64_t now_us = SYS_Timestamp.Get_Now_Microsecond();
+    for (Class_DMMotor *motor = service_head; motor != nullptr;
+         motor = motor->service_next)
+    {
+        if (!motor->recover_pending)
+        {
+            continue;
+        }
+        if (!motor->auto_enable_on_offline || motor->IsOnline())
+        {
+            motor->recover_pending = false;
+            continue;
+        }
+        if (now_us >= motor->last_recover_attempt_us &&
+            now_us - motor->last_recover_attempt_us >= DM_RECOVER_RETRY_US)
+        {
+            motor->last_recover_attempt_us = now_us;
+            motor->recover_pending = !motor->Enable();
+        }
     }
 }
 
@@ -195,7 +231,17 @@ bool Class_DMMotor::Init(FDCAN_HandleTypeDef *motor_hfdcan,
         return false;
     }
     /* 对象为静态生命周期，可安全交由固定容量管理器长期保存地址。 */
-    return DaemonManager::Register(feedback_daemon);
+    if (!DaemonManager::Register(feedback_daemon))
+    {
+        return false;
+    }
+    if (!service_registered)
+    {
+        service_next = service_head;
+        service_head = this;
+        service_registered = true;
+    }
+    return true;
 }
 
 Struct_DMMotor_Snapshot Class_DMMotor::GetFeedbackSnapshot() const

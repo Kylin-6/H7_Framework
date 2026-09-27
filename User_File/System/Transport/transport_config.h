@@ -10,6 +10,9 @@ constexpr BoardId kCommandSource = BoardId::Gimbal;
 constexpr BoardId kCommandTarget = BoardId::Chassis;
 constexpr uint16_t kChassisCmdCanId = TransportProtocol::CanId(
     kCommandSource, kCommandTarget, MessageId::ChassisCmd);
+constexpr uint16_t kChassisFeedbackCanId = TransportProtocol::CanId(
+    BoardId::Chassis, BoardId::Gimbal, MessageId::ChassisFeedback);
+static_assert(kChassisFeedbackCanId == 0x222U, "fixed feedback CAN ID");
 }
 
 /** One fixed CAN link per firmware target; no runtime routing table. */

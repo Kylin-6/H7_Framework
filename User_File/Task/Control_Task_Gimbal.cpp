@@ -27,6 +27,7 @@ extern "C" void Control_Task(void *)
     for (;;)
     {
         osThreadFlagsWait(0x0001, osFlagsWaitAny, osWaitForever);
+        BoardTransport_Poll();
         RobotCmd_Update();
         Gimbal_Update();
         Shoot_Update();

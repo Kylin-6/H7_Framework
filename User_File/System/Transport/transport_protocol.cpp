@@ -72,6 +72,45 @@ bool DecodeChassisCmd(const uint8_t *bytes, uint32_t size,
     return true;
 }
 
+bool EncodeChassisFeedback(const ChassisFeedback &feedback, uint8_t sequence,
+                           uint8_t (&bytes)[kPayloadSize])
+{
+    uint8_t encoded[kPayloadSize] = {sequence,
+        static_cast<uint8_t>((kVersion << 4U) |
+                             (feedback.enabled ? 1U : 0U) |
+                             (feedback.online ? 2U : 0U))};
+    if (!EncodeScalar(feedback.velocity_x_m_s, &encoded[2]) ||
+        !EncodeScalar(feedback.velocity_y_m_s, &encoded[4]) ||
+        !EncodeScalar(feedback.angular_velocity_rad_s, &encoded[6]))
+    {
+        return false;
+    }
+    for (uint8_t index = 0U; index < kPayloadSize; ++index)
+    {
+        bytes[index] = encoded[index];
+    }
+    return true;
+}
+
+bool DecodeChassisFeedback(const uint8_t *bytes, uint32_t size,
+                           ChassisFeedback &feedback, uint8_t &sequence)
+{
+    if (bytes == nullptr || size != kPayloadSize ||
+        (bytes[1] >> 4U) != kVersion || (bytes[1] & 0x0CU) != 0U)
+    {
+        return false;
+    }
+    ChassisFeedback decoded{};
+    decoded.enabled = (bytes[1] & 1U) != 0U;
+    decoded.online = (bytes[1] & 2U) != 0U;
+    decoded.velocity_x_m_s = DecodeScalar(&bytes[2]);
+    decoded.velocity_y_m_s = DecodeScalar(&bytes[4]);
+    decoded.angular_velocity_rad_s = DecodeScalar(&bytes[6]);
+    feedback = decoded;
+    sequence = bytes[0];
+    return true;
+}
+
 bool SequenceNewer(uint8_t candidate, uint8_t previous)
 {
     const uint8_t distance = static_cast<uint8_t>(candidate - previous);

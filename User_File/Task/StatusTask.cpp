@@ -6,6 +6,9 @@
 
 #include "daemon.h"
 #include "cmsis_os2.h"
+#if H7_HAS_DM_MOTOR
+#include "dmmotor.h"
+#endif
 
 extern "C" void Status_Task(void *argument)
 {
@@ -17,6 +20,9 @@ extern "C" void Status_Task(void *argument)
     {
         // 100 Hz 足以覆盖当前最短 100 ms 设备超时，并远低于 1 kHz 控制频率。
         DaemonManager::CheckAll();
+#if H7_HAS_DM_MOTOR
+        Class_DMMotor::ServiceAll();
+#endif
         next_wake_tick += 10U;
         osDelayUntil(next_wake_tick);
     }

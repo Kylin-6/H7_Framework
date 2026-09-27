@@ -299,6 +299,7 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     GIMBAL=$<BOOL:${H7_APP_GIMBAL}>
     CHASSIS=$<BOOL:${H7_APP_CHASSIS}>
     SHOOT=$<BOOL:${H7_APP_SHOOT}>
+    H7_HAS_DM_MOTOR=$<NOT:$<STREQUAL:${H7_BOARD},ChassisBoard>>
 )
 
 # Remove wrong libob.a library dependency when using cpp files
