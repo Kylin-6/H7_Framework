@@ -18,8 +18,17 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Debug")
 endif()
 
-# Set the project name
-set(CMAKE_PROJECT_NAME H7_BSP)
+# Firmware role is fixed at configure time. Keep the legacy executable name for
+# the default single-board build.
+set(H7_BOARD "SingleBoard" CACHE STRING "Firmware board role")
+set_property(CACHE H7_BOARD PROPERTY STRINGS SingleBoard GimbalBoard ChassisBoard)
+if(H7_BOARD STREQUAL "SingleBoard")
+    set(CMAKE_PROJECT_NAME H7_BSP)
+elseif(H7_BOARD STREQUAL "GimbalBoard" OR H7_BOARD STREQUAL "ChassisBoard")
+    set(CMAKE_PROJECT_NAME ${H7_BOARD})
+else()
+    message(FATAL_ERROR "Unknown H7_BOARD: ${H7_BOARD}")
+endif()
 
 # Enable compile command to ease indexing with e.g. clangd
 set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
@@ -125,6 +134,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/User_File/System/IMU/sys_imu.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/System/Daemon/daemon.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/System/MessageCenter/message_center.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/User_File/System/Transport/transport_protocol.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Device/Onboard/Power/bsp_power.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Device/Onboard/BMI088/bsp_bmi088.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Device/Onboard/BMI088/Accel/bsp_bmi088_accel.cpp
@@ -138,8 +148,6 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/SystemView/FreeRTOS/Config/SEGGER_SYSVIEW_Config_FreeRTOS.c
         ${CMAKE_CURRENT_LIST_DIR}/SystemView/SEGGER/SEGGER_RTT_ASM_ARMv7M.S
         ${CMAKE_CURRENT_LIST_DIR}/User_File/System/Init/Init.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/User_File/Task/InsTask.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/User_File/Task/TransportTask.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Task/CanTxTask.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Task/StatusTask.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/System/debug/sys_debug.cpp
@@ -153,28 +161,58 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Device/Onboard/Key/bsp_key.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Device/Onboard/WS2812/bsp_ws2812.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Device/Peripheral/EricTool/dvc_erictool.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/User_File/Task/TIM_1ms_Task.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/User_File/Task/BMI088_Task.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/User_File/Task/StorageTask.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/User_File/Device/Peripheral/Motor/QDrive/QD4310.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/User_File/Device/Peripheral/Motor/DMmotor/dmmotor.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Device/Peripheral/Motor/DJImotor/dji_motor.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Middleware/Algorithm/Pulse/alg_pulse.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Middleware/Algorithm/CRC/crc8.c
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Middleware/Algorithm/CRC/crc16.c
-        ${CMAKE_CURRENT_LIST_DIR}/User_File/Device/Peripheral/Remote/remote_control.c
-        ${CMAKE_CURRENT_LIST_DIR}/User_File/Device/Peripheral/Remote/sbus.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/User_File/Device/Peripheral/Referee/crc_ref.c
-        ${CMAKE_CURRENT_LIST_DIR}/User_File/Device/Peripheral/Referee/referee_26.c
-        ${CMAKE_CURRENT_LIST_DIR}/User_File/Device/Peripheral/Referee/referee_UI_26.c
-        ${CMAKE_CURRENT_LIST_DIR}/User_File/Device/Peripheral/Referee/vtm_26.c
-        ${CMAKE_CURRENT_LIST_DIR}/User_File/Task/Control_Task.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/User_File/Application/RobotCmd/RobotCmd.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/User_File/Application/Gimbal/Gimbal.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/User_File/Application/Chassis/Chassis.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/User_File/Application/Shoot/Shoot.cpp
-
 )
+
+set(H7_GIMBAL_TASK_DEVICE_SOURCES
+    User_File/Task/TransportTask.cpp
+    User_File/Task/TIM_1ms_Task.cpp
+    User_File/Task/BMI088_Task.cpp
+    User_File/Task/StorageTask.cpp
+    User_File/Device/Peripheral/Motor/DMmotor/dmmotor.cpp
+    User_File/Device/Peripheral/Remote/remote_control.c
+    User_File/Device/Peripheral/Remote/sbus.cpp)
+set(H7_CHASSIS_DEVICE_SOURCES
+    User_File/Device/Peripheral/Referee/crc_ref.c
+    User_File/Device/Peripheral/Referee/referee_26.c
+    User_File/Device/Peripheral/Referee/referee_UI_26.c
+    User_File/Device/Peripheral/Referee/vtm_26.c)
+
+if(H7_BOARD STREQUAL "SingleBoard")
+    target_sources(${CMAKE_PROJECT_NAME} PRIVATE
+        User_Config/Board/single_board_config.cpp
+        User_Config/Board/board_tasks_single.c
+        User_File/Task/InsTask.cpp
+        User_File/Device/Peripheral/Motor/QDrive/QD4310.cpp
+        ${H7_GIMBAL_TASK_DEVICE_SOURCES}
+        ${H7_CHASSIS_DEVICE_SOURCES}
+        User_File/Task/Control_Task.cpp
+        User_File/Application/RobotCmd/RobotCmd.cpp
+        User_File/Application/Gimbal/Gimbal.cpp
+        User_File/Application/Chassis/Chassis.cpp
+        User_File/Application/Shoot/Shoot.cpp)
+elseif(H7_BOARD STREQUAL "GimbalBoard")
+    target_sources(${CMAKE_PROJECT_NAME} PRIVATE
+        User_Config/Board/gimbal_board_config.cpp
+        User_Config/Board/board_tasks_gimbal.c
+        ${H7_GIMBAL_TASK_DEVICE_SOURCES}
+        User_File/System/Transport/transport_gimbal.cpp
+        User_File/Task/Control_Task_Gimbal.cpp
+        User_File/Application/RobotCmd/RobotCmd.cpp
+        User_File/Application/Gimbal/Gimbal.cpp
+        User_File/Application/Shoot/Shoot.cpp)
+else()
+    target_sources(${CMAKE_PROJECT_NAME} PRIVATE
+        User_Config/Board/chassis_board_config.cpp
+        User_Config/Board/board_tasks_chassis.c
+        ${H7_CHASSIS_DEVICE_SOURCES}
+        User_File/System/Transport/transport_chassis.cpp
+        User_File/Task/Control_Task_Chassis.cpp
+        User_File/Application/Chassis/Chassis.cpp)
+endif()
 
 # Add include paths
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
@@ -205,6 +243,8 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
         User_File/System/IMU
         User_File/System/Daemon
         User_File/System/MessageCenter
+        User_File/System/Transport
+        User_Config/Board
         User_File/Device/Onboard/Power
         User_File/Device/Onboard/BMI088
         User_File/Device/Onboard/BMI088/Accel
@@ -241,6 +281,15 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
 option(H7_APP_GIMBAL "Build the Gimbal hardware-control path" OFF)
 option(H7_APP_CHASSIS "Build the Chassis hardware-control path" OFF)
 option(H7_APP_SHOOT "Build the Shoot hardware-control path" OFF)
+if(H7_BOARD STREQUAL "GimbalBoard")
+    set(H7_APP_GIMBAL ON)
+    set(H7_APP_CHASSIS OFF)
+    set(H7_APP_SHOOT ON)
+elseif(H7_BOARD STREQUAL "ChassisBoard")
+    set(H7_APP_GIMBAL OFF)
+    set(H7_APP_CHASSIS ON)
+    set(H7_APP_SHOOT OFF)
+endif()
 
 # Add project symbols (macros)
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE

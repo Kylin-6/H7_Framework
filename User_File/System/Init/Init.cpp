@@ -1,4 +1,5 @@
 #include "Init.h"
+#include "board_config.h"
 
 #include "Com.h"
 #include "SEGGER_SYSVIEW.h"
@@ -49,6 +50,7 @@ extern "C" uint32_t System_Init_GetFailureMask(void)
 
 extern "C" void System_Init(void)
 {
+    const BoardHardware &hardware = BoardConfig_Get();
     // 支持调试阶段重复进入时重新生成一份完整的初始化结果。
     init_finished = false;
     system_init_state = SYSTEM_INIT_READY;
@@ -70,14 +72,18 @@ extern "C" void System_Init(void)
     UART_Init(&huart9, nullptr);
     UART_Init(&huart10, nullptr);
 
-    // 陀螺仪的SPI
-    SPI_Init(&hspi2, SPI2_Callback);
-
-    // WS2812的SPI
-    SPI_Init(&hspi6, nullptr);
-
-    // Flash 的 OSPI
-    OSPI_Init(&hospi2, OSPI2_Polling_Callback, OSPI2_Rx_Callback, OSPI2_Tx_Callback);
+    if (hardware.imu)
+    {
+        SPI_Init(&hspi2, SPI2_Callback);
+    }
+    if (hardware.indicators)
+    {
+        SPI_Init(&hspi6, nullptr);
+    }
+    if (hardware.flash)
+    {
+        OSPI_Init(&hospi2, OSPI2_Polling_Callback, OSPI2_Rx_Callback, OSPI2_Tx_Callback);
+    }
 
     if (HAL_TIM_Base_Start_IT(&htim4) != HAL_OK)
     {
@@ -93,29 +99,41 @@ extern "C" void System_Init(void)
         init_finished = true;
         return;
     }
-    System_IMU_Configure();
-    const bool bmi088_initialized = BSP_BMI088.Init();
-    if (!bmi088_initialized)
+    bool bmi088_initialized = false;
+    if (hardware.imu)
     {
-        // IMU、Flash 和 ADC 均为可降级设备；分别置位，便于诊断层精确上报。
-        System_Init_RecordFailure(SYSTEM_INIT_FAILURE_BMI088,
-                                  SYSTEM_INIT_DEGRADED);
+        System_IMU_Configure();
+        bmi088_initialized = BSP_BMI088.Init();
+        if (!bmi088_initialized)
+        {
+            System_Init_RecordFailure(SYSTEM_INIT_FAILURE_BMI088,
+                                      SYSTEM_INIT_DEGRADED);
+        }
     }
-    BSP_WS2812.Init();
-    BSP_Buzzer.Init();
-    BSP_Key.Init();
-    if (!BSP_W25Q64JV.Init())
+    if (hardware.indicators)
+    {
+        BSP_WS2812.Init();
+        BSP_Buzzer.Init();
+        BSP_Key.Init();
+    }
+    if (hardware.flash && !BSP_W25Q64JV.Init())
     {
         System_Init_RecordFailure(SYSTEM_INIT_FAILURE_W25Q64,
                                   SYSTEM_INIT_DEGRADED);
     }
-    if (!ADC_Init(&hadc1, 1))
+    if (hardware.adc && !ADC_Init(&hadc1, 1))
     {
         System_Init_RecordFailure(SYSTEM_INIT_FAILURE_ADC1,
                                   SYSTEM_INIT_DEGRADED);
     }
-    BSP_Power.Init(true, true, true);
-    EricTool_USB.Init();
+    if (hardware.power)
+    {
+        BSP_Power.Init(true, true, true);
+    }
+    if (hardware.usb_debug)
+    {
+        EricTool_USB.Init();
+    }
     if (bmi088_initialized)
     {
         // 只有完整通过芯片 ID 与配置回读后才允许启动 FIFO/姿态数据链路。

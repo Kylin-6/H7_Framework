@@ -2,10 +2,13 @@
 #define ROBOT_CMD_H
 
 #include "message_types.h"
+#include "output.h"
 
 /** 装载机器人安全启动默认命令。 */
-void RobotCmd_Init(void);
-/** 周期读取模块反馈，并发布发生变化的控制命令。 */
+void RobotCmd_Init(Output<GimbalCmd> gimbal_output,
+                   Output<ChassisCmd> chassis_output,
+                   Output<ShootCmd> shoot_output);
+/** 周期读取模块反馈；底盘命令每 10 ms 刷新。 */
 void RobotCmd_Update(void);
 
 /** 以下接口由遥控器、视觉或上层状态机更新对应应用目标。 */

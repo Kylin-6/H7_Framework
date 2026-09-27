@@ -10,12 +10,9 @@
 
 #include "message_center.h"
 
-static Publisher<GimbalCmd> Gimbal_Command_Publisher(
-    MessageCenter::Gimbal_Command_Topic);
-static Publisher<ChassisCmd> Chassis_Command_Publisher(
-    MessageCenter::Chassis_Command_Topic);
-static Publisher<ShootCmd> Shoot_Command_Publisher(
-    MessageCenter::Shoot_Command_Topic);
+static Output<GimbalCmd> Gimbal_Command_Output;
+static Output<ChassisCmd> Chassis_Command_Output;
+static Output<ShootCmd> Shoot_Command_Output;
 static Subscriber<GimbalFeedback> Gimbal_Feedback_Subscriber(
     MessageCenter::Gimbal_Feedback_Topic);
 static Subscriber<ChassisFeedback> Chassis_Feedback_Subscriber(
@@ -30,17 +27,21 @@ static GimbalFeedback Gimbal_Feedback;
 static ChassisFeedback Chassis_Feedback;
 static ShootFeedback Shoot_Feedback;
 
-/* Dirty 标志避免没有变化时重复发布命令。 */
+/* 云台和发射按变化发布；底盘命令按 10 ms 刷新以提供失联时效。 */
 static bool Gimbal_Command_Dirty;
-static bool Chassis_Command_Dirty;
 static bool Shoot_Command_Dirty;
 static bool Gimbal_Feedback_Valid;
 static bool Chassis_Feedback_Valid;
 static bool Shoot_Feedback_Valid;
 static uint8_t RobotCmd_Feedback_Divider;
 
-void RobotCmd_Init(void)
+void RobotCmd_Init(Output<GimbalCmd> gimbal_output,
+                   Output<ChassisCmd> chassis_output,
+                   Output<ShootCmd> shoot_output)
 {
+    Gimbal_Command_Output = gimbal_output;
+    Chassis_Command_Output = chassis_output;
+    Shoot_Command_Output = shoot_output;
     Gimbal_Command = {};
     Chassis_Command = {};
     Shoot_Command = {};
@@ -50,7 +51,6 @@ void RobotCmd_Init(void)
      */
     Gimbal_Command.mode = GimbalMode::LOCK;
     Gimbal_Command_Dirty = true;
-    Chassis_Command_Dirty = true;
     Shoot_Command_Dirty = true;
     Gimbal_Feedback_Valid = false;
     Chassis_Feedback_Valid = false;
@@ -83,22 +83,23 @@ void RobotCmd_Update(void)
             Shoot_Feedback_Valid = true;
         }
     }
+    const bool chassis_publish_due = RobotCmd_Feedback_Divider == 0U;
     RobotCmd_Feedback_Divider = (RobotCmd_Feedback_Divider + 1U) % 10U;
 
-    /* 只发布被上层更新过的目标；发布后清除 Dirty 标志。 */
+    /* 云台和发射按变化发布，底盘命令固定周期刷新。 */
     if (Gimbal_Command_Dirty)
     {
-        Gimbal_Command_Publisher.Publish(Gimbal_Command);
+        Gimbal_Command_Output.Publish(Gimbal_Command);
         Gimbal_Command_Dirty = false;
     }
-    if (Chassis_Command_Dirty)
+    // Continuous command refresh doubles as the receiver's freshness source.
+    if (chassis_publish_due)
     {
-        Chassis_Command_Publisher.Publish(Chassis_Command);
-        Chassis_Command_Dirty = false;
+        Chassis_Command_Output.Publish(Chassis_Command);
     }
     if (Shoot_Command_Dirty)
     {
-        Shoot_Command_Publisher.Publish(Shoot_Command);
+        Shoot_Command_Output.Publish(Shoot_Command);
         Shoot_Command_Dirty = false;
     }
 }
@@ -112,7 +113,6 @@ void RobotCmd_SetGimbal(const GimbalCmd &command)
 void RobotCmd_SetChassis(const ChassisCmd &command)
 {
     Chassis_Command = command;
-    Chassis_Command_Dirty = true;
 }
 
 void RobotCmd_SetShoot(const ShootCmd &command)

@@ -2,6 +2,7 @@
 #define GIMBAL_CONFIG_H
 
 #include "fdcan.h"
+#include "board_config.h"
 
 enum class GimbalGyroAxis : uint8_t { X, Y, Z };
 
@@ -46,8 +47,8 @@ struct Struct_Gimbal_Config
 inline Struct_Gimbal_Config Gimbal_Default_Config()
 {
     Struct_Gimbal_Config config;
-    config.yaw.bus = &hfdcan2;
-    config.pitch.bus = &hfdcan1;
+    config.yaw.bus = BoardConfig_Get().gimbal_yaw_bus;
+    config.pitch.bus = BoardConfig_Get().gimbal_pitch_bus;
     config.pitch.id = 2;
     config.pitch.feedback_id = 0x102;
     return config;

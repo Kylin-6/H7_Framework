@@ -35,14 +35,19 @@ public:
     /** 发布一个新状态；旧状态直接被覆盖，不保存历史记录。 */
     void Publish(const T &data)
     {
-        const uint64_t timestamp = SYS_Timestamp_Get_Microsecond();
+        PublishAt(data, SYS_Timestamp_Get_Microsecond());
+    }
+
+    /** Keep a frame's receive time when a transport publishes it in task context. */
+    void PublishAt(const T &data, uint64_t timestamp_us)
+    {
         const uint32_t primask = __get_PRIMASK();
         __disable_irq();
 
         /* 数据和元信息必须在同一临界区内更新，避免读到半帧数据。 */
         data_ = data;
         sequence_++;
-        timestamp_ = timestamp;
+        timestamp_ = timestamp_us;
         valid_ = true;
         __DMB();
 

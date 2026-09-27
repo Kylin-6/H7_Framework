@@ -122,6 +122,7 @@ void Status_Task(void *argument);
 void TIM1msTask(void *argument);
 void BMI088_Task(void *argument);
 void Control_Task(void *argument);
+void Board_CreateTasks(void);
 
 extern void MX_USB_DEVICE_Init(void);
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
@@ -170,30 +171,9 @@ void MX_FREERTOS_Init(void) {
   /* add queues, ... */
   /* USER CODE END RTOS_QUEUES */
 
-  /* Create the thread(s) */
-  /* creation of TransportTask */
-  TransportTaskHandle = osThreadNew(Transport_Task, NULL, &TransportTask_attributes);
-
-  /* creation of InsTask */
-  InsTaskHandle = osThreadNew(Ins_Task, NULL, &InsTask_attributes);
-
-  /* creation of CanTxTask */
-  CanTxTaskHandle = osThreadNew(Can_Tx_Task, NULL, &CanTxTask_attributes);
-
-  /* creation of StatusTask */
-  StatusTaskHandle = osThreadNew(Status_Task, NULL, &StatusTask_attributes);
-
-  /* creation of TIM_1ms_Task */
-  TIM_1ms_TaskHandle = osThreadNew(TIM1msTask, NULL, &TIM_1ms_Task_attributes);
-
-  /* creation of BMI088Task */
-  BMI088TaskHandle = osThreadNew(BMI088_Task, NULL, &BMI088Task_attributes);
-
-  /* creation of ControlTask */
-  ControlTaskHandle = osThreadNew(Control_Task, NULL, &ControlTask_attributes);
-
   /* USER CODE BEGIN RTOS_THREADS */
-  StorageTaskHandle = osThreadNew(Storage_Task, NULL, &StorageTask_attributes);
+  /* Board target owns the task list. Preserve this replacement after CubeMX regeneration. */
+  Board_CreateTasks();
   /* USER CODE END RTOS_THREADS */
 
   /* USER CODE BEGIN RTOS_EVENTS */

@@ -4,12 +4,15 @@
  *
  * 运动学与舵向最短路径规则来自 MIT 许可证下的 Meta-Embedded-NG
  * application/chassis，实现已适配本工程 Class_DJIMotor 接口。机械参数仍是
- * 待实车标定值，因此模块默认不参与固件构建。
+ * 待实车标定值；双板构建将此模块放在底盘板。
  */
 
 #include "Chassis.h"
 
 #include "message_center.h"
+#include "board_config.h"
+
+static constexpr uint64_t CHASSIS_COMMAND_MAX_AGE_US = 100000U;
 
 #if CHASSIS
 #include "dji_motor.h"
@@ -17,8 +20,6 @@
 #include <cmath>
 #endif
 
-static Subscriber<ChassisCmd> Chassis_Command_Subscriber(
-    MessageCenter::Chassis_Command_Topic);
 static Publisher<ChassisFeedback> Chassis_Feedback_Publisher(
     MessageCenter::Chassis_Feedback_Topic);
 static ChassisCmd Chassis_Command;
@@ -195,14 +196,14 @@ bool Chassis_Init(void)
 
 #if CHASSIS
     Struct_DJIMotor_Init_Config wheel_config{};
-    wheel_config.hfdcan = &hfdcan1;
+    wheel_config.hfdcan = BoardConfig_Get().chassis_wheel_bus;
     wheel_config.motor_type = Enum_DJIMotor_Type::M3508;
     wheel_config.close_loop = DJI_MOTOR_SPEED_LOOP;
     wheel_config.outer_loop = DJI_MOTOR_SPEED_LOOP;
     wheel_config.speed_pid = Chassis_MakePID(4.5f, 0.05f, 0.0f, 3000.0f, 16000.0f);
 
     Struct_DJIMotor_Init_Config steer_config{};
-    steer_config.hfdcan = &hfdcan2;
+    steer_config.hfdcan = BoardConfig_Get().chassis_steer_bus;
     steer_config.motor_type = Enum_DJIMotor_Type::M3508;
     steer_config.close_loop = DJI_MOTOR_ANGLE_LOOP | DJI_MOTOR_SPEED_LOOP;
     steer_config.outer_loop = DJI_MOTOR_ANGLE_LOOP;
@@ -237,11 +238,16 @@ bool Chassis_Init(void)
 
 void Chassis_Update(void)
 {
-    /* 每个控制周期都尝试接收新命令；无新数据时保留上一帧目标。 */
-    ChassisCmd command;
-    if (Chassis_Command_Subscriber.Read(command))
+    /* A held target may only drive motors while its local Topic is fresh. */
+    ChassisCmd command{};
+    if (MessageCenter::Chassis_Command_Topic.ReadFresh(
+            command, CHASSIS_COMMAND_MAX_AGE_US))
     {
         Chassis_Command = command;
+    }
+    else
+    {
+        Chassis_Command = {};
     }
 
 #if CHASSIS

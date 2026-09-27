@@ -11,6 +11,8 @@
 #include "RobotCmd.h"
 #include "Shoot.h"
 #include "Init.h"
+#include "message_center.h"
+#include "output.h"
 #include "user_task.h"
 
 extern "C" void Control_Task(void* argument)
@@ -31,7 +33,10 @@ extern "C" void Control_Task(void* argument)
 #endif
     (void)Chassis_Init();
     (void)Shoot_Init();
-    RobotCmd_Init();
+    static LocalPublisher<GimbalCmd> gimbal_output(MessageCenter::Gimbal_Command_Topic);
+    static LocalPublisher<ChassisCmd> chassis_output(MessageCenter::Chassis_Command_Topic);
+    static LocalPublisher<ShootCmd> shoot_output(MessageCenter::Shoot_Command_Topic);
+    RobotCmd_Init(gimbal_output.Bind(), chassis_output.Bind(), shoot_output.Bind());
     // Balance_init();
 
     for (;;)
