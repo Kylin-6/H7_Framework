@@ -5,6 +5,9 @@
  * 运动学与舵向最短路径规则来自 MIT 许可证下的 Meta-Embedded-NG
  * application/chassis，实现已适配本工程 Class_DJIMotor 接口。机械参数仍是
  * 待实车标定值；双板构建将此模块放在底盘板。
+ * @todo vx/vy/wz 的实车物理正方向须按电机安装和坐标系标定，不能仅由数组顺序推断。
+ * @todo 舵向依赖 output_total_angle；增量编码器上电不提供绝对输出轴零位，
+ *       需绝对编码器、寻零流程或已知上电姿态。
  */
 
 #include "Chassis.h"
@@ -80,7 +83,8 @@ static void Chassis_SetEnabled(bool enabled)
 static void Chassis_CalculateTargets(float wheel_target_rad_s[4],
                                      float steer_target_rad[4])
 {
-    /* 将底盘坐标系速度分解为四个舵轮各自的平移速度向量。 */
+    /* 四轮位置的旋转项为 ±wz·半宽/半长；符号按下方轮索引数组固定。
+       物理前/左和正转方向必须由实车接线及坐标标定确认。 */
     const float vx_m_s = Chassis_Command.velocity_x_m_s;
     const float vy_m_s = Chassis_Command.velocity_y_m_s;
     const float wz_rad_s = Chassis_Command.angular_velocity_rad_s;
@@ -114,7 +118,7 @@ static void Chassis_CalculateTargets(float wheel_target_rad_s[4],
                                        Chassis_Steer_Offset_Rad[index];
         float difference_rad = std::remainder(target_angle_rad - current_angle_rad,
                                               2.0f * kPiRad);
-        /* 舵向误差超过 90° 时反转轮速，缩短舵电机需要旋转的路径。 */
+        /* remainder 将误差压到 [-π, π]；超过 ±π/2 时舵角少转 π、轮速取反。 */
         if (difference_rad > kPiRad / 2.0f)
         {
             difference_rad -= kPiRad;

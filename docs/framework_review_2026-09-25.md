@@ -1,5 +1,18 @@
 # H7_BSP RoboMaster 框架审查与发展建议
 
+> **WARNING：历史快照。** 本文只记录 2026-09-25 对 `fac0977` 的审查，不代表当前 `RoboMaster_H7` 实现。下文的“当前”“尚未”等措辞均按当时版本理解，不能作为现版接入依据；请先看根 README 和各模块文档。
+
+| 旧问题 | 当前状态（2026-09-28 核对） | 当前代码位置 |
+| --- | --- | --- |
+| 底盘/发射 degree 与 rad 混用 | 已修，内部使用 rad/rad/s；机械参数仍需标定 | `User_File/Application/Chassis/Chassis.cpp`、`User_File/Application/Shoot/Shoot.cpp` |
+| CAN 离散命令跨总线队首阻塞 | 已修，三路 FDCAN 独立 FIFO/pending | `User_File/Middleware/BSP/CAN/bsp_can.c` |
+| 双板命令/反馈 Transport | 已实现固定 `ChassisCmd`/`ChassisFeedback` 双向链路 | `User_File/System/Transport/`、`User_Config/Board/` |
+| Referee parser 短载荷/拆包/长度回绕 | 未修，接入前需修复 | `User_File/Device/Peripheral/Referee/referee_26.c` |
+| RobotCmd 输入源仲裁与 Remote/Vision 接入 | 未完成 | `User_File/Application/RobotCmd/`、`User_File/Device/Peripheral/Remote/` |
+| DJI 反馈一致 Snapshot | 未完成，公开反馈字段由 ISR 更新 | `User_File/Device/Peripheral/Motor/DJImotor/dji_motor.h` |
+| CAN Bus-Off 恢复 | 未完成系统性处理 | `User_File/Middleware/BSP/CAN/bsp_can.c` |
+
+
 审查日期：2026-09-25。审查对象：本地 H7_BSP `fac0977`；参考：Meta-Embedded-NG `a0ebb95`、basic_framework `1a136eb`。结论针对这三个本地版本，不代表上游最新版本。
 
 ## 1. 总体判断
@@ -57,10 +70,10 @@
 
 参考依据：
 
-- [Meta 车型选择与消息契约](/home/kylin6/code/project/rm/opensourse/Meta-Embedded-NG/application/robot_def.h:8)、[Meta 构建选择](/home/kylin6/code/project/rm/opensourse/Meta-Embedded-NG/Makefile:267)。
-- [basic 命令组织和急停](/home/kylin6/code/project/rm/opensourse/basic_framework/application/cmd/robot_cmd.c:297)、[basic 单双板配置](/home/kylin6/code/project/rm/opensourse/basic_framework/application/robot_def.h:17)。
-- [basic 功率限制接入](/home/kylin6/code/project/rm/opensourse/basic_framework/application/chassis/chassis.c:200)、[Meta 发射就绪与热量状态机](/home/kylin6/code/project/rm/opensourse/Meta-Embedded-NG/application/shoot/ammo_booster.c:380)。
-- [basic 动态消息中心](/home/kylin6/code/project/rm/opensourse/basic_framework/modules/message_center/message_center.c:33)。
+- [Meta 车型选择与消息契约](https://github.com/Meta-Team/Meta-Embedded-NG)、[Meta 构建选择](https://github.com/Meta-Team/Meta-Embedded-NG)。
+- [basic 命令组织和急停](https://github.com/HNUYueLuRM/basic_framework)、[basic 单双板配置](https://github.com/HNUYueLuRM/basic_framework)。
+- [basic 功率限制接入](https://github.com/HNUYueLuRM/basic_framework)、[Meta 发射就绪与热量状态机](https://github.com/Meta-Team/Meta-Embedded-NG)。
+- [basic 动态消息中心](https://github.com/HNUYueLuRM/basic_framework)。
 
 **参考项目不是正确性标准。** basic 的 EmergencyHandler 仍有离线判断 TODO；Meta 的部分机器人初始化/任务调用被注释，发射参数也依赖具体机构。应借鉴完整的职责链与配置组织，不能把拷贝源码视为验证完成。
 
@@ -85,7 +98,7 @@ DJI 驱动明确要求角度目标/反馈为 rad、速度目标/反馈为 rad/s�
 
 **验收：** 1 m/s、轮半径 0.058 m 时应生成约 17.241 rad/s；单发增加约 0.6283 rad；运动学正解/逆解与 degree 遥测转换均有测试。
 
-依据：[DJI 单位契约](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Device/Peripheral/Motor/DJImotor/dji_motor.h:64)、[反馈计算](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Device/Peripheral/Motor/DJImotor/dji_motor.cpp:449)、[底盘换算](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Application/Chassis/Chassis.cpp:115)、[发射累加与反馈](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Application/Shoot/Shoot.cpp:121)。
+依据：[DJI 单位契约](../User_File/Device/Peripheral/Motor/DJImotor/dji_motor.h)、[反馈计算](../User_File/Device/Peripheral/Motor/DJImotor/dji_motor.cpp)、[底盘换算](../User_File/Application/Chassis/Chassis.cpp)、[发射累加与反馈](../User_File/Application/Shoot/Shoot.cpp)。
 
 ### 02｜P1：裁判系统解析存在越界读取和不前进循环
 
@@ -101,7 +114,7 @@ VTM 的 0xA5 分支也存在相同的长度强转/偏移模式，本次没有单
 
 **验收：** ASan/UBSan 覆盖短载荷、极大长度、CRC 错误和随机噪声，解析函数有明确单次工作上限。
 
-依据：[裁判长度与复制](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Device/Peripheral/Referee/referee_26.c:55)、[偏移推进](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Device/Peripheral/Referee/referee_26.c:138)、[VTM 同类代码](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Device/Peripheral/Referee/vtm_26.c:59)。
+依据：[裁判长度与复制](../User_File/Device/Peripheral/Referee/referee_26.c)、[偏移推进](../User_File/Device/Peripheral/Referee/referee_26.c)、[VTM 同类代码](../User_File/Device/Peripheral/Referee/vtm_26.c)。
 
 ### 03｜P1：裁判、图传、DBUS 的流式接收契约不统一
 
@@ -113,7 +126,7 @@ VTM 的 0xA5 分支也存在相同的长度强转/偏移模式，本次没有单
 
 **验收：** 合法帧在每个字节位置切分、任意组合回调后，得到相同解码结果；错误帧之后能恢复。
 
-依据：[裁判解析入口](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Device/Peripheral/Referee/referee_26.c:33)、[DBUS 回调](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Device/Peripheral/Remote/remote_control.c:108)、[SBUS 流式实现](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Device/Peripheral/Remote/sbus.cpp:106)。
+依据：[裁判解析入口](../User_File/Device/Peripheral/Referee/referee_26.c)、[DBUS 回调](../User_File/Device/Peripheral/Remote/remote_control.c)、[SBUS 流式实现](../User_File/Device/Peripheral/Remote/sbus.cpp)。
 
 ### 04｜P1：控制命令没有来源存活与失效策略
 
@@ -125,7 +138,7 @@ RobotCmd 只在 dirty 时发布，应用没有新命令就继续使用上一帧�
 
 **验收：** 保持恒定合法输入不会误停；中断输入后在配置期限内进入安全状态；重连不会自动恢复旧射击事件。
 
-依据：[RobotCmd 发布](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Application/RobotCmd/RobotCmd.cpp:87)、[底盘旧命令保持](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Application/Chassis/Chassis.cpp:238)、[发射旧命令保持](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Application/Shoot/Shoot.cpp:216)。
+依据：[RobotCmd 发布](../User_File/Application/RobotCmd/RobotCmd.cpp)、[底盘旧命令保持](../User_File/Application/Chassis/Chassis.cpp)、[发射旧命令保持](../User_File/Application/Shoot/Shoot.cpp)。
 
 ### 05｜P1：应用忽略发送失败，失能请求可能只尝试一次
 
@@ -137,7 +150,7 @@ RobotCmd 只在 dirty 时发布，应用没有新命令就继续使用上一帧�
 
 **验收：** 注入 FIFO 满、HAL 拒收后，停止仍能在恢复后送达；失能未确认前反馈不得宣称停机完成。
 
-依据：[云台模式处理](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Application/Gimbal/Gimbal.cpp:314)、[QD 动作提交路径](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Device/Peripheral/Motor/QDrive/QD4310.cpp:92)、[底盘使能状态](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Application/Chassis/Chassis.cpp:74)、[发射使能状态](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Application/Shoot/Shoot.cpp:54)。
+依据：[云台模式处理](../User_File/Application/Gimbal/Gimbal.cpp)、[QD 动作提交路径](../User_File/Device/Peripheral/Motor/QDrive/QD4310.cpp)、[底盘使能状态](../User_File/Application/Chassis/Chassis.cpp)、[发射使能状态](../User_File/Application/Shoot/Shoot.cpp)。
 
 ### 06｜P1：云台状态机主要覆盖初始化，缺少运行期故障转换与恢复
 
@@ -151,7 +164,7 @@ RobotCmd 只在 dirty 时发布，应用没有新命令就继续使用上一帧�
 
 **验收：** 开机缺电机、运行中拔线、电机重启、INS 中断及恢复均有状态和输出断言。
 
-依据：[初始化超时](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Application/Gimbal/Gimbal.cpp:183)、[运行期守卫](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Application/Gimbal/Gimbal.cpp:290)、[QD 健康接口](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Device/Peripheral/Motor/QDrive/QD4310.cpp:148)。
+依据：[初始化超时](../User_File/Application/Gimbal/Gimbal.cpp)、[运行期守卫](../User_File/Application/Gimbal/Gimbal.cpp)、[QD 健康接口](../User_File/Device/Peripheral/Motor/QDrive/QD4310.cpp)。
 
 ### 07｜P1：Yaw 直接相减，没有处理 ±π 跨界
 
@@ -161,7 +174,7 @@ RobotCmd 只在 dirty 时发布，应用没有新命令就继续使用上一帧�
 
 **验收：** 覆盖 ±π 两侧、连续多圈、模式切换与重连后零点建立。
 
-依据：[Yaw 产生](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Middleware/Algorithm/Quaternion/alg_quaternion.h:355)、[云台角环](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Application/Gimbal/Gimbal.cpp:265)、[PID 误差](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Middleware/Algorithm/PID/alg_pid.cpp:110)。
+依据：[Yaw 产生](../User_File/Middleware/Algorithm/Quaternion/alg_quaternion.h)、[云台角环](../User_File/Application/Gimbal/Gimbal.cpp)、[PID 误差](../User_File/Middleware/Algorithm/PID/alg_pid.cpp)。
 
 ### 08｜P1：发射缺少摩擦轮就绪联锁与事件生命周期
 
@@ -173,7 +186,7 @@ RobotCmd 只在 dirty 时发布，应用没有新命令就继续使用上一帧�
 
 **验收：** 摩擦轮 OFF/未就绪时不进弹；模式切换和离线恢复不会补执行过期事件；队满和执行失败可观察。
 
-依据：[发射执行分支](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Application/Shoot/Shoot.cpp:73)、[事件消费](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Application/Shoot/Shoot.cpp:118)、[OFF 清队列](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Application/Shoot/Shoot.cpp:225)。参考 [Meta 发射状态机](/home/kylin6/code/project/rm/opensourse/Meta-Embedded-NG/application/shoot/ammo_booster.c:380)。
+依据：[发射执行分支](../User_File/Application/Shoot/Shoot.cpp)、[事件消费](../User_File/Application/Shoot/Shoot.cpp)、[OFF 清队列](../User_File/Application/Shoot/Shoot.cpp)。参考 [Meta 发射状态机](https://github.com/Meta-Team/Meta-Embedded-NG)。
 
 ### 09｜P1：三路 CAN 共用动作 FIFO，存在跨总线队首阻塞
 
@@ -185,7 +198,7 @@ RobotCmd 只在 dirty 时发布，应用没有新命令就继续使用上一帧�
 
 **验收：** 一条总线持续发送失败，不阻塞其他总线的停止动作；恢复后不执行已经过期的动作。
 
-依据：[CAN 队首保留](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Middleware/BSP/CAN/bsp_can.c:464)、[通知配置](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Middleware/BSP/CAN/bsp_can.c:154)。
+依据：[CAN 队首保留](../User_File/Middleware/BSP/CAN/bsp_can.c)、[通知配置](../User_File/Middleware/BSP/CAN/bsp_can.c)。
 
 ### 10｜P1/P2：消息中心之外的共享状态缺少完整并发契约
 
@@ -199,7 +212,7 @@ DJI CAN ISR 逐字段写反馈，Application/控制计算直接读取多个字�
 
 **验收：** 在发布、读反馈、清标志各边界注入更新，既不丢最后一条命令，也不拼接不同帧的字段。
 
-依据：[RobotCmd setter](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Application/RobotCmd/RobotCmd.cpp:106)、[DJI ISR 更新](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Device/Peripheral/Motor/DJImotor/dji_motor.cpp:440)、[控制读取反馈](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Device/Peripheral/Motor/DJImotor/dji_motor.cpp:521)。
+依据：[RobotCmd setter](../User_File/Application/RobotCmd/RobotCmd.cpp)、[DJI ISR 更新](../User_File/Device/Peripheral/Motor/DJImotor/dji_motor.cpp)、[控制读取反馈](../User_File/Device/Peripheral/Motor/DJImotor/dji_motor.cpp)。
 
 ## 5. 不足清单：功能完整性与工程化
 
@@ -211,7 +224,7 @@ GimbalCmd 的速度字段被接收，但 Yaw 目标速度随即被角度 PID 输
 
 **建议：** 为每个模式写清输入、坐标系、控制策略和不支持行为；暂未实现的模式应显式拒绝或从公开契约移除。速度字段若表示前馈，要在明确位置叠加并测试。
 
-依据：[消息定义](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/System/MessageCenter/message_types.h:6)、[底盘模式判断](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Application/Chassis/Chassis.cpp:247)、[速度覆盖](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Application/Gimbal/Gimbal.cpp:245)。
+依据：[消息定义](../User_File/System/MessageCenter/message_types.h)、[底盘模式判断](../User_File/Application/Chassis/Chassis.cpp)、[速度覆盖](../User_File/Application/Gimbal/Gimbal.cpp)。
 
 ### 12｜P1（比赛启用前）：功率、热量、堵转等约束尚未贯通
 
@@ -221,7 +234,7 @@ GimbalCmd 的速度字段被接收，但 Yaw 目标速度随即被角度 PID 输
 
 **验收：** 对资源不足、裁判离线、机构卡滞分别测试限制输出与恢复；比赛数值以实际采用的规则版本和机构验证为准，本报告不指定赛事限值。
 
-依据：[当前底盘执行](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Application/Chassis/Chassis.cpp:247)、[发射能力说明](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Application/Shoot/Shoot.cpp:1)。参考 [basic 功率接入](/home/kylin6/code/project/rm/opensourse/basic_framework/application/chassis/chassis.c:200)。
+依据：[当前底盘执行](../User_File/Application/Chassis/Chassis.cpp)、[发射能力说明](../User_File/Application/Shoot/Shoot.cpp)。参考 [basic 功率接入](https://github.com/HNUYueLuRM/basic_framework)。
 
 ### 13｜P2：缺少可直接运行的整车输入与通信样例
 
@@ -233,7 +246,7 @@ GimbalCmd 的速度字段被接收，但 Yaw 目标速度随即被角度 PID 输
 
 参考 basic 的 CANComm/板角色组织，但板间协议应显式定义版本、序号、长度、时间有效性和重连行为，不直接把内存结构当稳定线协议。
 
-依据：[空通信入口](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Application/Communication/Com.cpp:8)、[传输任务](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Task/TransportTask.cpp:28)、[应用调度](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Task/Control_Task.cpp:31)。参考 [basic 板间命令](/home/kylin6/code/project/rm/opensourse/basic_framework/application/cmd/robot_cmd.c:351)。
+依据：[空通信入口](../User_File/Application/Communication/Com.cpp)、[传输任务](../User_File/Task/TransportTask.cpp)、[应用调度](../User_File/Task/Control_Task.cpp)。参考 [basic 板间命令](https://github.com/HNUYueLuRM/basic_framework)。
 
 ### 14｜P2：1 kHz 是调度意图，尚缺截止时间和过载行为验证
 
@@ -245,7 +258,7 @@ CAN 发送通过 RTOS tick 独立唤醒，与 TIM4 不构成严格先后依赖�
 
 **验收：** 满 CAN、持续 UART、IMU 积压及遥测同时运行时，在板测量控制延迟分布与最大值，不能仅凭 osDelayUntil 注释宣称严格周期。
 
-依据：[TIM4 唤醒](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/System/callback/callback.cpp:62)、[ControlTask 等待](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Task/Control_Task.cpp:43)、[CAN 独立周期](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Task/CanTxTask.cpp:25)、[IMU 排空循环](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Task/BMI088_Task.cpp:39)。
+依据：[TIM4 唤醒](../User_File/System/callback/callback.cpp)、[ControlTask 等待](../User_File/Task/Control_Task.cpp)、[CAN 独立周期](../User_File/Task/CanTxTask.cpp)、[IMU 排空循环](../User_File/Task/BMI088_Task.cpp)。
 
 ### 15｜P2：任务级健康监督、创建失败和崩溃留痕不完整
 
@@ -255,7 +268,7 @@ CAN 发送通过 RTOS tick 独立唤醒，与 TIM4 不构成严格先后依赖�
 
 **验收：** 人为停住关键任务、耗尽任务分配内存、触发 fault，能进入预期停机/复位流程并保留可读原因。
 
-依据：[任务创建](/home/kylin6/code/project/rm/opensourse/H7_BSP/Core/Src/freertos.c:174)、[HardFault](/home/kylin6/code/project/rm/opensourse/H7_BSP/Core/Src/stm32h7xx_it.c:120)、[看门狗配置](/home/kylin6/code/project/rm/opensourse/H7_BSP/Core/Inc/stm32h7xx_hal_conf.h:64)。
+依据：[任务创建](../Core/Src/freertos.c)、[HardFault](../Core/Src/stm32h7xx_it.c)、[看门狗配置](../Core/Inc/stm32h7xx_hal_conf.h)。
 
 ### 16｜P2：车型、接线、机械参数和 PID 混在实现文件中
 
@@ -265,7 +278,7 @@ CAN 发送通过 RTOS tick 独立唤醒，与 TIM4 不构成严格先后依赖�
 
 **验收：** 两个配置档可独立构建、输出可辨认的配置标识，切换配置不修改算法源码。
 
-依据：[底盘参数](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Application/Chassis/Chassis.cpp:30)、[云台接线与范围](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Application/Gimbal/Gimbal.h:16)、[应用选项](/home/kylin6/code/project/rm/opensourse/H7_BSP/CMakeLists.txt:241)。参考 [Meta 参数选择](/home/kylin6/code/project/rm/opensourse/Meta-Embedded-NG/application/robot_def.h:104)。
+依据：[底盘参数](../User_File/Application/Chassis/Chassis.cpp)、[云台接线与范围](../User_File/Application/Gimbal/Gimbal.h)、[应用选项](../CMakeLists.txt)。参考 [Meta 参数选择](https://github.com/Meta-Team/Meta-Embedded-NG)。
 
 ### 17｜P2：有 Flash 驱动和分区，尚无完整参数服务，OSPI 错误传播仍薄弱
 
@@ -277,7 +290,7 @@ StorageTask 启动后立即退出；目前未发现 IMU A/B 分区被实际参�
 
 **验收：** 注入 DMA 启动失败、超时和写入中断电；调用有界返回，重启只选择完整有效参数。
 
-依据：[空存储任务](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Task/StorageTask.cpp:26)、[Flash 分区](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/System/Storage/sys_flash_layout.h:21)、[OSPI 丢弃结果](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Middleware/BSP/OSPI/bsp_ospi.cpp:101)、[W25Q 超时处理](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Device/Onboard/W25Q64JV/bsp_w25q64jv.cpp:262)。
+依据：[空存储任务](../User_File/Task/StorageTask.cpp)、[Flash 分区](../User_File/System/Storage/sys_flash_layout.h)、[OSPI 丢弃结果](../User_File/Middleware/BSP/OSPI/bsp_ospi.cpp)、[W25Q 超时处理](../User_File/Device/Onboard/W25Q64JV/bsp_w25q64jv.cpp)。
 
 ### 18｜P2：测试缺少应用组合、协议异常和持续集成入口
 
@@ -289,7 +302,7 @@ Tests 各自独立，根工程没有统一主机测试入口，当前 .github �
 
 **验收：** 上述定向复现成为可自动回归的失败/通过用例；单位错误、停止提交失败和输入失联均能被 CI 拦截。
 
-依据：`RoboMaster_Test` 分支中的 `Tests/Boundary/CMakeLists.txt`、`Tests/Topic/CMakeLists.txt`、[当前测试说明](/home/kylin6/code/project/rm/opensourse/H7_BSP/README.md:281)。
+依据：`RoboMaster_Test` 分支中的 `Tests/Boundary/CMakeLists.txt`、`Tests/Topic/CMakeLists.txt`、[当前测试说明](../README.md)。
 
 ### 19｜P2：诊断接口分散，尚未形成整车可观测性和资源预算
 
@@ -299,7 +312,7 @@ Tests 各自独立，根工程没有统一主机测试入口，当前 .github �
 
 **建议：** 新增低频健康快照，包含固件/配置标识、故障原因、输入/INS 年龄、每总线失败计数、队列占用和任务资源指标；建立链接段预算和在板运行预算。内存迁移应依据测量，不先盲目优化。
 
-依据：[CAN 统计](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Middleware/BSP/CAN/bsp_can.c:452)、[初始化状态](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/System/Init/Init.cpp:39)、[当前遥测](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Task/TransportTask.cpp:30)、[heap 布局](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_Config/FreeRTOS_Patch/heap_regions_patched.c:32)。
+依据：[CAN 统计](../User_File/Middleware/BSP/CAN/bsp_can.c)、[初始化状态](../User_File/System/Init/Init.cpp)、[当前遥测](../User_File/Task/TransportTask.cpp)、[heap 布局](../User_Config/FreeRTOS_Patch/heap_regions_patched.c)。
 
 ### 20｜P2：构建模块边界与工具链契约仍不够明确
 
@@ -311,7 +324,7 @@ Tests 各自独立，根工程没有统一主机测试入口，当前 .github �
 
 **建议：** 逐步建立少量 CMake target（平台、设备、应用、纯算法），用依赖限制 include；固定 C++ 标准和已验证工具链版本。维护模块“已实现/已接入/已测”的状态表，修正文档中的过度概括。
 
-依据：[顶层构建](/home/kylin6/code/project/rm/opensourse/H7_BSP/CMakeLists.txt:11)、[源码集中注册](/home/kylin6/code/project/rm/opensourse/H7_BSP/CMakeLists.txt:106)、[在线检查实际路径](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Device/Peripheral/Motor/DJImotor/dji_motor.cpp:489)、[Daemon 调度范围](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Task/StatusTask.cpp:10)。
+依据：[顶层构建](../CMakeLists.txt)、[源码集中注册](../CMakeLists.txt)、[在线检查实际路径](../User_File/Device/Peripheral/Motor/DJImotor/dji_motor.cpp)、[Daemon 调度范围](../User_File/Task/StatusTask.cpp)。
 
 ## 6. 建议的发展顺序
 
@@ -363,12 +376,12 @@ Tests 各自独立，根工程没有统一主机测试入口，当前 .github �
 
 ### 8.1 具体代码依据
 
-- [DJI 调参同步与调试导出](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Device/Peripheral/Motor/DJImotor/dji_motor.cpp:288)、[每周期调用](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Device/Peripheral/Motor/DJImotor/dji_motor.cpp:521)。
-- [底盘反馈计算](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Application/Chassis/Chassis.cpp:150)、[计算与发布频率](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Application/Chassis/Chassis.cpp:262)。
-- [订阅者读取](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/System/MessageCenter/topic.h:168)、[CAN 槽查找](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Middleware/BSP/CAN/bsp_can.c:341)。
-- [累计角归一化](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Application/Chassis/Chassis.cpp:60)、[电机组接口语义](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Device/Peripheral/Motor/DJImotor/dji_motor.cpp:749)。
-- [PID 初始化长参数列表](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Application/Gimbal/Gimbal.cpp:135)、[Matrix 构造与复制](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Middleware/Algorithm/Matrix/alg_matrix.h:31)。
-- [OSPI ISR 日志](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Middleware/BSP/OSPI/bsp_ospi.cpp:159)、[Shoot 清事件](/home/kylin6/code/project/rm/opensourse/H7_BSP/User_File/Application/Shoot/Shoot.cpp:225)。
+- [DJI 调参同步与调试导出](../User_File/Device/Peripheral/Motor/DJImotor/dji_motor.cpp)、[每周期调用](../User_File/Device/Peripheral/Motor/DJImotor/dji_motor.cpp)。
+- [底盘反馈计算](../User_File/Application/Chassis/Chassis.cpp)、[计算与发布频率](../User_File/Application/Chassis/Chassis.cpp)。
+- [订阅者读取](../User_File/System/MessageCenter/topic.h)、[CAN 槽查找](../User_File/Middleware/BSP/CAN/bsp_can.c)。
+- [累计角归一化](../User_File/Application/Chassis/Chassis.cpp)、[电机组接口语义](../User_File/Device/Peripheral/Motor/DJImotor/dji_motor.cpp)。
+- [PID 初始化长参数列表](../User_File/Application/Gimbal/Gimbal.cpp)、[Matrix 构造与复制](../User_File/Middleware/Algorithm/Matrix/alg_matrix.h)。
+- [OSPI ISR 日志](../User_File/Middleware/BSP/OSPI/bsp_ospi.cpp)、[Shoot 清事件](../User_File/Application/Shoot/Shoot.cpp)。
 
 ### 8.2 不建议为了“优化”贸然做的改动
 

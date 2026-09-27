@@ -26,6 +26,7 @@ Message Center 是 H7_BSP 内部的静态、类型安全消息基础设施。它
 | 文件 | 内容 |
 | --- | --- |
 | `topic.h` | `TopicSnapshot<T>`、`Topic<T>`、`Publisher<T>`、`Subscriber<T>` |
+| `output.h` | 无堆分配、函数指针加上下文的 `Output<T>` 与 `LocalPublisher<T>` |
 | `event_queue.h` | 固定容量 FIFO `EventQueue<T,N>` |
 | `message_types.h` | INS、应用命令、反馈和射击事件类型 |
 | `message_center.h/.cpp` | 全工程唯一 Topic 与 EventQueue 实例 |
@@ -38,6 +39,7 @@ Message Center 是 H7_BSP 内部的静态、类型安全消息基础设施。它
 ### 3.1 核心语义
 
 `Topic<T>` 只保存最后一次发布的完整快照。新发布覆盖旧值，不保存历史、不排队。
+`Publish()` 成功只表示快照已经写入，不代表任何 Subscriber 已经处理。
 它适合“接收方开始计算时只需要当前目标或当前状态”的数据：
 
 - INS 姿态与角速度。
@@ -91,6 +93,13 @@ logger.Read(command_for_log);          // true，订阅者状态互不影响
 
 首次有效快照即使 sequence 恰好为零也能被读取，因为 Subscriber 还保存了
 `has_read_`，不会用初始 sequence 值误判。
+`Subscriber::Read()` 的“已读”只属于该订阅者，不会从 Topic 中移除数据。
+
+`Output<T>` 是不拥有目标对象的句柄，用固定函数指针和上下文统一本地/远端发布，
+不使用虚函数或动态分配。`LocalPublisher<T>` 将其绑定到现有 Topic；远端绑定由
+Transport 的 `RemotePublisher` 提供。调用前必须检查 `IsBound()`：未绑定时
+`Publish()` 当前会直接返回，因此绝不能把它当作有效输出配置；`RobotCmd_Init()`
+会拒绝任一未绑定的三个输出。
 
 ### 3.4 Publisher / Subscriber
 
@@ -153,10 +162,10 @@ bool available = queue.Pop(event);
 | --- | --- | --- | --- |
 | `INS_State_Topic` | `System_IMU_Publish_State` | Gimbal | 最新姿态与角速度 |
 | `Gimbal_Command_Topic` | RobotCmd | Gimbal | 最新云台控制目标 |
-| `Chassis_Command_Topic` | RobotCmd | Chassis | 最新底盘速度目标 |
+| `Chassis_Command_Topic` | 单板 RobotCmd；底盘板 Transport 接收入口 | Chassis | 最新底盘速度目标 |
 | `Shoot_Command_Topic` | RobotCmd | Shoot | 最新发射连续状态 |
 | `Gimbal_Feedback_Topic` | Gimbal | RobotCmd | 最新云台反馈 |
-| `Chassis_Feedback_Topic` | Chassis | RobotCmd | 最新底盘反馈 |
+| `Chassis_Feedback_Topic` | 底盘板 Chassis；云台板 Transport 接收入口 | RobotCmd；底盘板 Transport | 最新底盘反馈 |
 | `Shoot_Feedback_Topic` | Shoot | RobotCmd | 最新发射反馈 |
 | `Shoot_Event_Queue` | RobotCmd | Shoot | 单发/三连发 FIFO，容量 8 |
 
@@ -188,8 +197,10 @@ Gimbal_Update（Control_Task，1 kHz）
   └─ RobotCmd_SetGimbal / SetChassis / SetShoot
           ↓ dirty 标志
      RobotCmd_Update
-          ↓ Publish 最新命令
- Gimbal / Chassis / Shoot Subscriber
+          ↓ Output::Publish 最新命令
+ SingleBoard: 本地 Topic → Gimbal / Chassis / Shoot Subscriber
+ GimbalBoard: 本地 Topic → Gimbal / Shoot Subscriber
+              固定 Transport → 底盘板本地 Topic → Chassis Subscriber
           ↓ 直接控制所属 Device
      100 Hz 发布 Feedback
           ↓
@@ -197,7 +208,7 @@ Gimbal_Update（Control_Task，1 kHz）
 ```
 
 命令只在对应 dirty 标志置位时发布。Application 没有读到新命令时继续执行保存的上一帧
-目标；反馈控制逻辑保持 1 kHz，Topic 发布频率降到 100 Hz。
+目标；反馈控制逻辑保持 1 kHz，通常每 10 ms 发布一次反馈 Topic。
 
 ## 7. 并发模型
 
@@ -216,7 +227,9 @@ Topic 和 EventQueue 使用 Cortex-M PRIMASK：
 - Control_Task 发布命令、读取命令与反馈、处理 ShootEvent。
 - 后续 ISR/回调可以使用基础设施，但消息必须足够小，且调用路径不得阻塞。
 
-PRIMASK 会短暂屏蔽所有可屏蔽中断，消息体积必须保持小而可预测。大型数组、图像、日志
+PRIMASK 会短暂屏蔽所有可屏蔽中断；Topic 的数据由发布任务写、订阅任务读，
+EventQueue 的索引和元素由 Push/Pop 调用方更新并在同样的临界区保护。消息体积必须
+保持小而可预测。大型数组、图像、日志
 或协议帧不应直接放入 Topic/EventQueue；应使用拥有明确生命周期的缓冲或传输模块。
 
 ## 8. 新增消息的决策流程

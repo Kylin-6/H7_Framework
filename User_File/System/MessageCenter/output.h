@@ -3,7 +3,7 @@
 
 #include "topic.h"
 
-/** A fixed publisher binding. The owner of context must outlive this handle. */
+/** 无堆分配、无虚函数的输出句柄；不拥有 context，绑定对象须比句柄活得更久。 */
 template<typename T>
 class Output
 {
@@ -13,6 +13,7 @@ public:
     Output() = default;
     Output(void *context, PublishFn publish) : context_(context), publish_(publish) {}
 
+    /** 调用方初始化时必须检查；未绑定的 Publish 当前为无操作，不是有效配置。 */
     bool IsBound() const { return context_ != nullptr && publish_ != nullptr; }
 
     void Publish(const T &data) const

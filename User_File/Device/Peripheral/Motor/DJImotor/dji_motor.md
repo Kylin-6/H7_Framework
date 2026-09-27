@@ -79,8 +79,9 @@ if (motor.Init(config))
 ```
 
 非 GM6020 电机只接受 `CURRENT`。`gear_ratio <= 0` 时使用型号默认值：M2006 为
-36、M3508 为官方标称约 19、GM6020 为 1。若实际机构或精度要求不同，应显式填写
-实测或设计减速比。
+36、M3508 为官方标称约 19、GM6020 为 1。`motor_type` 还决定协议、CAN ID 与电流范围，
+不意味着所有 M3508 都装有 19:1 减速箱。当前 Shoot 摩擦轮 M3508/C620 为直驱转子，
+显式使用 `gear_ratio = 1.0`，默认速度目标 `25 rad/s`。其他机构也应显式填写实测或设计减速比。
 
 ## 控制与发送
 
@@ -131,6 +132,9 @@ gimbal.Control_Degree(yaw_deg, pitch_deg); // 位置环：deg；速度环：deg/
 - `online`：最近一次接收或超时检查得到的在线状态。
 - `last_feedback_timestamp_us`：最近反馈的 64 位系统微秒时间戳；任务中读取时使用
   `Get_Last_Feedback_Timestamp_Us()`，由接口保护 32 位 MCU 上的完整快照。
+
+上述 degree 显示字段不进入正式控制链。反馈由 CAN RX 中断写入，任务直接读取多个
+公开字段不保证来自同一帧；当前 DJI 驱动没有完整的 `GetFeedbackSnapshot()` 接口。
 
 反向配置作用于角度、速度以及控制输出的逻辑方向；`feedback.encoder` 和 `feedback.current_raw` 始终保留
 协议原始值。内部电流环会根据反向配置转换 `feedback.current_raw` 的符号。

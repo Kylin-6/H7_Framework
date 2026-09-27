@@ -3,7 +3,7 @@
 
 #include "fdcan.h"
 
-/** Hardware fitted to this firmware target; transport mapping lives separately. */
+/** 当前构建目标的物理硬件资源；不决定应用源码，也不保存板间通信路由。 */
 struct BoardHardware
 {
     FDCAN_HandleTypeDef *gimbal_yaw_bus;

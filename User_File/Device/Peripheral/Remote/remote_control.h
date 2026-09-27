@@ -117,7 +117,8 @@ typedef struct
 /**
  * @brief 初始化遥控器,该函数会将遥控器注册到串口
  *
- * @attention 注意分配正确的串口硬件,遥控器在C板上使用USART3
+ * @note 调用方选择已配置 RX DMA 的 UART；当前 System_Init 未调用本接口。
+ *       接收回调仅取本次 DMA chunk 的最后 18 字节，不支持跨回调半帧。
  *
  */
 RC_ctrl_t *RemoteControlInit(UART_HandleTypeDef *rc_usart_handle);

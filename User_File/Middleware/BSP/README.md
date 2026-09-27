@@ -87,8 +87,11 @@ CAN 刻意保留两种语义，不应按消息频率混用：
 参数无效、资源尚未建立或容量不足，Device 必须保留失败状态或决定重试，不能把“写入
 软件通道成功”等同于“电机已经执行”。
 
-`Can_Tx_Task` 每 1 ms 依次调用 `BSP_CAN_SendAsync()` 和 `BSP_CAN_SendPer()`。命令 FIFO
-的队首在 HAL FIFO 暂时不可写时会保留并阻止后续命令越过；周期槽仍可独立处理。
+`Can_Tx_Task` 每 1 ms 依次调用 `BSP_CAN_SendAsync()` 和 `BSP_CAN_SendPer()`。
+FDCAN1/2/3 各有静态 FIFO 和 pending 帧，每次轮询每条总线最多尝试一帧；同总线
+pending 先于队列后续帧重试。某条总线暂时不可写只阻塞本总线的后续离散命令，
+其他总线和周期槽仍独立处理。软件接受、HAL 写入硬件 FIFO、总线发送、对端收到、
+设备执行并非同一事件。
 
 ## 5. SPI、UART、USB 与 OSPI
 
@@ -103,12 +106,15 @@ SPI2 额外保留 timeout 快照，包括 SPI/DMA 寄存器、HAL 状态、传�
 
 ### 5.2 UART
 
-UART 接收采用 `HAL_UARTEx_ReceiveToIdle_DMA` 和双缓冲，支持不定长帧。DMA TX 会先复制
+UART 接收采用 `HAL_UARTEx_ReceiveToIdle_DMA` 和双缓冲，回调交付的是本次 DMA chunk，
+可能是半帧或多帧。BSP 不负责协议拼帧、粘包和重同步，Device parser 必须处理。
+DMA TX 会先复制
 到管理对象的专用发送缓冲；接口返回后调用方可以立即复用原数据。发送在途时返回
 `HAL_BUSY`，不会覆盖现有帧。
 
 错误中断只设置恢复标志；`TIM1msTask` 调用
-`UART_TIM_1ms_Recover_PeriodElapsedCallback()` 在任务上下文清理 DMA 并重启接收。
+`UART_TIM_1ms_Recover_PeriodElapsedCallback()` 在任务上下文清理 DMA，并每 10 ms
+重试待恢复的接收通道。就绪缓冲只保证在当前回调期间有效。
 
 当前管理对象覆盖 UART5、UART7、USART1/2/3/6/10。其他 UART 若要使用 DMA 路径，必须
 先补齐管理对象、CubeMX DMA 配置和回调映射。

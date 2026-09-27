@@ -68,8 +68,8 @@ BSP 以外设管理对象和接口函数承接 HAL，设备层通过注册回调
 CAN 的两条发送通道适用于不同数据语义：
 
 - `CAN_Tx_Perform()` 更新 `(FDCAN, ID)` 对应的周期槽，同一键保留最新数据，适合连续控制目标。
-- `CAN_Tx_Submit()` 将命令复制到 FIFO 队列，适合使能、复位与模式设置等需要按顺序处理的操作。
-- `CanTxTask` 调用 `BSP_CAN_SendAsync()` / `BSP_CAN_SendPer()` 处理发送。调用方需要检查提交结果；进入软件缓冲与总线发送完成是不同阶段。
+- `CAN_Tx_Submit()` 将离散命令复制到 FDCAN1/2/3 各自的 FIFO；同总线按序重试，单总线拥塞不阻断其他总线或周期槽。
+- `CanTxTask` 每 1 ms 调用 `BSP_CAN_SendAsync()` / `BSP_CAN_SendPer()`。软件提交成功、写入硬件 FIFO、总线发送、对端收到和设备执行是不同阶段；调用方须检查提交结果。
 
 CAN 接收回调在中断上下文执行。UART 的 DMA 接收须同时具备 CubeMX 的 RX DMA 配置和 BSP 管理入口，接入新端口时需同步核对。
 
@@ -91,7 +91,7 @@ CAN 接收回调在中断上下文执行。UART 的 DMA 接收须同时具备 Cu
 
 达妙动作/模式请求及 QDrive 命令接口返回 `bool`，表示是否成功提交到软件发送通道。提交失败时保留相应状态，调用方可据此重试；达妙置零仅在提交成功后重置位置展开状态。返回成功不代表电机已经执行或确认命令。
 
-达妙反馈以 `(FDCAN, master_id)` 注册接收入口，并继续用反馈首字节低四位匹配 `can_id`；电机 ID 支持 `0x00~0xFF`，不要把高 ID 截断为四位。只有总线、ID、DLC 和节点号全部合法的运动反馈才刷新在线状态，参数应答不会喂在线守护器。在线电机连续 100 ms 无合法反馈时，Daemon 的离线跃迁回调会尝试提交**一帧**使能命令；同一离线阶段不持续重发，提交失败也不代表已经恢复，应用仍须依据 `IsHealthy()` 决定是否输出。
+达妙反馈以 `(FDCAN, master_id)` 注册接收入口，并用反馈首字节低四位匹配 `can_id`；电机 ID 使用 8 位值，高四位仍用于发送 ID。只有总线、ID、DLC 和节点号全部合法的运动反馈才刷新在线状态。在线电机连续 100 ms 无合法反馈时，Daemon 离线回调首次尝试将使能帧入软件 FIFO；首次失败才由 `StatusTask` 的 `ServiceAll()` 至少间隔 50 ms 重试入队。入队成功不代表已恢复；Gimbal 两轴关闭此自动机制，使用自身状态机。
 
 ### 板载设备与外接工具
 
@@ -163,15 +163,21 @@ EricTool 的 USB/UART 解析均只读取回调传入的缓冲区及有效长度�
 - `Topic<T>` 使用 Latest-Value 语义，传递连续状态和控制目标；`Publisher`/`Subscriber` 只是其无分配访问封装。
 - `EventQueue<T,N>` 使用固定容量 FIFO，传递不能被最新值覆盖的离散事件；队列满时拒绝新事件并累计溢出次数。
 
-业务类型和唯一静态通道统一定义在 [MessageCenter](User_File/System/MessageCenter)。`INS_State_Topic` 由 BMI088 链路发布，云台读取最新姿态；RobotCmd 发布 Gimbal、Chassis、Shoot 连续命令并汇总反馈。单发和三连发通过固定容量 `ShootEvent` FIFO 传递。完整 API、并发语义、通道所有权、示例和验证清单见 [Message Center 专篇](User_File/System/MessageCenter/README.md)。
+业务类型和唯一静态通道统一定义在 [MessageCenter](User_File/System/MessageCenter)。`INS_State_Topic` 由 BMI088 链路发布，云台读取最新姿态；RobotCmd 通过 Output 发布 Gimbal、Chassis、Shoot 连续命令并汇总反馈，底盘命令在云台板由固定 Transport 送往底盘板 Topic。单发和三连发通过固定容量 `ShootEvent` FIFO 传递。完整 API、并发语义、通道所有权、示例和验证清单见 [Message Center 专篇](User_File/System/MessageCenter/README.md)。
 
-Daemon 只负责在线状态判断，不负责掉线后的停机、安全策略或消息路由。设备在收到合法反馈后直接 `Feed()`；`StatusTask` 每 10 ms 调用 `CheckAll()`，各设备使用独立超时时间。管理器采用固定容量注册，无动态分配。
+Daemon 只负责在线状态判断，不负责整车停机、安全策略或消息路由。设备在收到合法反馈后直接 `Feed()`；`StatusTask` 每 10 ms 调用 `CheckAll()`，并在包含 DM 电机的目标上调用 `Class_DMMotor::ServiceAll()`。管理器采用固定容量注册，无动态分配。
 
 ### Application
 
 Application 作为独立机器人业务层维护，不在 BSP 总览展开具体控制实现。当前模块、
 Control_Task 调度顺序、RobotCmd 所有权、Gimbal/Chassis/Shoot 行为和新应用接入规范见
 [Application 开发指南](User_File/Application/README.md)。
+
+### 单板与双板
+
+构建目标在编译期确定应用与任务：`SingleBoard` 保留全部应用源码，但 Gimbal、Chassis、Shoot 硬件控制默认关闭；`GimbalBoard` 运行 RobotCmd、Gimbal、Shoot；`ChassisBoard` 运行 Chassis。BoardConfig 只绑定本板硬件，TransportConfig 固定板间总线和报文号。运行时不使用 Router 或动态 Topic 路由。
+
+单板 RobotCmd 的三个 Output 都是 LocalPublisher；云台板的底盘 Output 是 RemotePublisher。`ChassisCmd` 经 CAN 标准 ID `0x141` 到达底盘板本地 Topic，`ChassisFeedback` 经 `0x222` 返回云台板本地 Topic。两者是 8 字节 Classic CAN 最新值，接收任务按实际 RX 时间和序号校验，底盘命令超过 100 ms 变为 `ZERO_FORCE`。INS、Gimbal、Shoot 的 1 kHz 板内路径不经过 Transport。协议和接线见 [双板 Transport](User_File/System/Transport/README.md)。
 
 ## 可靠性与降级边界
 
@@ -198,7 +204,7 @@ Control_Task 调度顺序、RobotCmd 所有权、Gimbal/Chassis/Shoot 行为和�
 | `DataValid` | 当前反馈可供上层使用；现有驱动通常要求 Online |
 | `Healthy` | 当前设备满足业务使用的最小条件，通常为 Enabled 且 DataValid |
 
-`Daemon` 只负责时间窗、在线/离线跃迁和可选离线回调。设备收到完整合法反馈后自行 `Feed()`，`StatusTask` 每 10 ms 统一 `CheckAll()`。它不自动实现全车停机、云台 DISABLE、消息路由或故障上报；这些安全动作必须在拥有设备的 Application 中显式处理，并用实机拔线验证时限。
+`Daemon` 只负责时间窗、在线/离线跃迁和可选离线回调。设备收到完整合法反馈后自行 `Feed()`，`StatusTask` 每 10 ms 统一 `CheckAll()`，有 DM 电机时随后执行待恢复入队服务。它不自动实现全车停机、云台 DISABLE、消息路由或故障上报；这些安全动作必须在拥有设备的 Application 中显式处理，并用实机拔线验证时限。
 
 ### 数据新鲜度、发送与可观测性
 
@@ -282,8 +288,10 @@ cmake --build --preset Release
 ### 主机回归
 
 项目自有测试统一保存在 `RoboMaster_Test` 分支；`RoboMaster_H7` 不包含 `Tests/`。
-测试分支保留完整固件源码及 10 个主机测试工程（57 项测试），包括测试桩、参考数据、
-生成脚本和各套件 README。第三方 CMSIS 等依赖自带的测试文件仍随依赖保留。
+当前本地 `RoboMaster_Test/Tests` 包含 Boundary、CAN、Chassis、Communication、
+FilterPolynomial、Fuzzy、Gimbal、Initialization、Output、SBUS、Shoot、Topic、
+Trajectory、Transport。完整列表与测试数量以该分支 `Tests/` 和 `ctest` 输出为准；
+第三方 CMSIS 等依赖自带的测试文件仍随依赖保留。
 
 需要运行回归时，在工作区干净的情况下切换到测试分支，按该分支 README 的主机回归
 步骤操作：
@@ -297,7 +305,7 @@ git switch RoboMaster_Test
 
 ### 烧录与观察
 
-[VS Code 任务](.vscode/tasks.json) 提供 DAPLink、ST-Link、J-Link 选择与烧录入口；[调试配置](.vscode/launch.json) 和 [Ozone 工程](H7_BSP.jdebug) 提供源码调试入口。使用前按本机安装位置检查工具路径、探针和目标芯片配置。
+本地如已配置 VS Code 烧录/调试任务，可按探针和目标芯片检查工具路径；仓库提供 [Ozone 工程](H7_BSP.jdebug) 作为源码调试入口。
 
 - Ozone / GDB：观察设备反馈、算法状态、系统调试数据与任务栈水位。
 - SystemView / RTT：观察任务调度、中断和运行时信息。
@@ -308,6 +316,7 @@ git switch RoboMaster_Test
 
 - [BSP 开发指南](User_File/Middleware/BSP/README.md) · [Message Center](User_File/System/MessageCenter/README.md) · [Application 开发指南](User_File/Application/README.md)。
 - [DJI 电机驱动](User_File/Device/Peripheral/Motor/DJImotor/dji_motor.md) · [达妙电机驱动](User_File/Device/Peripheral/Motor/DMmotor/dmmotor.md) · [更新记录](CHANGELOG.md)。
+- [文档与注释一致性审查](docs/documentation_sync_2026-09-28.md) · [2026-09-25 历史框架审查](docs/framework_review_2026-09-25.md)。
 - [FreeRTOS heap memory management](https://www.freertos.org/Documentation/02-Kernel/02-Kernel-features/09-Memory-management/01-Memory-management)。
 - [ST AN4891：STM32H7 系统架构与性能](https://www.st.com/resource/en/application_note/an4891-stm32h72x-stm32h73x-and-singlecore-stm32h74x75x-system-architecture-and-performance-stmicroelectronics.pdf)。
 - [ST AN4839：STM32F7/H7 一级缓存](https://www.st.com/resource/en/application_note/an4839-level-1-cache-on-stm32f7-series-and-stm32h7-series-stmicroelectronics.pdf)。

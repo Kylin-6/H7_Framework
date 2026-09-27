@@ -14,7 +14,7 @@
 
 PMAX/VMAX/TMAX 是协议映射范围，不代表电机的额定或峰值能力；输出力矩、速度和控制增益应由应用层按电机和负载单独限制。所有模式的反馈解码均使用这些范围。
 
-三个映射范围参数必须是有限正数。当前驱动接受 `can_id` 为 `0x00~0x0F`、`master_id` 为 `0x000~0x7FF`；同一 CAN 总线上的各电机应使用不同的发送 ID 和反馈 ID，并检查 `Init()` 返回值。
+三个映射范围参数必须是有限正数。`can_id` 使用 8 位值（`0x00~0xFF`），反馈首字节只以低四位核对节点号；`master_id` 是标准 CAN ID（`0x000~0x7FF`）。同一 CAN 总线上的各电机应使用不同的发送 ID 和反馈 ID，并检查 `Init()` 返回值。
 
 ## 初始化和通用命令
 
@@ -89,13 +89,13 @@ motor.SetTorque(1.0f);
 
 ### 位置-速度模式
 
-发送 ID 为 `0x100 + can_id`，数据包含 4 字节目标位置和 4 字节最大速度限幅。速度限幅应为非负值：
+发送 ID 为 `0x100 + can_id`，数据包含 4 字节目标位置和 4 字节有符号目标速度：
 
 ```c
 motor.SetPositionSpeed(1.0f, 2.0f); // 1 rad，2 rad/s
 ```
 
-已知限制：当前实现仍会在 `reverse=true` 时反转速度限幅的符号，该问题尚未修复，反向安装时不能直接套用这一接口。
+`reverse=true` 会同时反转目标位置和目标速度的符号；它们必须与电机端模式契约一致。
 
 ### 速度模式
 
@@ -112,6 +112,8 @@ motor.SetSpeed(1.0f); // 1 rad/s
 ```c
 motor.SetForcePosition(1.0f, 5.0f, 0.2f);
 ```
+
+此接口在 `reverse=true` 时反转位置，速度限幅仍编码为非负幅值；旧文档关于速度限幅变负的限制已不适用。
 
 ### CAN 切换模式
 
@@ -156,8 +158,13 @@ MIT 的 `kp`、`kd` 是发给电机内部控制器的控制参数，不属于反
 复制，online 按最近一次运动反馈的 100 ms 截止时间计算，不等待 StatusTask。
 
 `SetMIT()`、`SetTorque()` 返回软件周期槽更新结果，false 时由应用处理；不表示设备已执行。
-初始化阶段可调用 `SetAutoEnableOnOffline(false)` 关闭单次掉线使能回调，由应用管理恢复；
-其他实例默认仍保留原行为。
+在线电机发生 Online→Offline 跃迁时，Daemon 回调尝试将一次 `Enable()` 放入该总线的
+离散命令 FIFO。首次入队成功后不继续软件重发；仅当入队失败时标记
+`recover_pending`，由 100 Hz `StatusTask` 在 `CheckAll()` 后调用 `ServiceAll()`，每个
+待恢复实例至少间隔 50 ms 非阻塞重试入队。入队成功、电机重新在线或关闭自动恢复后
+停止重试。这不是“电机一直离线就不断重发 Enable”，也不代表对端已执行使能。
+云台两轴调用 `SetAutoEnableOnOffline(false)`，由 Gimbal 自己的
+`DISABLED/ENABLING/READY/FAULT/CONFIG_ERROR` 状态机负责恢复，不同时运行两套策略。
 
 ## 接入示例
 

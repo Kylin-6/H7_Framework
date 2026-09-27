@@ -18,8 +18,8 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Debug")
 endif()
 
-# Firmware role is fixed at configure time. Keep the legacy executable name for
-# the default single-board build.
+# CMake 在配置期固定板型，并选择 Application/Device/Task 源码；硬件接线由
+# BoardConfig 管理，跨板 CAN 映射由 TransportConfig 管理。单板保留原 ELF 名称。
 set(H7_BOARD "SingleBoard" CACHE STRING "Firmware board role")
 set_property(CACHE H7_BOARD PROPERTY STRINGS SingleBoard GimbalBoard ChassisBoard)
 if(H7_BOARD STREQUAL "SingleBoard")

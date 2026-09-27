@@ -21,8 +21,8 @@ struct TopicSnapshot
  * @brief 静态、非阻塞的 Latest-Value Topic。
  * @tparam T 体积较小且可平凡复制的消息类型。
  *
- * Publish/Read 面向任务上下文。通过极短的 PRIMASK 临界区保证 FreeRTOS
- * 任务间读取的数据与元信息一致，不使用互斥锁、队列或动态内存。
+ * Publish/Read 主要由任务调用。发布者写入和读者复制均以短 PRIMASK 临界区保护，
+ * 保证快照的数据与元信息一致；不使用互斥锁、队列或动态内存。
  * 适用于只关心最新值的连续状态和控制目标，与消息更新频率无关。
  */
 template<typename T>
@@ -32,13 +32,13 @@ class Topic
                   "Topic messages must be trivially copyable");
 
 public:
-    /** 发布一个新状态；旧状态直接被覆盖，不保存历史记录。 */
+    /** 发布并覆盖旧快照；返回不代表订阅者已经处理。时间戳为调用时刻。 */
     void Publish(const T &data)
     {
         PublishAt(data, SYS_Timestamp_Get_Microsecond());
     }
 
-    /** Keep a frame's receive time when a transport publishes it in task context. */
+    /** @brief 指定快照时间戳；板间接收端在任务中保留 CAN 实际接收时刻（us）。 */
     void PublishAt(const T &data, uint64_t timestamp_us)
     {
         const uint32_t primask = __get_PRIMASK();

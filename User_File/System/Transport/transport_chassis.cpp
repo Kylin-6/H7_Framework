@@ -9,6 +9,7 @@
 
 namespace
 {
+// FDCAN RX ISR 写最新帧和实际接收时间；ControlTask 在 PRIMASK 临界区复制后解码。
 volatile uint8_t pending_bytes[TransportProtocol::kPayloadSize];
 volatile bool pending;
 volatile uint64_t pending_rx_us;
@@ -71,6 +72,7 @@ void ProcessCommand(const uint8_t *bytes, uint64_t received_us)
     {
         return;
     }
+    // 超时重建只看已通过解码/当前时效检查的实际 RX 时间；无会话标识，旧合法帧仍可能被重建接受。
     if (has_sequence && received_us - last_accepted_rx_us >
                             TransportProtocol::kCommandMaxAgeUs)
     {

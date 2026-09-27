@@ -24,10 +24,10 @@ static uint32_t referee_last_valid_tick;
 #define REFEREE_OFFLINE_TIMEOUT_MS 500U
 
 /**
- * @brief  读取裁判数据,中断中读取保证速度
- * @param  buff: 读取到的裁判系统原始数据
- * @retval 是否对正误判断做处理
- * @attention  在此判断帧头和CRC校验,无误再写入数据，不重复判断帧头
+ * @brief 解析本次 UART DMA chunk 中完整的裁判帧；回调可处于中断上下文。
+ * @warning 不保存跨回调半帧；按 CmdID memcpy 前未检查声明载荷是否达到固定结构长度。
+ *          DataLength 的 16 位长度运算也可能回绕。CRC 通过不等于载荷可安全复制。
+ *          接入生产控制链前须改为有界流式解析并补长度校验。
  */
 static void JudgeReadData(uint8_t *buff, uint16_t length)
 {
@@ -143,7 +143,7 @@ static void JudgeReadData(uint8_t *buff, uint16_t length)
     }
 }
 
-/*裁判系统串口接收回调函数,解析数据 */
+/* UART BSP 交付的是本次 DMA chunk，不保证恰好一帧。 */
 static void RefereeRxCallback(uint8_t *buffer, uint16_t length)
 {
     JudgeReadData(buffer, length);
@@ -163,10 +163,7 @@ referee_info_t *RefereeInit(UART_HandleTypeDef *referee_usart_handle)
     return &referee_info;
 }
 
-/**
- * @brief 裁判系统数据发送函数
- * @param
- */
+/** 提交成功后在调用任务阻塞 115 ms；不适用于中断或 1 kHz 控制循环。 */
 void RefereeSend(uint8_t *send, uint16_t tx_len)
 {
     if (referee_uart != NULL &&

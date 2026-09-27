@@ -4,6 +4,8 @@
  *
  * 未直接移植热量限制和堵转阈值：这些参数依赖实车机构与裁判系统数据，当前
  * 工程尚不具备可靠标定条件。
+ * 摩擦轮为 M3508/C620 直驱（gear_ratio=1），默认目标 25 rad/s。
+ * 当前无就绪、卡弹回退、热量/裁判互锁或完整 FEEDING 状态机。
  */
 
 #include "Shoot.h"
@@ -121,6 +123,7 @@ static void Shoot_ApplyCommand(void)
     default:
     {
         ShootEvent event;
+        /* 每个 1 ms 周期最多取一个逻辑请求并累加目标角，不等待前一发物理完成。 */
         if (MessageCenter::Shoot_Event_Queue.Pop(event))
         {
             if (!Shoot_Event_Angle_Active)

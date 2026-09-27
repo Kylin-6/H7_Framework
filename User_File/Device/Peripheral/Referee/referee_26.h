@@ -49,23 +49,22 @@ typedef struct
 #pragma pack()
 
 /**
- * @brief 裁判系统通信初始化,该函数会初始化裁判系统串口,开启中断
- *
- * @param referee_usart_handle 串口handle,C板一般用串口6
- * @return referee_info_t* 返回裁判系统反馈的数据,包括热量/血量/状态等
+ * @brief 向 UART BSP 注册裁判数据接收回调；当前 System_Init 不自动调用。
+ * @param referee_usart_handle 已配置 RX DMA 的 UART 句柄，由板级接线选择。
+ * @return 静态反馈对象指针；空句柄返回 NULL。
+ * @note 回调在 UART 中断中解析本次 DMA chunk；当前不跨回调拼帧，且固定载荷复制缺少严格长度检查。
  */
 referee_info_t *RefereeInit(UART_HandleTypeDef *referee_usart_handle);
 
 /**
- * @brief UI绘制和交互数的发送接口,由UI绘制任务和多机通信函数调用
- * @note 内部包含了一个实时系统的延时函数,这是因为裁判系统接收CMD数据至高位10Hz
- *
- * @param send 发送数据首地址
- * @param tx_len 发送长度
+ * @brief 提交 UI/交互数据；只有 UART 提交成功才阻塞延时 115 ms。
+ * @param send 发送缓冲首地址；BSP 的 DMA 发送路径会复制内容。
+ * @param tx_len 字节数。
+ * @note 无返回值，不能用于 ISR 或 1 kHz 控制任务；调用前须先 RefereeInit。
  */
 void RefereeSend(uint8_t *send, uint16_t tx_len);
 
-/** @brief Parse one DMA receive block without registering a UART. */
+/** @brief 解析本次 DMA chunk，不注册 UART，也不保留跨调用半帧。 */
 void RefereeReceiveData(uint8_t *data, uint16_t length);
 uint8_t RefereeIsEnabled(void);   ///< 已完成 UART 注册；裁判系统没有协议使能态。
 uint8_t RefereeIsOnline(void);    ///< 最近 500 ms 内解析到过 CRC 合法帧。

@@ -5,6 +5,8 @@
  *
  * @details
  * 陀螺仪 SPI 接收回调在 FIFO 状态机需要续传或样本入队后置位线程标志。本任务
+ * High2；阻塞等待 SPI 回调线程标志，非固定周期。输入为 BMI088 FIFO 样本，
+ * 输出为 INS Topic 和调试数据；不负责 Gimbal 控制或板间 Transport。
  * 被唤醒后在任务上下文继续传输并逐帧调用 Calculate() 清空队列，避免约 2 kHz
  * 的陀螺仪数据积压；完成本批解算后更新调试遥测数据。任务使用 CMSIS-RTOS v2
  * 接口，不直接依赖 FreeRTOS 原生 API。

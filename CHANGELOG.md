@@ -3,6 +3,24 @@
 本文件记录 H7_BSP 当前阶段的工程进展、已验证结果和仍待完成事项。
 
 格式遵循“日期 + 分类”的方式维护。当前项目尚未形成正式版本号，因此先使用日期条目。
+旧日期条目记录当时的构建和测试快照，其中的数量及“尚未完成”不表示当前状态；
+当前能力以根 README 和对应模块文档为准。
+
+## 2026-09-28
+
+### 当前代码已实现
+
+- CMake 增加 SingleBoard、GimbalBoard、ChassisBoard 构建目标，分别选择应用、设备、任务源码；BoardConfig 管硬件资源，TransportConfig 管固定跨板映射。SingleBoard 硬件应用默认关闭。
+- RobotCmd 使用无堆分配的 `Output<T>`，通过 `IsBound()` 拒绝未绑定的初始化；`LocalPublisher` 发布到本地 Topic，`RemotePublisher` 将底盘命令交给固定 Transport。
+- `ChassisCmd` 由云台板通过标准 CAN ID `0x141` 发往底盘板；`ChassisFeedback` 由底盘板通过 `0x222` 返回。两方向按实际 RX 时间、序号与 100 ms 时效检查后进入本地 Message Center；协议为 latest-value，无会话标识或 ACK。
+- 三路 FDCAN 离散命令各有静态 FIFO 和 pending 帧；同总线保持顺序，单总线失败不阻断其他总线。`CAN_Tx_Perform()` 保留最新值周期槽语义。
+- DM 离线首次使能入队失败时记录 `recover_pending`；`StatusTask` 调用 `ServiceAll()` 至少间隔 50 ms 重试入队。Gimbal 两轴关闭此机制，使用自己的恢复状态机。
+- Chassis、Shoot 和 DJI 控制链统一 rad/rad/s；直驱 M3508 摩擦轮显式配置 `gear_ratio = 1.0`，默认目标 `25 rad/s`。
+
+### 文档同步
+
+- 以当前源码修订架构、任务、双板、设备和协议契约；将 2026-09-25 框架审查标为历史快照，测试套件数量改为以测试分支实际目录与 `ctest` 为准。
+- 未修改生产行为。Referee/DBUS 解析、输入仲裁、完整发射状态机等仍为待完成项，实机验证尚未完成。
 
 ## 2026-09-27
 

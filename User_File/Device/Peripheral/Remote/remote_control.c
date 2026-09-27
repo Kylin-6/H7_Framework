@@ -101,10 +101,7 @@ static void sbus_to_rc(const uint8_t *sbus_buf)
     memcpy(&rc_ctrl[LAST], &rc_ctrl[TEMP], sizeof(RC_ctrl_t)); // 保存上一次的数据,用于按键持续按下和切换的判断
 }
 
-/**
- * @brief 对sbus_to_rc的简单封装,用于注册到本工程UART BSP的回调函数中
- *
- */
+/** @brief DBUS 接收回调。仅使用本次 DMA chunk 末尾 18 字节，不跨回调拼帧；拆包会丢失。 */
 static void RemoteControlRxCallback(uint8_t *buffer, uint16_t length)
 {
     if (buffer == NULL || length < REMOTE_CONTROL_FRAME_SIZE)

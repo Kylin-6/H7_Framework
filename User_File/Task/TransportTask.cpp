@@ -1,6 +1,9 @@
 /**
  * @file    TransportTask.cpp
- * @brief   传输任务 —— USB CDC 初始化与遥测输出
+ * @brief   Normal 优先级、约 1 ms 的 USB CDC 调试遥测任务。
+ * @details 初始化 USB，周期调用 EricTool 输出；osDelay(1) 允许阻塞。
+ *          不负责 System/Transport 的板间 CAN，也不解析遥控/裁判协议。
+ * @todo    文件名与板间 Transport 易混淆，后续独立更名，本次保留任务符号。
  * @author  zzm
  * @version 1.2
  * @date    2026-07-11 1.2 移除未使用的 PID tuner

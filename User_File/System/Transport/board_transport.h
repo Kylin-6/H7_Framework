@@ -3,7 +3,7 @@
 
 #include "message_types.h"
 
-/** Implemented only by the selected board's fixed transport binding. */
+/** 仅由当前 CMake 板型选中的固定协议绑定实现；不是动态 Router。 */
 void BoardTransport_Init(void);
 void BoardTransport_Poll(void);
 void BoardTransport_SendChassis(const ChassisCmd &command);

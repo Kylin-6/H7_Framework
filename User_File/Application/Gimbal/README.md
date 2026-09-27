@@ -1,7 +1,8 @@
 # 双达妙云台
 
 云台由统一 ControlTask 以 1 kHz 调度，两轴均使用现有 `Class_DMMotor` 和 MIT 模式。
-QD4310 驱动仍作为独立设备保留，云台不再依赖它。默认 `H7_APP_GIMBAL=OFF`。
+QD4310 驱动仍作为独立设备保留，云台不再依赖它。SingleBoard 默认
+`H7_APP_GIMBAL=OFF`；GimbalBoard 构建固定启用云台硬件路径。
 
 ## 配置与参考来源
 
@@ -12,7 +13,7 @@ QD4310 驱动仍作为独立设备保留，云台不再依赖它。默认 `H7_AP
 
 | 项目 | 示例 | 来源与限制 |
 | --- | --- | --- |
-| Yaw / Pitch 总线 | FDCAN2 / FDCAN1 | 沿用本工程云台接线 |
+| Yaw / Pitch 总线 | GimbalBoard 均为 FDCAN1；SingleBoard 为 FDCAN2 / FDCAN1 | 由所选 BoardConfig 固定接线，板间链路占用 GimbalBoard 的 FDCAN2 |
 | 电机 ID | 1 / 2 | 示例，需与电机端对应 |
 | 反馈 Master ID | 0x101 / 0x102 | 示例，不能与同总线现有接收 ID 冲突 |
 | 协议量程 | ±12.5 rad、±45 rad/s、±18 N·m | Meta 达妙驱动示例，必须与电机端 PMAX/VMAX/TMAX 相同 |

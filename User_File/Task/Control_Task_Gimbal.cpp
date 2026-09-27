@@ -1,3 +1,10 @@
+/**
+ * @file Control_Task_Gimbal.cpp
+ * @brief GimbalBoard 的 High1、1 kHz 控制任务。
+ * @details 阻塞等待线程标志；先处理板间反馈，再由 RobotCmd 输出本地云台/发射和
+ *          远端底盘命令，最后更新 Gimbal/Shoot。周期内不等待 CAN/电机执行，
+ *          不负责遥控/视觉解析或动态路由。
+ */
 #include "Gimbal.h"
 #include "RobotCmd.h"
 #include "Shoot.h"

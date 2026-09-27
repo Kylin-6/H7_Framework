@@ -6,7 +6,7 @@
 #include <cstdint>
 #include <type_traits>
 
-/** 静态、非阻塞、线程安全的固定容量 FIFO。 */
+/** 固定容量 FIFO；Push/Pop 的元素与索引复制受短 PRIMASK 临界区保护。满时拒绝新事件，不覆盖旧事件；调用者必须处理 Push(false)。 */
 template<typename T, size_t N>
 class EventQueue
 {

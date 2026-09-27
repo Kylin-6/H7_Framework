@@ -33,8 +33,9 @@
 /**
  * @brief UART 通信接收回调函数数据类型
  *
- * @param Buffer 接收完毕的缓冲区指针
- * @param Length 本帧接收到的字节长度
+ * @param Buffer 本次 ReceiveToIdle DMA chunk 的就绪缓冲；仅在回调期间使用，不得长期保存指针。
+ * @param Length 本次 chunk 的字节数，可能是半帧或多帧。
+ * @note BSP 交换 Rx_Buffer_Active/Rx_Buffer_Ready 后重启 DMA；业务协议拆包、粘包和重同步由 Device parser 负责。
  */
 typedef void (*UART_Callback)(uint8_t *Buffer, uint16_t Length);
 

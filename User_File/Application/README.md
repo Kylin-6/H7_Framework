@@ -35,35 +35,32 @@ Application 不应：
 
 | 模块 | 职责 | 拥有/调用的主要对象 |
 | --- | --- | --- |
-| `RobotCmd` | 统一接收上层输入、发布应用命令、汇总反馈 | Message Center Publisher/Subscriber |
+| `RobotCmd` | 命令唯一所有者和发布者；当前由设置接口提供目标，尚未接入输入仲裁 | Output、Message Center Subscriber |
 | `Gimbal` | 云台模式、目标角/速度、达妙控制和反馈 | 两轴 Class_DMMotor、Yaw PID、INS Topic |
 | `Chassis` | 四舵轮运动学、最短转向和电机目标 | 8 个 DJI 电机及电机组 |
 | `Shoot` | 摩擦轮、拨弹连续模式和离散射击动作 | 3 个 DJI 电机、ShootEvent FIFO |
-| `Communication` | 当前通信应用骨架 | 后续外部输入或传输接入点 |
+| `Communication` | 保留的通信应用骨架，当前不参与板间链路 | 无 |
 
-硬件路径由 `H7_APP_GIMBAL`、`H7_APP_CHASSIS`、`H7_APP_SHOOT` 控制。默认关闭的模块
-仍保留消息端点和反馈结构，但不会访问对应电机硬件。
+单板固件的硬件路径由 `H7_APP_GIMBAL`、`H7_APP_CHASSIS`、`H7_APP_SHOOT` 控制，默认均关闭；
+双板固件由 CMake 在构建期分别选择应用和任务源码。板内命令通过 `LocalPublisher` 进入
+Message Center，云台板的底盘命令通过 `RemotePublisher` 进入固定 CAN Transport。
 
 ## 3. Control_Task 生命周期
 
-`Control_Task` 是 Application 的统一 1 kHz 调度入口：
+各板的 `Control_Task` 均由 1 ms 线程标志唤醒，当前初始化和更新顺序为：
 
 ```text
-任务启动
-  ├─ Gimbal_Init()      条件编译启用时初始化
-  ├─ Chassis_Init()
-  ├─ Shoot_Init()
-  └─ RobotCmd_Init()    装载安全默认命令
-
-每次 1 ms 线程标志
-  ├─ RobotCmd_Update()  读取反馈，发布 dirty 命令
-  ├─ Gimbal_Update()    读取 INS/命令，执行闭环，发布反馈
-  ├─ Chassis_Update()   读取命令，计算轮组目标，发布反馈
-  └─ Shoot_Update()     读取连续命令/事件，控制发射，发布反馈
+SingleBoard: RobotCmd_Init → Gimbal_Init(启用时) → Chassis_Init → Shoot_Init
+             RobotCmd_Update → Gimbal_Update → Chassis_Update → Shoot_Update
+GimbalBoard: BoardTransport_Init → RobotCmd_Init → Gimbal_Init → Shoot_Init
+             BoardTransport_Poll → RobotCmd_Update → Gimbal_Update → Shoot_Update
+ChassisBoard: BoardTransport_Init → Chassis_Init
+              BoardTransport_Poll → Chassis_Update
 ```
 
-顺序是契约：RobotCmd 先发布，消费者在同一控制周期读取；各 Application 更新后发布的
-反馈由 RobotCmd 在后续周期读取。Application 不创建额外控制任务。
+RobotCmd 初始化失败时控制任务停在延时循环；不会继续初始化电机应用。RobotCmd 在
+消费者之前发布命令，各 Application 更新后发布的反馈由 RobotCmd 在后续周期读取。
+Gimbal/Chassis 板间轮询复用该任务，不创建额外控制任务。
 
 ## 4. RobotCmd：命令唯一入口
 
@@ -76,9 +73,10 @@ void RobotCmd_SetShoot(const ShootCmd &command);
 bool RobotCmd_PushShootEvent(const ShootEvent &event);
 ```
 
-连续命令写入本地缓存并设置 dirty 标志，`RobotCmd_Update()` 才发布到对应 Topic。多个
-上层输入若可能同时写同一类命令，必须在 RobotCmd 之前定义优先级和仲裁，不能绕过
-RobotCmd 直接发布。
+连续命令写入本地缓存并设置 dirty 标志，`RobotCmd_Update()` 才通过已注入的 Output
+发布；底盘命令每 10 ms 刷新。Setter 当前没有并发保护，应由 ControlTask 上下文调用，
+不能直接从 ISR/UART 回调并发修改。Remote、键鼠和 Vision 尚未进入 RobotCmd；未来应由
+各 Device/parser 将输入交给 Topic 或输入状态，再在 `RobotCmd_Update()` 中统一仲裁。
 
 启动默认值：
 
@@ -87,6 +85,7 @@ RobotCmd 直接发布。
 - Shoot 总开关、摩擦轮和拨弹盘均关闭。
 
 反馈读取 API 在对应 Application 首次发布前返回 false，并保持调用者输出不变。
+底盘反馈另外要求最近 100 ms 内发布；云台和发射反馈缓存当前没有同样的时效检查。
 
 ## 5. Gimbal
 
@@ -136,6 +135,9 @@ Yaw 使用 INS 角度/速度串级闭环，通过达妙 MIT 纯转矩指令输�
 
 `ZERO_FORCE` 会关闭轮组和舵向组输出；其他模式使能设备并计算目标。机械尺寸、轮径、
 舵向零位和 PID 参数均为实车相关配置，启用前必须标定。
+`NO_FOLLOW`、`FOLLOW_GIMBAL_YAW`、`ROTATE` 枚举已定义，当前没有彼此独立的控制分支。
+舵向使用 `output_total_angle`，上电绝对零位不能仅由增量编码器确定；实车需要可靠的
+绝对编码器、寻零或已知上电姿态。车体 `vx/vy/wz` 的物理正方向尚待接线和坐标标定。
 
 现有轮速环、舵向角度环和舵向速度环增益没有可靠的实车单位/整定记录。它们目前
 只作为初始占位值，启用电机前必须按 rad/rad/s 反馈重新整定；不能把旧的混合单位
@@ -155,8 +157,9 @@ Yaw 使用 INS 角度/速度串级闭环，通过达妙 MIT 纯转矩指令输�
 - `LoaderMode::STOP/REVERSE/BURST`：拨弹盘持续模式。
 - `loader_speed_rad_s` / `shoot_rate_hz`：持续目标。
 
-摩擦轮 M3508 为直驱，明确配置传动比 `1.0`，默认目标为 `25 rad/s`；不再沿用
-原先误设的 40000 deg/s。单弹 36°、反转 -360 deg/s 作为机械参数输入后分别
+摩擦轮 M3508/C620 使用直连转子、无原厂减速箱，明确配置 `gear_ratio = 1.0`，
+默认目标为 `25 rad/s`。型号仍决定 CAN 协议、ID、电流指令范围及温度反馈。
+单弹 36°、反转 -360 deg/s 作为机械标定输入后分别
 转换为约 0.62832 rad、-6.28319 rad/s。发射反馈字段均为输出轴 rad/rad/s。
 拨弹角度环输出为速度目标，原 360 deg/s 限幅已换算为 `2π rad/s`。
 摩擦轮和拨弹速度环增益尚无可靠实车整定记录，必须重新实车整定。
@@ -169,6 +172,8 @@ Yaw 使用 INS 角度/速度串级闭环，通过达妙 MIT 纯转矩指令输�
 STOP 模式每周期最多消费一个事件：首次事件从当前反馈角建立目标，后续排队事件在已有
 目标上累加 1 或 3 个弹位。BURST/REVERSE 取消事件角度保持；OFF 禁用输出并排空当前
 队列，避免重新使能后补射。
+每次成功 Push 只代表一个逻辑动作请求；事件按目标角累加，不等待前一发物理完成。
+当前没有摩擦轮就绪、卡弹检测/回退、热量限制、裁判系统互锁或完整 FEEDING 状态机。
 
 调用者必须检查 `RobotCmd_PushShootEvent()` 返回值。返回 false 表示队列已满，本次动作
 没有被接受。

@@ -6,6 +6,7 @@
 
 namespace TransportConfig
 {
+// 固定板间消息方向与标准 CAN ID；CMake 决定编入哪块板，BoardConfig 管硬件接线。
 constexpr BoardId kCommandSource = BoardId::Gimbal;
 constexpr BoardId kCommandTarget = BoardId::Chassis;
 constexpr uint16_t kChassisCmdCanId = TransportProtocol::CanId(

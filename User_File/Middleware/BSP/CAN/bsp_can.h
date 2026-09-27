@@ -91,6 +91,7 @@ bool BSP_CAN_RegisterCallback(uint32_t can_id,
  * @return true 已成功复制到队列；false 参数无效、队列未创建或队列已满。
  * @note 每次提交都会按本总线队列顺序处理，适合使能、失能、复位、回零等命令。
  * @note 函数会复制消息内容，返回后调用者可以继续修改或释放原变量。
+ * @note true 只表示软件 FIFO 接受；不表示 HAL 已写入硬件 FIFO、总线发送、对端接收或设备执行。
  */
 bool CAN_Tx_Submit(const Struct_CAN_Tx_Msg *tx_msg);
 
@@ -101,6 +102,7 @@ bool CAN_Tx_Submit(const Struct_CAN_Tx_Msg *tx_msg);
  * @note BSP 自动按 (hfdcan, id) 查找或分配槽，不需要设备层保存槽号。
  * @note 相同键只保留最新数据；不同总线或不同 ID 使用不同槽。
  * @note 本函数只更新内存中的周期槽，不直接调用 HAL 发送。
+ * @note true 只表示软件槽接受最新值；后来的值可能在硬件发送前覆盖它。
  */
 bool CAN_Tx_Perform(const Struct_CAN_Tx_Msg *tx_msg);
 

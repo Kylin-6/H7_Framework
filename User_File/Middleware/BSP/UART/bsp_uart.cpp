@@ -282,7 +282,9 @@ uint8_t UART_Transmit_Data(UART_HandleTypeDef *huart, uint8_t *Data, uint16_t Le
  * @brief HAL 库 UART 接收 DMA 空闲中断回调
  *
  * @param huart UART 句柄
- * @param Size 本帧接收到的字节长度
+ * @param Size 本次 ReceiveToIdle DMA chunk 的字节数；不保证恰好一条业务帧。
+ * @note ISR 交换 Active/Ready 缓冲并重启接收，回调数据只在当前回调期间有效；
+ *       协议半帧累积、粘包及重同步由上层 parser 负责。
  */
 extern "C" void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
