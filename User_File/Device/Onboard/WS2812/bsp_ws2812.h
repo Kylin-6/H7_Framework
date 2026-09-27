@@ -50,7 +50,7 @@ public:
 
     inline void Set_Color(const Struct_WS2812_Color &__Color, const float &__Brightness = 1.0f);
 
-    void TIM_10ms_Write_PeriodElapsedCallback() const;
+    void TIM_10ms_Write_PeriodElapsedCallback();
 
 protected:
     // 初始化相关常量
@@ -73,6 +73,8 @@ protected:
     // RGB颜色值
     // WS2812的RGB顺序是GRB, 为方便使用, 仍采用RGB顺序
     Struct_WS2812_Color Color;
+    Struct_WS2812_Color Last_Written_Color;
+    bool Has_Written_Color = false;
 
     // 读写变量
 

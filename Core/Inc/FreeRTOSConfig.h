@@ -46,6 +46,13 @@
 /* USER CODE BEGIN Includes */
 /* Section where include file can be added */
 #include "SEGGER_SYSVIEW_FreeRTOS.h"
+#define H7_SYSVIEW_TRACE_NOTIFY_API 0
+#if H7_SYSVIEW_TRACE_NOTIFY_API == 0
+  #undef traceTASK_NOTIFY_FROM_ISR
+  #define traceTASK_NOTIFY_FROM_ISR()
+  #undef traceTASK_NOTIFY_WAIT
+  #define traceTASK_NOTIFY_WAIT()
+#endif
 /* USER CODE END Includes */
 
 /* Ensure definitions are only used by the compiler, and not by the assembler. */
