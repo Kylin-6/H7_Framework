@@ -15,6 +15,7 @@ volatile uint64_t pending_rx_us;
 bool initialized;
 bool has_sequence;
 uint8_t last_sequence;
+uint64_t last_accepted_rx_us;
 
 void Receive(FDCAN_HandleTypeDef *bus, uint32_t id, uint8_t *data,
              uint32_t size, void *)
@@ -80,13 +81,21 @@ void BoardTransport_Poll(void)
     ChassisCmd command{};
     uint8_t sequence = 0U;
     if (!TransportProtocol::DecodeChassisCmd(bytes, sizeof(bytes),
-                                             command, sequence) ||
-        (has_sequence && !TransportProtocol::SequenceNewer(sequence,
-                                                            last_sequence)))
+                                             command, sequence))
+    {
+        return;
+    }
+    if (has_sequence && received_us - last_accepted_rx_us >
+                            TransportProtocol::kCommandMaxAgeUs)
+    {
+        has_sequence = false;
+    }
+    if (has_sequence && !TransportProtocol::SequenceNewer(sequence, last_sequence))
     {
         return;
     }
     MessageCenter::Chassis_Command_Topic.PublishAt(command, received_us);
     last_sequence = sequence;
+    last_accepted_rx_us = received_us;
     has_sequence = true;
 }

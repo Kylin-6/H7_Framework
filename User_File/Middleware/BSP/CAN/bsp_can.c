@@ -13,6 +13,7 @@
 
 #include "bsp_can.h"
 #include "cmsis_os2.h"
+#include "FreeRTOS.h"
 
 #include <string.h>
 
@@ -26,6 +27,8 @@
 
 /** 插入发送队列能够缓存的消息数量。 */
 #define CAN_TX_QUEUE_DEPTH (16)
+#define CAN_BUS_COUNT (3)
+#define CAN_TX_QUEUE_WORDS (CAN_TX_QUEUE_DEPTH * ((sizeof(Struct_CAN_Tx_Msg) + 3U) / 4U))
 
 /* Private types -------------------------------------------------------------*/
 
@@ -64,9 +67,11 @@ static CAN_CallbackEntry_t Can_RxCallbacks[MAX_CAN_CALLBACKS];
 static Struct_CAN_Tx_Slot Can_TxSlots[CAN_TX_SLOT_COUNT];
 static uint16_t Can_TxRoundRobin;
 
-static osMessageQueueId_t Can_TxQueue;
-static Struct_CAN_Tx_Msg Can_TxPendingMessage;
-static uint8_t Can_TxPending;
+static osMessageQueueId_t Can_TxQueue[CAN_BUS_COUNT];
+static StaticQueue_t Can_TxQueueControl[CAN_BUS_COUNT];
+static uint32_t Can_TxQueueStorage[CAN_BUS_COUNT][CAN_TX_QUEUE_WORDS];
+static Struct_CAN_Tx_Msg Can_TxPendingMessage[CAN_BUS_COUNT];
+static uint8_t Can_TxPending[CAN_BUS_COUNT];
 static Struct_CAN_Tx_Stats Can_TxStats;
 
 static void BSP_CAN_SaturatingIncrement(uint32_t *counter)
@@ -84,6 +89,7 @@ static void BSP_CAN_SaturatingIncrement(uint32_t *counter)
 /* Private function declarations ---------------------------------------------*/
 
 static bool BSP_CAN_HandleIsValid(FDCAN_HandleTypeDef *hfdcan);
+static uint8_t BSP_CAN_BusIndex(FDCAN_HandleTypeDef *hfdcan);
 static bool BSP_CAN_MessageIsValid(const Struct_CAN_Tx_Msg *message);
 static uint32_t BSP_CAN_EnterCritical(void);
 static void BSP_CAN_ExitCritical(uint32_t primask);
@@ -102,6 +108,13 @@ static bool BSP_CAN_HandleIsValid(FDCAN_HandleTypeDef *hfdcan)
     return hfdcan == &hfdcan1 ||
            hfdcan == &hfdcan2 ||
            hfdcan == &hfdcan3;
+}
+
+static uint8_t BSP_CAN_BusIndex(FDCAN_HandleTypeDef *hfdcan)
+{
+    if (hfdcan == &hfdcan1) return 0U;
+    if (hfdcan == &hfdcan2) return 1U;
+    return 2U;
 }
 
 /**
@@ -185,22 +198,31 @@ static void BSP_CAN_ConfigBus(FDCAN_HandleTypeDef *hfdcan)
  */
 void BSP_CAN_ConfigInit(void)
 {
+    uint8_t bus;
     memset(Can_TxSlots, 0, sizeof(Can_TxSlots));
     Can_TxRoundRobin = 0;
-    memset(&Can_TxPendingMessage, 0, sizeof(Can_TxPendingMessage));
-    Can_TxPending = 0;
+    memset(Can_TxPendingMessage, 0, sizeof(Can_TxPendingMessage));
+    memset(Can_TxPending, 0, sizeof(Can_TxPending));
     memset(&Can_TxStats, 0, sizeof(Can_TxStats));
 
-    if (Can_TxQueue == NULL)
+    for (bus = 0U; bus < CAN_BUS_COUNT; ++bus)
     {
-        Can_TxQueue = osMessageQueueNew(CAN_TX_QUEUE_DEPTH,
-                                        sizeof(Struct_CAN_Tx_Msg),
-                                        NULL);
-    }
-
-    if (Can_TxQueue == NULL)
-    {
-        Error_Handler();
+        if (Can_TxQueue[bus] == NULL)
+        {
+            const osMessageQueueAttr_t attr = {
+                .cb_mem = &Can_TxQueueControl[bus],
+                .cb_size = sizeof(Can_TxQueueControl[bus]),
+                .mq_mem = Can_TxQueueStorage[bus],
+                .mq_size = sizeof(Can_TxQueueStorage[bus])
+            };
+            Can_TxQueue[bus] = osMessageQueueNew(CAN_TX_QUEUE_DEPTH,
+                                                 sizeof(Struct_CAN_Tx_Msg),
+                                                 &attr);
+        }
+        if (Can_TxQueue[bus] == NULL)
+        {
+            Error_Handler();
+        }
     }
 
     BSP_CAN_ConfigBus(&hfdcan1);
@@ -329,12 +351,16 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan,
  */
 bool CAN_Tx_Submit(const Struct_CAN_Tx_Msg *tx_msg)
 {
-    if (!BSP_CAN_MessageIsValid(tx_msg) || Can_TxQueue == NULL)
+    if (!BSP_CAN_MessageIsValid(tx_msg))
     {
         return false;
     }
-
-    if (osMessageQueuePut(Can_TxQueue, tx_msg, 0, 0) != osOK)
+    const uint8_t bus = BSP_CAN_BusIndex(tx_msg->hfdcan);
+    if (Can_TxQueue[bus] == NULL)
+    {
+        return false;
+    }
+    if (osMessageQueuePut(Can_TxQueue[bus], tx_msg, 0, 0) != osOK)
     {
         BSP_CAN_SaturatingIncrement(&Can_TxStats.submit_queue_full_count);
         return false;
@@ -474,36 +500,30 @@ void BSP_CAN_GetTxStats(Struct_CAN_Tx_Stats *stats)
 }
 
 /**
- * @brief 按先进先出顺序将插入消息写入硬件发送 FIFO。
- * @details 发送任务持有一帧待发送消息，只有 HAL 接受后才取下一帧。
- *          FIFO 满或 HAL 写入失败时保留该帧并结束本轮，下次调用优先重试。
+ * @brief 每条总线最多发送一帧插入消息。
+ * @details 每条总线各自保留一帧待重试消息；失败不阻塞其他总线。
  * @note 只能由同一个 CAN 发送任务调用，不支持并发或重入。
- * @note 三条总线共享队列；队首发送失败时，后续插入消息均等待下一轮，
- *       包括其他总线的消息，以保持全局入队顺序。周期缓冲仍可独立处理。
  */
 void BSP_CAN_SendAsync(void)
 {
-    while (1)
+    uint8_t bus;
+    for (bus = 0U; bus < CAN_BUS_COUNT; ++bus)
     {
-        if (Can_TxPending == 0)
+        if (Can_TxPending[bus] == 0U)
         {
-            if (osMessageQueueGet(Can_TxQueue,
-                                  &Can_TxPendingMessage,
+            if (osMessageQueueGet(Can_TxQueue[bus],
+                                  &Can_TxPendingMessage[bus],
                                   NULL,
                                   0) != osOK)
             {
-                return;
+                continue;
             }
-            Can_TxPending = 1;
+            Can_TxPending[bus] = 1U;
         }
-
-        if (!BSP_CAN_SendMsg(&Can_TxPendingMessage))
+        if (BSP_CAN_SendMsg(&Can_TxPendingMessage[bus]))
         {
-            return;
+            Can_TxPending[bus] = 0U;
         }
-
-        /* 硬件已接收当前帧，才允许释放暂存并处理下一帧。 */
-        Can_TxPending = 0;
     }
 }
 

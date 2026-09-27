@@ -5,7 +5,7 @@
  * @details
  * 接收方向使用 (FDCAN 句柄, CAN ID) 作为回调注册键。
  * 发送方向保留两条通道：
- * - CAN_Tx_Submit：插入队列，每次提交都按顺序发送。
+ * - CAN_Tx_Submit：每条总线各自的插入队列，保持同总线顺序。
  * - CAN_Tx_Perform：周期缓冲，同一 (FDCAN, CAN ID) 只保留最新数据。
  * @author  zzm
  * @date    2026-05-18
@@ -89,7 +89,7 @@ bool BSP_CAN_RegisterCallback(uint32_t can_id,
  * @brief 把一帧消息插入发送队列。
  * @param tx_msg 要插入队列的完整 CAN 消息。
  * @return true 已成功复制到队列；false 参数无效、队列未创建或队列已满。
- * @note 每次提交都会按队列顺序处理，适合使能、失能、复位、回零等命令。
+ * @note 每次提交都会按本总线队列顺序处理，适合使能、失能、复位、回零等命令。
  * @note 函数会复制消息内容，返回后调用者可以继续修改或释放原变量。
  */
 bool CAN_Tx_Submit(const Struct_CAN_Tx_Msg *tx_msg);
@@ -105,12 +105,10 @@ bool CAN_Tx_Submit(const Struct_CAN_Tx_Msg *tx_msg);
 bool CAN_Tx_Perform(const Struct_CAN_Tx_Msg *tx_msg);
 
 /**
- * @brief 按先进先出顺序处理插入发送队列。
- * @details FIFO 满或 HAL 写入失败时保留当前帧并立即返回，
- *          下次调用先重试该帧，成功后才继续处理后续消息。
+ * @brief 每条总线各处理至多一帧插入发送消息。
+ * @details FIFO 满或 HAL 写入失败时保留当前总线帧，下次调用先重试；
+ *          其他总线仍独立发送，同一总线保持入队顺序。
  * @note 只能由同一个 CAN 发送任务周期调用，不支持并发或重入。
- * @note 三条总线共享队列；队首失败会阻止所有后续插入消息越过，
- *       包括其他总线的消息。BSP_CAN_SendPer 可继续独立处理周期缓冲。
  */
 void BSP_CAN_SendAsync(void);
 
