@@ -79,10 +79,11 @@ struct ChassisCmd
     ChassisMode mode = ChassisMode::ZERO_FORCE;
 };
 
+/** 内部物理量采用 SI：发射转速 rad/s，射频 Hz。 */
 struct ShootCmd
 {
-    float friction_speed_deg_s = 0.0f;
-    float loader_speed_deg_s = 0.0f;
+    float friction_speed_rad_s = 0.0f;
+    float loader_speed_rad_s = 0.0f;
     float shoot_rate_hz = 0.0f;
     ShootMode shoot_mode = ShootMode::OFF;
     FrictionMode friction_mode = FrictionMode::OFF;
@@ -111,12 +112,13 @@ struct ChassisFeedback
     bool online = false;
 };
 
+/** DJI 输出轴反馈直接使用 rad 和 rad/s，不经角度制转换。 */
 struct ShootFeedback
 {
-    float friction_left_speed_deg_s = 0.0f;
-    float friction_right_speed_deg_s = 0.0f;
-    float loader_angle_deg = 0.0f;
-    float loader_speed_deg_s = 0.0f;
+    float friction_left_speed_rad_s = 0.0f;
+    float friction_right_speed_rad_s = 0.0f;
+    float loader_angle_rad = 0.0f;
+    float loader_speed_rad_s = 0.0f;
     bool enabled = false;
     bool online = false;
 };

@@ -102,6 +102,9 @@ if (motor.Init(config))
 
 驱动默认采用弧度制：位置环参考值和外部角度反馈为 `rad`，速度环参考值和外部速度
 反馈为 `rad/s`。电流环和开环参考值仍是对应协议控制量，不进行角度单位换算。
+Application、Message Center 和 Algorithm 的正式控制路径应调用 `SetRef()` / `Control()`
+并使用 rad/rad/s。`SetRef_Degree()` / `Control_Degree()` 仅供标定输入、调试显示或
+外部角度制协议边界使用；下方带 `degree` 的反馈字段同样仅用于边界显示。
 从旧角度制配置迁移时，若要保持近似相同的控制输出，角度环和速度环中作用于误差的
 PID 增益通常需要乘以 `180/pi`，之后仍应结合实机重新整定。
 

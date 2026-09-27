@@ -6,6 +6,14 @@ Device 与 BSP。
 
 本文单独维护应用架构，不把具体机器人控制逻辑混入 BSP 总览。
 
+## 物理单位
+
+Application、Algorithm、Message Center 和 Transport 的物理量统一使用 SI：角度
+`rad`、角速度 `rad/s`、线速度 `m/s`、转矩 `N·m`。时间接口保留明确的 `s/ms/us`
+后缀。机械标定表可用角度书写，但必须在常量定义处通过 `DegToRad()` 转成 rad；
+调试显示和外部协议可保留 degree，进入控制链前须转换。DJI 的编码器、RPM、原始
+电流和 CAN 指令仍按设备协议处理；Application 仅使用输出侧 rad/rad/s 反馈。
+
 ## 1. 分层边界
 
 Application 可以：
@@ -120,8 +128,18 @@ Yaw 使用 INS 角度/速度串级闭环，通过达妙 MIT 纯转矩指令输�
 3. 舵向误差超过 90° 时翻转轮速，缩短舵电机转动路径。
 4. 轮电机走速度环，舵电机走角度外环。
 
+轮速目标按 `omega_rad_s = velocity_m_s / wheel_radius_m` 计算；反馈按
+`velocity_m_s = output_speed_rad_s * wheel_radius_m` 还原。舵向零位在标定处由角度
+转成 rad，`atan2`、`remainder`、`sin/cos` 均直接使用 rad。轮电机速度环输出为
+协议电流原始值；舵向角度环输出为速度目标 rad/s，原 200/1000 deg/s 的积分/输出
+限幅已分别转成约 3.49/17.45 rad/s。
+
 `ZERO_FORCE` 会关闭轮组和舵向组输出；其他模式使能设备并计算目标。机械尺寸、轮径、
 舵向零位和 PID 参数均为实车相关配置，启用前必须标定。
+
+现有轮速环、舵向角度环和舵向速度环增益没有可靠的实车单位/整定记录。它们目前
+只作为初始占位值，启用电机前必须按 rad/rad/s 反馈重新整定；不能把旧的混合单位
+表现视为等效基线。
 
 反馈由四个轮模块估算 `vx/vy/wz`，经过一阶平滑后每 10 ms 发布。`online` 只有八个
 电机均在线时为 true；在线状态来源仍是 Device/Daemon，而不是 Message Center。
@@ -133,9 +151,15 @@ Yaw 使用 INS 角度/速度串级闭环，通过达妙 MIT 纯转矩指令输�
 ### 7.1 ShootCmd
 
 - `ShootMode`：发射机构总开关。
-- `FrictionMode` 与 `friction_speed_deg_s`：摩擦轮持续状态。
+- `FrictionMode` 与 `friction_speed_rad_s`：摩擦轮持续状态。
 - `LoaderMode::STOP/REVERSE/BURST`：拨弹盘持续模式。
-- `loader_speed_deg_s` / `shoot_rate_hz`：持续目标。
+- `loader_speed_rad_s` / `shoot_rate_hz`：持续目标。
+
+默认摩擦轮 40000 deg/s、单弹 36°、反转 -360 deg/s 仅是原机械参数写法；内部
+分别为约 698.13 rad/s、0.62832 rad、-6.28319 rad/s。发射反馈字段均为输出轴
+rad/rad/s。拨弹角度环输出为速度目标，原 360 deg/s 限幅已换算为 `2π rad/s`。
+摩擦轮和拨弹速度环的增益与实际齿比/机构未标定，必须重新实车整定；默认摩擦轮
+速度也须核对是否在实际电机与减速比的可达范围内。
 
 ### 7.2 ShootEvent
 
