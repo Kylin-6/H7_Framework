@@ -23,6 +23,7 @@ void TIM1msTask(void *);
 void BMI088_Task(void *);
 void Control_Task(void *);
 void Storage_Task(void *);
+void Board_CreateTasks(void);
 
 #ifdef __cplusplus
 }

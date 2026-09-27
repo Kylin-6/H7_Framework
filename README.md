@@ -274,7 +274,7 @@ cmake --preset Release
 cmake --build --preset Release
 ```
 
-[CMakePresets.json](CMakePresets.json) 管理构建配置。Debug 使用 `-Og -g3`，Release 使用 `-Os -g0`。
+[CMakePresets.json](CMakePresets.json) 保留 Debug/Release 配置；[CMakeUserPresets.json](CMakeUserPresets.json) 提供 SingleBoard/GimbalBoard/ChassisBoard。Debug 使用 `-Og -g3`，Release 使用 `-Os -g0`。
 
 ### 主机回归
 

@@ -134,6 +134,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/User_File/System/IMU/sys_imu.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/System/Daemon/daemon.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/System/MessageCenter/message_center.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/User_Config/Board/board_tasks_common.c
         ${CMAKE_CURRENT_LIST_DIR}/User_File/System/Transport/transport_protocol.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Device/Onboard/Power/bsp_power.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Device/Onboard/BMI088/bsp_bmi088.cpp

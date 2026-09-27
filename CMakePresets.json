@@ -2,30 +2,6 @@
     "version": 3,
     "configurePresets": [
         {
-            "name": "SingleBoard",
-            "inherits": "default",
-            "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Debug",
-                "H7_BOARD": "SingleBoard"
-            }
-        },
-        {
-            "name": "GimbalBoard",
-            "inherits": "default",
-            "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Debug",
-                "H7_BOARD": "GimbalBoard"
-            }
-        },
-        {
-            "name": "ChassisBoard",
-            "inherits": "default",
-            "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Debug",
-                "H7_BOARD": "ChassisBoard"
-            }
-        },
-        {
             "name": "default",
             "hidden": true,
             "generator": "Ninja",
@@ -50,9 +26,6 @@
         }
     ],
     "buildPresets": [
-        {"name": "SingleBoard", "configurePreset": "SingleBoard"},
-        {"name": "GimbalBoard", "configurePreset": "GimbalBoard"},
-        {"name": "ChassisBoard", "configurePreset": "ChassisBoard"},
         {
             "name": "Debug",
             "configurePreset": "Debug"

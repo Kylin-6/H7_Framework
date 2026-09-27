@@ -26,6 +26,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "bsp_can.h"
+#include "board_tasks.h"
 
 /* USER CODE END Includes */
 
@@ -46,85 +47,11 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
-osThreadId_t StorageTaskHandle;
-const osThreadAttr_t StorageTask_attributes = {
-  .name = "StorageTask",
-  .stack_size = 1024 * 4,
-  .priority = (osPriority_t) osPriorityLow,
-};
-
 /* USER CODE END Variables */
-/* Definitions for TransportTask */
-osThreadId_t TransportTaskHandle;
-const osThreadAttr_t TransportTask_attributes = {
-  .name = "TransportTask",
-  .stack_size = 2048 * 4,
-  .priority = (osPriority_t) osPriorityNormal,
-};
-/* Definitions for InsTask */
-osThreadId_t InsTaskHandle;
-const osThreadAttr_t InsTask_attributes = {
-  .name = "InsTask",
-  .stack_size = 2048 * 4,
-  .priority = (osPriority_t) osPriorityHigh1,
-};
-/* Definitions for CanTxTask */
-osThreadId_t CanTxTaskHandle;
-const osThreadAttr_t CanTxTask_attributes = {
-  .name = "CanTxTask",
-  .stack_size = 1024 * 4,
-  .priority = (osPriority_t) osPriorityHigh,
-};
-/* Definitions for StatusTask */
-osThreadId_t StatusTaskHandle;
-static StaticTask_t StatusTaskControlBlock;
-static StackType_t StatusTaskBuffer[512];
-const osThreadAttr_t StatusTask_attributes = {
-  .name = "StatusTask",
-  .cb_mem = &StatusTaskControlBlock,
-  .cb_size = sizeof(StatusTaskControlBlock),
-  .stack_mem = StatusTaskBuffer,
-  .stack_size = sizeof(StatusTaskBuffer),
-  .priority = (osPriority_t) osPriorityLow,
-};
-/* Definitions for TIM_1ms_Task */
-osThreadId_t TIM_1ms_TaskHandle;
-const osThreadAttr_t TIM_1ms_Task_attributes = {
-  .name = "TIM_1ms_Task",
-  .stack_size = 1024 * 4,
-  .priority = (osPriority_t) osPriorityLow,
-};
-/* Definitions for BMI088Task */
-osThreadId_t BMI088TaskHandle;
-const osThreadAttr_t BMI088Task_attributes = {
-  .name = "BMI088Task",
-  .stack_size = 2048 * 4,
-  .priority = (osPriority_t) osPriorityLow,
-};
-/* Definitions for ControlTask */
-osThreadId_t ControlTaskHandle;
-const osThreadAttr_t ControlTask_attributes = {
-  .name = "ControlTask",
-  .stack_size = 2048 * 4,
-  .priority = (osPriority_t) osPriorityLow,
-};
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
-void Storage_Task(void *argument);
-
 /* USER CODE END FunctionPrototypes */
-
-void Transport_Task(void *argument);
-void Ins_Task(void *argument);
-void Can_Tx_Task(void *argument);
-void Status_Task(void *argument);
-void TIM1msTask(void *argument);
-void BMI088_Task(void *argument);
-void Control_Task(void *argument);
-void Board_CreateTasks(void);
-
-extern void MX_USB_DEVICE_Init(void);
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
 /* Hook prototypes */
@@ -172,7 +99,7 @@ void MX_FREERTOS_Init(void) {
   /* USER CODE END RTOS_QUEUES */
 
   /* USER CODE BEGIN RTOS_THREADS */
-  /* Board target owns the task list. Preserve this replacement after CubeMX regeneration. */
+  /* Tasks are defined by the selected board target, not CubeMX Tasks01. */
   Board_CreateTasks();
   /* USER CODE END RTOS_THREADS */
 
@@ -180,134 +107,6 @@ void MX_FREERTOS_Init(void) {
   /* add events, ... */
   /* USER CODE END RTOS_EVENTS */
 
-}
-
-/* USER CODE BEGIN Header_Transport_Task */
-/**
-  * @brief  Function implementing the TransportTask thread.
-  * @param  argument: Not used
-  * @retval None
-  */
-/* USER CODE END Header_Transport_Task */
-__weak void Transport_Task(void *argument)
-{
-  /* init code for USB_DEVICE */
-  MX_USB_DEVICE_Init();
-  /* USER CODE BEGIN Transport_Task */
-  /* Infinite loop */
-  for(;;)
-  {
-    osDelay(1);
-  }
-  /* USER CODE END Transport_Task */
-}
-
-/* USER CODE BEGIN Header_Ins_Task */
-/**
-* @brief Function implementing the InsTask thread.
-* @param argument: Not used
-* @retval None
-*/
-/* USER CODE END Header_Ins_Task */
-__weak void Ins_Task(void *argument)
-{
-  /* USER CODE BEGIN Ins_Task */
-  /* Infinite loop */
-  for(;;)
-  {
-    osDelay(1);
-  }
-  /* USER CODE END Ins_Task */
-}
-
-/* USER CODE BEGIN Header_Can_Tx_Task */
-/**
-* @brief Function implementing the CanTxTask thread.
-* @param argument: Not used
-* @retval None
-*/
-/* USER CODE END Header_Can_Tx_Task */
-__weak void Can_Tx_Task(void *argument)
-{
-  /* USER CODE BEGIN Can_Tx_Task */
-  /* Infinite loop */
-  for(;;)
-  {
-    osDelay(1);
-  }
-  /* USER CODE END Can_Tx_Task */
-}
-
-/* USER CODE BEGIN Header_Status_Task */
-/**
-* @brief Function implementing the StatusTask thread.
-* @param argument: Not used
-* @retval None
-*/
-/* USER CODE END Header_Status_Task */
-__weak void Status_Task(void *argument)
-{
-  /* USER CODE BEGIN Status_Task */
-  /* Infinite loop */
-  for(;;)
-  {
-    osDelay(1);
-  }
-  /* USER CODE END Status_Task */
-}
-
-/* USER CODE BEGIN Header_TIM1msTask */
-/**
-* @brief Function implementing the TIM_1ms_Task thread.
-* @param argument: Not used
-* @retval None
-*/
-/* USER CODE END Header_TIM1msTask */
-__weak void TIM1msTask(void *argument)
-{
-  /* USER CODE BEGIN TIM1msTask */
-  /* Infinite loop */
-  for(;;)
-  {
-    osDelay(1);
-  }
-  /* USER CODE END TIM1msTask */
-}
-
-/* USER CODE BEGIN Header_BMI088_Task */
-/**
-* @brief Function implementing the BMI088Task thread.
-* @param argument: Not used
-* @retval None
-*/
-/* USER CODE END Header_BMI088_Task */
-__weak void BMI088_Task(void *argument)
-{
-  /* USER CODE BEGIN BMI088_Task */
-  /* Infinite loop */
-  for(;;)
-  {
-    osDelay(1);
-  }
-  /* USER CODE END BMI088_Task */
-}
-
-/* USER CODE BEGIN Header_Control_Task */
-/**
-* @brief Function implementing the GimbalTask thread.
-* @param argument: Not used
-* @retval None
-*/
-/* USER CODE END Header_Control_Task */
-__weak void Control_Task(void *argument)
-{
-  /* USER CODE BEGIN Control_Task */
-  /* Infinite loop */
-  for(;;)
-  {
-    osDelay(1);
-  }
-  /* USER CODE END Control_Task */
 }
 
 /* Private application code --------------------------------------------------*/

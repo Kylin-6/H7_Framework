@@ -13,8 +13,10 @@ cmake --preset ChassisBoard && cmake --build --preset ChassisBoard
 `Debug` / `Release` 预设仍是原有单板入口；`SingleBoard` 保留原有
 `H7_APP_GIMBAL`、`H7_APP_CHASSIS`、`H7_APP_SHOOT` 硬件控制开关。
 双板预设在配置时固定其应用开关，不靠运行时 BoardId 选择应用。
-如果重新生成 CubeMX 的 `Core/Src/freertos.c`，需保留其中由
-`Board_CreateTasks()` 取代默认任务创建列表的改动。
+`.ioc` 不再声明默认 FreeRTOS 任务；任务属性和句柄放在用户文件
+`board_tasks_common.c`，各目标任务列表放在各自的 `board_tasks_*.c`。
+`freertos.c` 仅在 USER CODE 区调用 `Board_CreateTasks()`，可随 CubeMX 重新生成。
+板型预设保存在独立的 `CMakeUserPresets.json`，避免生成器重写 `CMakePresets.json` 时丢失。
 
 | 固件 | 本地应用 | 电机 CAN | 板间 CAN |
 | --- | --- | --- | --- |
