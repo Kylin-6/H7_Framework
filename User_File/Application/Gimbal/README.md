@@ -9,7 +9,9 @@ QD4310 驱动仍作为独立设备保留，云台不再依赖它。SingleBoard �
 在 [Gimbal_Config.h](Gimbal_Config.h) 集中配置；`Gimbal_Init()` 复制默认配置，
 也可在启动阶段传入一份 `Struct_Gimbal_Config`。初始化只调用一次，不等待电机、
 不自动设置机械零位、不切换控制模式、不写电机持久化参数。电机端须预先设置 MIT 模式。
-配置校验失败或驱动注册失败返回 false，`Gimbal.status` 为 CONFIG_ERROR。
+配置校验失败或驱动注册失败返回 false，`Gimbal_GetStatus()` 返回 CONFIG_ERROR。
+电机、PID、目标、Snapshot 和恢复计时由 `Gimbal.cpp` 的私有 `GimbalContext` 持有；
+外部只能通过初始化、周期入口和只读状态接口访问 Application。
 
 | 项目 | 示例 | 来源与限制 |
 | --- | --- | --- |
@@ -45,7 +47,7 @@ QD4310 驱动仍作为独立设备保留，云台不再依赖它。SingleBoard �
 
 ## 状态与恢复
 
-`Gimbal.status` 为 DISABLE、ENABLING、READY、FAULT 或 CONFIG_ERROR。
+`Gimbal_GetStatus()` 返回 DISABLE、ENABLING、READY、FAULT 或 CONFIG_ERROR。
 `Gimbal_Init()` 不发送使能；收到活动模式后才启动就绪流程。现有 RobotCmd 启动默认
 发布 LOCK，因此打开云台编译选项后会自动进入此流程，不能把示例参数当作上板标定结果。
 
