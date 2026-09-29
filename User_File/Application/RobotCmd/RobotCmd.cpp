@@ -2,7 +2,7 @@
  * @file RobotCmd.cpp
  * @brief 机器人命令所有权与分发中心，参考 Meta-Embedded-NG 设计。
  * @details
- * RobotCmd 是各 Application 命令的唯一发布者，同时订阅各模块反馈。它只负责
+ * RobotCmd 是各 Application 命令的唯一发布者，按需读取各模块反馈。它只负责
  * 命令组织与模块间通信，不直接访问电机、CAN 或 IMU 设备。
  */
 
@@ -14,25 +14,21 @@
 static Output<GimbalCmd> Gimbal_Command_Output;
 static Output<ChassisCmd> Chassis_Command_Output;
 static Output<ShootCmd> Shoot_Command_Output;
-static Subscriber<GimbalFeedback> Gimbal_Feedback_Subscriber(
-    MessageCenter::Gimbal_Feedback_Topic);
-static Subscriber<ShootFeedback> Shoot_Feedback_Subscriber(
-    MessageCenter::Shoot_Feedback_Topic);
+namespace
+{
+constexpr uint64_t FEEDBACK_MAX_AGE_US = 100000U;
+}
 
 static GimbalCmd Gimbal_Command;
 static ChassisCmd Chassis_Command;
 static ShootCmd Shoot_Command;
-static GimbalFeedback Gimbal_Feedback;
-static ShootFeedback Shoot_Feedback;
 
 /* 云台和发射按变化发布；底盘命令按 10 ms 刷新以提供失联时效。 */
 static bool Gimbal_Command_Dirty;
 static bool Shoot_Command_Dirty;
 static bool Chassis_Command_Dirty;
 static bool Input_Armed;
-static bool Gimbal_Feedback_Valid;
-static bool Shoot_Feedback_Valid;
-static uint8_t RobotCmd_Feedback_Divider;
+static uint8_t RobotCmd_Chassis_Publish_Divider;
 static InputSource Last_Input_Source;
 static void RobotCmd_SetInputArmed(bool armed);
 
@@ -79,9 +75,7 @@ bool RobotCmd_Init(Output<GimbalCmd> gimbal_output,
     Shoot_Command_Dirty = true;
     Chassis_Command_Dirty = false;
     Input_Armed = true;
-    Gimbal_Feedback_Valid = false;
-    Shoot_Feedback_Valid = false;
-    RobotCmd_Feedback_Divider = 0U;
+    RobotCmd_Chassis_Publish_Divider = 0U;
     Last_Input_Source = InputSource::Remote;
     return true;
 }
@@ -111,25 +105,8 @@ void RobotCmd_Update(void)
     }
     Last_Input_Source = decision.source;
 
-    /* 应用反馈以 100 Hz 拉取，首次未收到反馈时 Valid 保持 false。 */
-    if (RobotCmd_Feedback_Divider == 0U)
-    {
-        GimbalFeedback gimbal_feedback;
-        ShootFeedback shoot_feedback;
-
-        if (Gimbal_Feedback_Subscriber.Read(gimbal_feedback))
-        {
-            Gimbal_Feedback = gimbal_feedback;
-            Gimbal_Feedback_Valid = true;
-        }
-        if (Shoot_Feedback_Subscriber.Read(shoot_feedback))
-        {
-            Shoot_Feedback = shoot_feedback;
-            Shoot_Feedback_Valid = true;
-        }
-    }
-    const bool chassis_publish_due = RobotCmd_Feedback_Divider == 0U;
-    RobotCmd_Feedback_Divider = (RobotCmd_Feedback_Divider + 1U) % 10U;
+    const bool chassis_publish_due = RobotCmd_Chassis_Publish_Divider == 0U;
+    RobotCmd_Chassis_Publish_Divider = (RobotCmd_Chassis_Publish_Divider + 1U) % 10U;
 
     /* 云台和发射按变化发布，底盘命令固定周期刷新。 */
     if (Gimbal_Command_Dirty)
@@ -197,25 +174,15 @@ bool RobotCmd_PushShootEvent(const ShootEvent &event)
 
 bool RobotCmd_GetGimbalFeedback(GimbalFeedback &feedback)
 {
-    if (!Gimbal_Feedback_Valid)
-    {
-        return false;
-    }
-    feedback = Gimbal_Feedback;
-    return true;
+    return MessageCenter::Gimbal_Feedback_Topic.ReadFresh(feedback, FEEDBACK_MAX_AGE_US);
 }
 
 bool RobotCmd_GetChassisFeedback(ChassisFeedback &feedback)
 {
-    return MessageCenter::Chassis_Feedback_Topic.ReadFresh(feedback, 100000U);
+    return MessageCenter::Chassis_Feedback_Topic.ReadFresh(feedback, FEEDBACK_MAX_AGE_US);
 }
 
 bool RobotCmd_GetShootFeedback(ShootFeedback &feedback)
 {
-    if (!Shoot_Feedback_Valid)
-    {
-        return false;
-    }
-    feedback = Shoot_Feedback;
-    return true;
+    return MessageCenter::Shoot_Feedback_Topic.ReadFresh(feedback, FEEDBACK_MAX_AGE_US);
 }
