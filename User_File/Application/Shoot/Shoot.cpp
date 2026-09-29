@@ -9,7 +9,7 @@
  */
 
 #include "Shoot.h"
-#include "../physical_units.h"
+#include "Shoot_Config.h"
 #include "board_config.h"
 
 #include "message_center.h"
@@ -18,14 +18,6 @@
 #include "dji_motor.h"
 #include "fdcan.h"
 #include <cmath>
-#endif
-
-#if SHOOT
-static constexpr float SHOOT_DEFAULT_FRICTION_SPEED_RAD_S = 25.0f;
-static constexpr float SHOOT_DEFAULT_RATE_HZ = 10.0f;
-static constexpr float SHOOT_ONE_BULLET_ANGLE_RAD = DegToRad(36.0f);
-static constexpr float SHOOT_REVERSE_SPEED_RAD_S = DegToRad(-360.0f);
-
 #endif
 
 namespace
@@ -58,15 +50,14 @@ ShootContext ctx;
 
 #if SHOOT
 
-static PID_InitTypeDef Shoot_MakePID(float kp, float ki, float kd,
-                                    float integral_limit, float output_limit)
+static PID_InitTypeDef Shoot_MakePID(const ShootPidConfig &config)
 {
     PID_InitTypeDef pid{};
-    pid.K_P = kp;
-    pid.K_I = ki;
-    pid.K_D = kd;
-    pid.I_Out_Max = integral_limit;
-    pid.Out_Max = output_limit;
+    pid.K_P = config.kp;
+    pid.K_I = config.ki;
+    pid.K_D = config.kd;
+    pid.I_Out_Max = config.integral_limit;
+    pid.Out_Max = config.output_limit;
     pid.D_T = 0.001f;
     return pid;
 }
@@ -106,7 +97,7 @@ static void Shoot_ApplyCommand(void)
     {
         friction_reference_rad_s = ctx.command.friction_speed_rad_s > 0.0f
             ? ctx.command.friction_speed_rad_s
-            : SHOOT_DEFAULT_FRICTION_SPEED_RAD_S;
+            : kShootConfig.default_friction_speed_rad_s;
     }
     ctx.friction_group.Control(friction_reference_rad_s, friction_reference_rad_s);
 
@@ -118,10 +109,10 @@ static void Shoot_ApplyCommand(void)
         ctx.event_angle_active = false;
         ctx.loader.Set_Outer_Loop(DJI_MOTOR_SPEED_LOOP);
         const float rate = ctx.command.shoot_rate_hz > 0.0f
-            ? ctx.command.shoot_rate_hz : SHOOT_DEFAULT_RATE_HZ;
+            ? ctx.command.shoot_rate_hz : kShootConfig.default_rate_hz;
         loader_speed_target_rad_s = ctx.command.loader_speed_rad_s != 0.0f
             ? ctx.command.loader_speed_rad_s
-            : rate * SHOOT_ONE_BULLET_ANGLE_RAD;
+            : rate * kShootConfig.one_bullet_angle_rad;
         break;
     }
 
@@ -130,7 +121,7 @@ static void Shoot_ApplyCommand(void)
         ctx.loader.Set_Outer_Loop(DJI_MOTOR_SPEED_LOOP);
         loader_speed_target_rad_s = ctx.command.loader_speed_rad_s != 0.0f
             ? -std::fabs(ctx.command.loader_speed_rad_s)
-            : SHOOT_REVERSE_SPEED_RAD_S;
+            : kShootConfig.reverse_speed_rad_s;
         break;
 
     case LoaderMode::STOP:
@@ -148,7 +139,7 @@ static void Shoot_ApplyCommand(void)
             const float bullet_count =
                 event.type == ShootEventType::ShootTriple ? 3.0f : 1.0f;
             ctx.loader_angle_target_rad +=
-                bullet_count * SHOOT_ONE_BULLET_ANGLE_RAD;
+                bullet_count * kShootConfig.one_bullet_angle_rad;
             ctx.event_angle_active = true;
         }
         if (ctx.event_angle_active)
@@ -198,31 +189,30 @@ bool Shoot_Init(void)
     Struct_DJIMotor_Init_Config friction_config{};
     friction_config.hfdcan = BoardConfig_Get().shoot_bus;
     friction_config.motor_type = Enum_DJIMotor_Type::M3508;
-    friction_config.gear_ratio = 1.0f; // 摩擦轮直驱，不使用 M3508 默认减速比 19。
+    friction_config.gear_ratio = kShootConfig.friction_gear_ratio;
     friction_config.close_loop = DJI_MOTOR_SPEED_LOOP;
     friction_config.outer_loop = DJI_MOTOR_SPEED_LOOP;
     // 速度环输入为 rad/s；增益无可信实车标定依据，启用前需重新整定。
-    friction_config.speed_pid = Shoot_MakePID(7.5f, 5.0f, 0.0f, 16000.0f, 16000.0f);
+    friction_config.speed_pid = Shoot_MakePID(kShootConfig.friction_speed_pid);
 
-    friction_config.can_id = 3U;
+    friction_config.can_id = kShootConfig.friction_left_id;
     const bool left_initialized = ctx.friction_left.Init(friction_config);
-    friction_config.can_id = 2U;
+    friction_config.can_id = kShootConfig.friction_right_id;
     friction_config.reverse = true;
     const bool right_initialized = ctx.friction_right.Init(friction_config);
 
     Struct_DJIMotor_Init_Config loader_config{};
     loader_config.hfdcan = BoardConfig_Get().shoot_bus;
-    loader_config.can_id = 8U;
+    loader_config.can_id = kShootConfig.loader_id;
     loader_config.motor_type = Enum_DJIMotor_Type::M3508;
     loader_config.close_loop = DJI_MOTOR_CURRENT_LOOP |
                                DJI_MOTOR_SPEED_LOOP |
                                DJI_MOTOR_ANGLE_LOOP;
     loader_config.outer_loop = DJI_MOTOR_SPEED_LOOP;
-    loader_config.current_pid = Shoot_MakePID(1.0f, 50.0f, 0.0f, 12000.0f, 12000.0f);
-    loader_config.speed_pid = Shoot_MakePID(7.5f, 20.0f, 0.0f, 12000.0f, 12000.0f);
+    loader_config.current_pid = Shoot_MakePID(kShootConfig.loader_current_pid);
+    loader_config.speed_pid = Shoot_MakePID(kShootConfig.loader_speed_pid);
     // 角度环输出是 rad/s；原 360 deg/s 限幅转换为 2π rad/s。
-    loader_config.angle_pid = Shoot_MakePID(10.0f, 0.0f, 0.0f,
-                                            0.0f, DegToRad(360.0f));
+    loader_config.angle_pid = Shoot_MakePID(kShootConfig.loader_angle_pid);
     const bool loader_initialized = ctx.loader.Init(loader_config);
 
     ctx.initialized = left_initialized && right_initialized && loader_initialized &&

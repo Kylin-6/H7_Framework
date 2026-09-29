@@ -11,7 +11,7 @@
  */
 
 #include "Chassis.h"
-#include "../physical_units.h"
+#include "Chassis_Config.h"
 
 #include "message_center.h"
 #include "board_config.h"
@@ -22,18 +22,6 @@ static constexpr uint64_t CHASSIS_COMMAND_MAX_AGE_US = 100000U;
 #include "dji_motor.h"
 #include "fdcan.h"
 #include <cmath>
-#endif
-
-#if CHASSIS
-static constexpr float CHASSIS_HALF_LENGTH_M = 0.163f;
-static constexpr float CHASSIS_HALF_WIDTH_M = 0.163f;
-static constexpr float CHASSIS_WHEEL_RADIUS_M = 0.058f;
-static constexpr float CHASSIS_FEEDBACK_ALPHA = 0.032258f;
-static constexpr float CHASSIS_STOP_SPEED_M_S = 0.001f;
-static constexpr float Chassis_Steer_Offset_Rad[4] = {
-    DegToRad(102.5f), DegToRad(12.5f),
-    DegToRad(137.5f), DegToRad(145.0f)};
-
 #endif
 
 namespace
@@ -62,15 +50,14 @@ ChassisContext ctx;
 
 #if CHASSIS
 
-static PID_InitTypeDef Chassis_MakePID(float kp, float ki, float kd,
-                                      float integral_limit, float output_limit)
+static PID_InitTypeDef Chassis_MakePID(const ChassisPidConfig &config)
 {
     PID_InitTypeDef pid{};
-    pid.K_P = kp;
-    pid.K_I = ki;
-    pid.K_D = kd;
-    pid.I_Out_Max = integral_limit;
-    pid.Out_Max = output_limit;
+    pid.K_P = config.kp;
+    pid.K_I = config.ki;
+    pid.K_D = config.kd;
+    pid.I_Out_Max = config.integral_limit;
+    pid.Out_Max = config.output_limit;
     pid.D_T = 0.001f;
     return pid;
 }
@@ -103,16 +90,16 @@ static void Chassis_CalculateTargets(float wheel_target_rad_s[4],
     const float vy_m_s = ctx.command.velocity_y_m_s;
     const float wz_rad_s = ctx.command.angular_velocity_rad_s;
     const float wheel_vx[4] = {
-        vx_m_s + wz_rad_s * CHASSIS_HALF_WIDTH_M,
-        vx_m_s + wz_rad_s * CHASSIS_HALF_WIDTH_M,
-        vx_m_s - wz_rad_s * CHASSIS_HALF_WIDTH_M,
-        vx_m_s - wz_rad_s * CHASSIS_HALF_WIDTH_M,
+        vx_m_s + wz_rad_s * kChassisConfig.half_width_m,
+        vx_m_s + wz_rad_s * kChassisConfig.half_width_m,
+        vx_m_s - wz_rad_s * kChassisConfig.half_width_m,
+        vx_m_s - wz_rad_s * kChassisConfig.half_width_m,
     };
     const float wheel_vy[4] = {
-        vy_m_s + wz_rad_s * CHASSIS_HALF_LENGTH_M,
-        vy_m_s - wz_rad_s * CHASSIS_HALF_LENGTH_M,
-        vy_m_s - wz_rad_s * CHASSIS_HALF_LENGTH_M,
-        vy_m_s + wz_rad_s * CHASSIS_HALF_LENGTH_M,
+        vy_m_s + wz_rad_s * kChassisConfig.half_length_m,
+        vy_m_s - wz_rad_s * kChassisConfig.half_length_m,
+        vy_m_s - wz_rad_s * kChassisConfig.half_length_m,
+        vy_m_s + wz_rad_s * kChassisConfig.half_length_m,
     };
 
     for (uint8_t index = 0; index < 4; ++index)
@@ -121,7 +108,7 @@ static void Chassis_CalculateTargets(float wheel_target_rad_s[4],
                                             wheel_vy[index] * wheel_vy[index]);
         const float current_angle_rad =
             ctx.steer_snapshot[index].output_total_angle;
-        if (velocity_m_s < CHASSIS_STOP_SPEED_M_S)
+        if (velocity_m_s < kChassisConfig.stop_speed_m_s)
         {
             wheel_target_rad_s[index] = 0.0f;
             steer_target_rad[index] = current_angle_rad;
@@ -129,7 +116,7 @@ static void Chassis_CalculateTargets(float wheel_target_rad_s[4],
         }
 
         const float target_angle_rad = std::atan2(wheel_vy[index], wheel_vx[index]) +
-                                       Chassis_Steer_Offset_Rad[index];
+                                       kChassisConfig.steer_offset_rad[index];
         float difference_rad = std::remainder(target_angle_rad - current_angle_rad,
                                               2.0f * kPiRad);
         /* remainder 将误差压到 [-π, π]；超过 ±π/2 时舵角少转 π、轮速取反。 */
@@ -149,7 +136,7 @@ static void Chassis_CalculateTargets(float wheel_target_rad_s[4],
         }
 
         steer_target_rad[index] = current_angle_rad + difference_rad;
-        wheel_target_rad_s[index] = (velocity_m_s / CHASSIS_WHEEL_RADIUS_M) *
+        wheel_target_rad_s[index] = (velocity_m_s / kChassisConfig.wheel_radius_m) *
                                     ctx.wheel_direction[index];
     }
 }
@@ -163,10 +150,10 @@ static void Chassis_UpdateFeedback(void)
     {
         const float heading_rad =
             ctx.steer_snapshot[index].output_total_angle -
-            Chassis_Steer_Offset_Rad[index];
+            kChassisConfig.steer_offset_rad[index];
         const float linear_speed_m_s =
             ctx.wheel_snapshot[index].output_speed *
-            CHASSIS_WHEEL_RADIUS_M;
+            kChassisConfig.wheel_radius_m;
         wheel_vx[index] = linear_speed_m_s * std::cos(heading_rad);
         wheel_vy[index] = linear_speed_m_s * std::sin(heading_rad);
         online = online && ctx.wheel_snapshot[index].online &&
@@ -177,16 +164,16 @@ static void Chassis_UpdateFeedback(void)
     const float vy = (wheel_vy[0] + wheel_vy[1] + wheel_vy[2] + wheel_vy[3]) * 0.25f;
     const float wz_x = ((wheel_vx[0] - wheel_vx[2]) +
                         (wheel_vx[1] - wheel_vx[3])) /
-                       (4.0f * CHASSIS_HALF_WIDTH_M);
+                       (4.0f * kChassisConfig.half_width_m);
     const float wz_y = ((wheel_vy[0] - wheel_vy[1]) +
                         (wheel_vy[3] - wheel_vy[2])) /
-                       (4.0f * CHASSIS_HALF_LENGTH_M);
+                       (4.0f * kChassisConfig.half_length_m);
 
-    ctx.feedback.velocity_x_m_s += CHASSIS_FEEDBACK_ALPHA *
+    ctx.feedback.velocity_x_m_s += kChassisConfig.feedback_alpha *
         (vx - ctx.feedback.velocity_x_m_s);
-    ctx.feedback.velocity_y_m_s += CHASSIS_FEEDBACK_ALPHA *
+    ctx.feedback.velocity_y_m_s += kChassisConfig.feedback_alpha *
         (vy - ctx.feedback.velocity_y_m_s);
-    ctx.feedback.angular_velocity_rad_s += CHASSIS_FEEDBACK_ALPHA *
+    ctx.feedback.angular_velocity_rad_s += kChassisConfig.feedback_alpha *
         (0.5f * (wz_x + wz_y) - ctx.feedback.angular_velocity_rad_s);
     ctx.feedback.enabled = ctx.output_enabled;
     ctx.feedback.online = online;
@@ -206,7 +193,7 @@ bool Chassis_Init(void)
     wheel_config.close_loop = DJI_MOTOR_SPEED_LOOP;
     wheel_config.outer_loop = DJI_MOTOR_SPEED_LOOP;
     // 速度环输入现为 rad/s；以下增益来源未标定，需实车重新整定。
-    wheel_config.speed_pid = Chassis_MakePID(4.5f, 0.05f, 0.0f, 3000.0f, 16000.0f);
+    wheel_config.speed_pid = Chassis_MakePID(kChassisConfig.wheel_speed_pid);
 
     Struct_DJIMotor_Init_Config steer_config{};
     steer_config.hfdcan = BoardConfig_Get().chassis_steer_bus;
@@ -215,15 +202,14 @@ bool Chassis_Init(void)
     steer_config.outer_loop = DJI_MOTOR_ANGLE_LOOP;
     // 角度环输出为 rad/s：原 200/1000 deg/s 限幅作物理等效转换。
     // Kp/Ki 和舵轮速度环增益没有可信实车来源，启用前均需重新整定。
-    steer_config.angle_pid = Chassis_MakePID(30.0f, 0.2f, 0.0f,
-                                             DegToRad(200.0f), DegToRad(1000.0f));
-    steer_config.speed_pid = Chassis_MakePID(4.0f, 4.0f, 0.0f, 3000.0f, 15000.0f);
+    steer_config.angle_pid = Chassis_MakePID(kChassisConfig.steer_angle_pid);
+    steer_config.speed_pid = Chassis_MakePID(kChassisConfig.steer_speed_pid);
 
     bool initialized = true;
     for (uint8_t index = 0; index < 4; ++index)
     {
-        wheel_config.can_id = index + 1U;
-        steer_config.can_id = index + 1U;
+        wheel_config.can_id = kChassisConfig.motor_id[index];
+        steer_config.can_id = kChassisConfig.motor_id[index];
         initialized = ctx.wheel_motor[index].Init(wheel_config) && initialized;
         initialized = ctx.steer_motor[index].Init(steer_config) && initialized;
     }
