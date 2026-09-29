@@ -2,16 +2,19 @@
 #include "message_center.h"
 #include <cmath>
 
-static INS_State Gimbal_INS_State;
-static bool Gimbal_INS_Valid = false;
-static constexpr uint64_t GIMBAL_INS_MAX_AGE_US = 10000U;
-static uint8_t Gimbal_Message_Divider;
+namespace
+{
+INS_State Gimbal_INS_State;
+bool Gimbal_INS_Valid = false;
+constexpr uint64_t GIMBAL_INS_MAX_AGE_US = 10000U;
+uint8_t Gimbal_Feedback_Divider;
 
-static bool Gimbal_INS_Finite(const INS_State &ins)
+bool Gimbal_INS_Finite(const INS_State &ins)
 {
     return std::isfinite(ins.yaw_rad) && std::isfinite(ins.pitch_rad) &&
            std::isfinite(ins.roll_rad) && std::isfinite(ins.gyro_x_rad_s) &&
            std::isfinite(ins.gyro_y_rad_s) && std::isfinite(ins.gyro_z_rad_s);
+}
 }
 
 #if GIMBAL
@@ -302,9 +305,9 @@ void Gimbal_Update(void)
     const auto pitch = Gimbal.Pitch_Motor.GetFeedbackSnapshot();
     UpdateControl(MessageCenter::Gimbal_Command_Topic.ReadWithMeta(), yaw, pitch);
 #endif
-    if (++Gimbal_Message_Divider >= 10U)
+    if (++Gimbal_Feedback_Divider >= 10U)
     {
-        Gimbal_Message_Divider = 0;
+        Gimbal_Feedback_Divider = 0;
         GimbalFeedback feedback{};
         if (Gimbal_INS_Valid)
         {
