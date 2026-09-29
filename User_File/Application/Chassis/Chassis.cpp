@@ -24,12 +24,6 @@ static constexpr uint64_t CHASSIS_COMMAND_MAX_AGE_US = 100000U;
 #include <cmath>
 #endif
 
-static Publisher<ChassisFeedback> Chassis_Feedback_Publisher(
-    MessageCenter::Chassis_Feedback_Topic);
-static ChassisCmd Chassis_Command;
-static ChassisFeedback Chassis_Feedback;
-static uint8_t Chassis_Feedback_Divider;
-
 #if CHASSIS
 static constexpr float CHASSIS_HALF_LENGTH_M = 0.163f;
 static constexpr float CHASSIS_HALF_WIDTH_M = 0.163f;
@@ -40,15 +34,33 @@ static constexpr float Chassis_Steer_Offset_Rad[4] = {
     DegToRad(102.5f), DegToRad(12.5f),
     DegToRad(137.5f), DegToRad(145.0f)};
 
-static Class_DJIMotor Chassis_Wheel_Motor[4];
-static Class_DJIMotor Chassis_Steer_Motor[4];
-static Struct_DJIMotor_Motion_Snapshot Chassis_Wheel_Snapshot[4];
-static Struct_DJIMotor_Motion_Snapshot Chassis_Steer_Snapshot[4];
-static Class_DJIMotor_Group Chassis_Wheel_Group;
-static Class_DJIMotor_Group Chassis_Steer_Group;
-static bool Chassis_Initialized;
-static bool Chassis_Output_Enabled;
-static int8_t Chassis_Wheel_Direction[4] = {1, 1, 1, 1};
+#endif
+
+namespace
+{
+struct ChassisContext
+{
+    Publisher<ChassisFeedback> feedback_publisher{MessageCenter::Chassis_Feedback_Topic};
+    ChassisCmd command{};
+    ChassisFeedback feedback{};
+    uint8_t feedback_divider = 0U;
+#if CHASSIS
+    Class_DJIMotor wheel_motor[4];
+    Class_DJIMotor steer_motor[4];
+    Struct_DJIMotor_Motion_Snapshot wheel_snapshot[4];
+    Struct_DJIMotor_Motion_Snapshot steer_snapshot[4];
+    Class_DJIMotor_Group wheel_group;
+    Class_DJIMotor_Group steer_group;
+    bool initialized = false;
+    bool output_enabled = false;
+    int8_t wheel_direction[4] = {1, 1, 1, 1};
+#endif
+};
+
+ChassisContext ctx;
+}
+
+#if CHASSIS
 
 static PID_InitTypeDef Chassis_MakePID(float kp, float ki, float kd,
                                       float integral_limit, float output_limit)
@@ -65,20 +77,20 @@ static PID_InitTypeDef Chassis_MakePID(float kp, float ki, float kd,
 
 static void Chassis_SetEnabled(bool enabled)
 {
-    if (enabled == Chassis_Output_Enabled)
+    if (enabled == ctx.output_enabled)
     {
         return;
     }
-    Chassis_Output_Enabled = enabled;
+    ctx.output_enabled = enabled;
     if (enabled)
     {
-        Chassis_Wheel_Group.Enable();
-        Chassis_Steer_Group.Enable();
+        ctx.wheel_group.Enable();
+        ctx.steer_group.Enable();
     }
     else
     {
-        Chassis_Wheel_Group.Disable();
-        Chassis_Steer_Group.Disable();
+        ctx.wheel_group.Disable();
+        ctx.steer_group.Disable();
     }
 }
 
@@ -87,9 +99,9 @@ static void Chassis_CalculateTargets(float wheel_target_rad_s[4],
 {
     /* 四轮位置的旋转项为 ±wz·半宽/半长；符号按下方轮索引数组固定。
        物理前/左和正转方向必须由实车接线及坐标标定确认。 */
-    const float vx_m_s = Chassis_Command.velocity_x_m_s;
-    const float vy_m_s = Chassis_Command.velocity_y_m_s;
-    const float wz_rad_s = Chassis_Command.angular_velocity_rad_s;
+    const float vx_m_s = ctx.command.velocity_x_m_s;
+    const float vy_m_s = ctx.command.velocity_y_m_s;
+    const float wz_rad_s = ctx.command.angular_velocity_rad_s;
     const float wheel_vx[4] = {
         vx_m_s + wz_rad_s * CHASSIS_HALF_WIDTH_M,
         vx_m_s + wz_rad_s * CHASSIS_HALF_WIDTH_M,
@@ -108,7 +120,7 @@ static void Chassis_CalculateTargets(float wheel_target_rad_s[4],
         const float velocity_m_s = std::sqrt(wheel_vx[index] * wheel_vx[index] +
                                             wheel_vy[index] * wheel_vy[index]);
         const float current_angle_rad =
-            Chassis_Steer_Snapshot[index].output_total_angle;
+            ctx.steer_snapshot[index].output_total_angle;
         if (velocity_m_s < CHASSIS_STOP_SPEED_M_S)
         {
             wheel_target_rad_s[index] = 0.0f;
@@ -124,21 +136,21 @@ static void Chassis_CalculateTargets(float wheel_target_rad_s[4],
         if (difference_rad > kPiRad / 2.0f)
         {
             difference_rad -= kPiRad;
-            Chassis_Wheel_Direction[index] = -1;
+            ctx.wheel_direction[index] = -1;
         }
         else if (difference_rad < -kPiRad / 2.0f)
         {
             difference_rad += kPiRad;
-            Chassis_Wheel_Direction[index] = -1;
+            ctx.wheel_direction[index] = -1;
         }
         else
         {
-            Chassis_Wheel_Direction[index] = 1;
+            ctx.wheel_direction[index] = 1;
         }
 
         steer_target_rad[index] = current_angle_rad + difference_rad;
         wheel_target_rad_s[index] = (velocity_m_s / CHASSIS_WHEEL_RADIUS_M) *
-                                    Chassis_Wheel_Direction[index];
+                                    ctx.wheel_direction[index];
     }
 }
 
@@ -150,15 +162,15 @@ static void Chassis_UpdateFeedback(void)
     for (uint8_t index = 0; index < 4; ++index)
     {
         const float heading_rad =
-            Chassis_Steer_Snapshot[index].output_total_angle -
+            ctx.steer_snapshot[index].output_total_angle -
             Chassis_Steer_Offset_Rad[index];
         const float linear_speed_m_s =
-            Chassis_Wheel_Snapshot[index].output_speed *
+            ctx.wheel_snapshot[index].output_speed *
             CHASSIS_WHEEL_RADIUS_M;
         wheel_vx[index] = linear_speed_m_s * std::cos(heading_rad);
         wheel_vy[index] = linear_speed_m_s * std::sin(heading_rad);
-        online = online && Chassis_Wheel_Snapshot[index].online &&
-                 Chassis_Steer_Snapshot[index].online;
+        online = online && ctx.wheel_snapshot[index].online &&
+                 ctx.steer_snapshot[index].online;
     }
 
     const float vx = (wheel_vx[0] + wheel_vx[1] + wheel_vx[2] + wheel_vx[3]) * 0.25f;
@@ -170,22 +182,22 @@ static void Chassis_UpdateFeedback(void)
                         (wheel_vy[3] - wheel_vy[2])) /
                        (4.0f * CHASSIS_HALF_LENGTH_M);
 
-    Chassis_Feedback.velocity_x_m_s += CHASSIS_FEEDBACK_ALPHA *
-        (vx - Chassis_Feedback.velocity_x_m_s);
-    Chassis_Feedback.velocity_y_m_s += CHASSIS_FEEDBACK_ALPHA *
-        (vy - Chassis_Feedback.velocity_y_m_s);
-    Chassis_Feedback.angular_velocity_rad_s += CHASSIS_FEEDBACK_ALPHA *
-        (0.5f * (wz_x + wz_y) - Chassis_Feedback.angular_velocity_rad_s);
-    Chassis_Feedback.enabled = Chassis_Output_Enabled;
-    Chassis_Feedback.online = online;
+    ctx.feedback.velocity_x_m_s += CHASSIS_FEEDBACK_ALPHA *
+        (vx - ctx.feedback.velocity_x_m_s);
+    ctx.feedback.velocity_y_m_s += CHASSIS_FEEDBACK_ALPHA *
+        (vy - ctx.feedback.velocity_y_m_s);
+    ctx.feedback.angular_velocity_rad_s += CHASSIS_FEEDBACK_ALPHA *
+        (0.5f * (wz_x + wz_y) - ctx.feedback.angular_velocity_rad_s);
+    ctx.feedback.enabled = ctx.output_enabled;
+    ctx.feedback.online = online;
 }
 #endif
 
 bool Chassis_Init(void)
 {
-    Chassis_Command = {};
-    Chassis_Feedback = {};
-    Chassis_Feedback_Divider = 0U;
+    ctx.command = {};
+    ctx.feedback = {};
+    ctx.feedback_divider = 0U;
 
 #if CHASSIS
     Struct_DJIMotor_Init_Config wheel_config{};
@@ -212,17 +224,17 @@ bool Chassis_Init(void)
     {
         wheel_config.can_id = index + 1U;
         steer_config.can_id = index + 1U;
-        initialized = Chassis_Wheel_Motor[index].Init(wheel_config) && initialized;
-        initialized = Chassis_Steer_Motor[index].Init(steer_config) && initialized;
+        initialized = ctx.wheel_motor[index].Init(wheel_config) && initialized;
+        initialized = ctx.steer_motor[index].Init(steer_config) && initialized;
     }
-    initialized = initialized && Chassis_Wheel_Group.Init(
-        &Chassis_Wheel_Motor[0], &Chassis_Wheel_Motor[1],
-        &Chassis_Wheel_Motor[2], &Chassis_Wheel_Motor[3]);
-    initialized = initialized && Chassis_Steer_Group.Init(
-        &Chassis_Steer_Motor[0], &Chassis_Steer_Motor[1],
-        &Chassis_Steer_Motor[2], &Chassis_Steer_Motor[3]);
-    Chassis_Initialized = initialized;
-    Chassis_Output_Enabled = true;
+    initialized = initialized && ctx.wheel_group.Init(
+        &ctx.wheel_motor[0], &ctx.wheel_motor[1],
+        &ctx.wheel_motor[2], &ctx.wheel_motor[3]);
+    initialized = initialized && ctx.steer_group.Init(
+        &ctx.steer_motor[0], &ctx.steer_motor[1],
+        &ctx.steer_motor[2], &ctx.steer_motor[3]);
+    ctx.initialized = initialized;
+    ctx.output_enabled = true;
     if (initialized)
     {
         Chassis_SetEnabled(false);
@@ -240,31 +252,31 @@ void Chassis_Update(void)
     if (MessageCenter::Chassis_Command_Topic.ReadFresh(
             command, CHASSIS_COMMAND_MAX_AGE_US))
     {
-        Chassis_Command = command;
+        ctx.command = command;
     }
     else
     {
-        Chassis_Command = {};
+        ctx.command = {};
     }
 
 #if CHASSIS
-    if (Chassis_Initialized)
+    if (ctx.initialized)
     {
         for (uint8_t index = 0U; index < 4U; ++index)
         {
-            Chassis_Wheel_Snapshot[index] = Chassis_Wheel_Motor[index].GetMotionSnapshot();
-            Chassis_Steer_Snapshot[index] = Chassis_Steer_Motor[index].GetMotionSnapshot();
+            ctx.wheel_snapshot[index] = ctx.wheel_motor[index].GetMotionSnapshot();
+            ctx.steer_snapshot[index] = ctx.steer_motor[index].GetMotionSnapshot();
         }
-        const bool enabled = Chassis_Command.mode != ChassisMode::ZERO_FORCE;
+        const bool enabled = ctx.command.mode != ChassisMode::ZERO_FORCE;
         Chassis_SetEnabled(enabled);
         if (enabled)
         {
             float wheel_target_rad_s[4];
             float steer_target_rad[4];
             Chassis_CalculateTargets(wheel_target_rad_s, steer_target_rad);
-            Chassis_Wheel_Group.Control(wheel_target_rad_s[0], wheel_target_rad_s[1],
+            ctx.wheel_group.Control(wheel_target_rad_s[0], wheel_target_rad_s[1],
                                         wheel_target_rad_s[2], wheel_target_rad_s[3]);
-            Chassis_Steer_Group.Control(steer_target_rad[0], steer_target_rad[1],
+            ctx.steer_group.Control(steer_target_rad[0], steer_target_rad[1],
                                         steer_target_rad[2], steer_target_rad[3]);
         }
         Chassis_UpdateFeedback();
@@ -272,10 +284,10 @@ void Chassis_Update(void)
 #endif
 
     /* 电机控制按 1 kHz 执行，反馈消息按 100 Hz 发布。 */
-    Chassis_Feedback_Divider++;
-    if (Chassis_Feedback_Divider >= 10U)
+    ctx.feedback_divider++;
+    if (ctx.feedback_divider >= 10U)
     {
-        Chassis_Feedback_Divider = 0U;
-        Chassis_Feedback_Publisher.Publish(Chassis_Feedback);
+        ctx.feedback_divider = 0U;
+        ctx.feedback_publisher.Publish(ctx.feedback);
     }
 }
