@@ -35,11 +35,16 @@ Application 不应：
 
 | 模块 | 职责 | 拥有/调用的主要对象 |
 | --- | --- | --- |
-| `RobotCmd` | 命令唯一所有者和发布者；输入互锁失效时立即发布安全目标 | Output、Message Center Subscriber |
+| `RobotCmd` | 命令唯一所有者和发布者；输入互锁失效时立即发布安全目标 | Output、ShootEvent FIFO、反馈 Topic getter |
 | `Gimbal` | 云台模式、目标角/速度、达妙控制和反馈 | 两轴 Class_DMMotor、Yaw PID、INS Topic |
 | `Chassis` | 四舵轮运动学、最短转向和电机目标 | 8 个 DJI 电机及电机组 |
 | `Shoot` | 摩擦轮、拨弹连续模式和离散射击动作 | 3 个 DJI 电机、ShootEvent FIFO |
 | `Communication` | UART5 S.BUS 适配、固定来源输入状态与仲裁 | S.BUS、InputState |
+
+Chassis 与 Shoot 的机械参数和 PID 初值分别放在 `Chassis_Config.h`、`Shoot_Config.h`；
+运行状态和设备实例由各自 `.cpp` 内的私有 Context 持有。BoardConfig 只提供总线等硬件
+资源，不存机构参数。Gimbal 保持现有 `Gimbal_Config.h` 与状态机组织，本轮不拆文件。
+`Communication` 目录本轮保留；老步兵分支合并稳定后可考虑改名为 `Input`。
 
 单板固件的硬件路径由 `H7_APP_GIMBAL`、`H7_APP_CHASSIS`、`H7_APP_SHOOT` 控制，默认均关闭；
 双板固件由 CMake 在构建期分别选择应用和任务源码。板内命令通过 `LocalPublisher` 进入
@@ -59,7 +64,7 @@ ChassisBoard: BoardTransport_Init → Chassis_Init
 ```
 
 RobotCmd 初始化失败时控制任务停在延时循环；不会继续初始化电机应用。RobotCmd 在
-消费者之前发布命令，各 Application 更新后发布的反馈由 RobotCmd 在后续周期读取。
+消费者之前发布命令；反馈 getter 在调用时直接读取各 Application 的 Topic。
 Gimbal/Chassis 板间轮询复用该任务，不创建额外控制任务。
 
 ## 4. RobotCmd：命令唯一入口
@@ -108,8 +113,8 @@ RobotCmd 独立初始化时的默认值如下；ControlTask 随后初始化 UART
 - Chassis 为 `ZERO_FORCE`。
 - Shoot 总开关、摩擦轮和拨弹盘均关闭。
 
-反馈读取 API 在对应 Application 首次发布前返回 false，并保持调用者输出不变。
-底盘反馈另外要求最近 100 ms 内发布；云台和发射反馈缓存当前没有同样的时效检查。
+三个反馈 getter 都要求对应 Application 最近 100 ms 内发布；未发布或超时均返回
+false，并保持调用者输出不变。RobotCmd 不再维护应用反馈的二次缓存。
 
 ## 5. Gimbal
 
@@ -223,6 +228,9 @@ STOP 模式每周期最多消费一个事件：首次事件从当前反馈角建
 5. 在 `Control_Task` 中按数据依赖安排调用顺序，不轻易新增任务。
 6. 用 CMake 选项控制尚未标定的硬件路径，默认状态必须安全。
 7. 更新本文、Message Center 通道表、根 README 和架构图。
+
+机械参数放 Application 的 Config，运行状态和设备实例放私有 Context；公共接口放 `.h`，
+控制细节和私有 helper 留在 `.cpp`。Task 只安排初始化顺序和周期调用。
 
 推荐接口形态：
 
