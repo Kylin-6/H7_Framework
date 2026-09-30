@@ -31,13 +31,9 @@ struct GimbalContext
     float target_pitch_speed_rad_s = 0.0f;
     uint64_t state_since_us = 0U;
     uint64_t stable_since_us = 0U;
-    uint64_t last_enable_us = 0U;
-    uint64_t last_disable_us = 0U;
     bool yaw_registered = false;
     bool pitch_registered = false;
     bool stabilizing = false;
-    bool enable_sent = false;
-    bool disable_sent = false;
     uint32_t target_sequence = 0U;
 #endif
 };
@@ -56,7 +52,6 @@ bool Gimbal_INS_Finite(const INS_State &ins)
 namespace
 {
 constexpr float GIMBAL_PI = 3.14159265358979323846f;
-constexpr uint64_t RETRY_US = 20000U;
 constexpr uint64_t ENABLE_TIMEOUT_US = 2000000U;
 constexpr uint64_t BACKOFF_US = 1000000U;
 constexpr uint64_t STABLE_US = 100000U;
@@ -159,35 +154,13 @@ void SetState(Enum_Gimbal_Status state, uint64_t now)
         ctx.status = state;
         ctx.state_since_us = now;
         ctx.stabilizing = false;
-        ctx.enable_sent = ctx.disable_sent = false;
     }
 }
 
-bool ZeroOutput()
+void Stop()
 {
-    // 两轴都尝试，不能用短路表达式跳过第二轴；覆盖尚未发出的旧周期帧。
-    const bool yaw_ok = !ctx.yaw_registered || ctx.yaw_motor.SetTorque(0);
-    const bool pitch_ok = !ctx.pitch_registered || ctx.pitch_motor.SetTorque(0);
-    return yaw_ok && pitch_ok;
-}
-
-void Stop(uint64_t now, const Struct_DMMotor_Snapshot &yaw,
-          const Struct_DMMotor_Snapshot &pitch)
-{
-    (void)ZeroOutput(); // 失败时下个周期继续覆盖，不将发布失败当作停机成功。
-    if (!ctx.disable_sent || now - ctx.last_disable_us >= RETRY_US)
-    {
-        if (ctx.yaw_registered && (!yaw.online || yaw.feedback.state != 0))
-        {
-            (void)ctx.yaw_motor.Disable();
-        }
-        if (ctx.pitch_registered && (!pitch.online || pitch.feedback.state != 0))
-        {
-            (void)ctx.pitch_motor.Disable();
-        }
-        ctx.last_disable_us = now;
-        ctx.disable_sent = true;
-    }
+    if (ctx.yaw_registered) { (void)ctx.yaw_motor.RequestEnabled(false); }
+    if (ctx.pitch_registered) { (void)ctx.pitch_motor.RequestEnabled(false); }
 }
 
 bool Control(const Struct_DMMotor_Snapshot &pitch)
@@ -220,18 +193,18 @@ void UpdateControl(const TopicSnapshot<GimbalCmd> &message,
     const uint64_t now = SYS_Timestamp_Get_Microsecond();
     if (ctx.status == Gimbal_Status_CONFIG_ERROR)
     {
-        Stop(now, yaw, pitch);
+        Stop();
         return;
     }
     const GimbalCmd command = message.valid ? message.data : GimbalCmd{};
     const bool valid = CommandValid(command) && ctx.ins_valid &&
                        FeedbackFinite(yaw) && FeedbackFinite(pitch) &&
                        !MotorFault(yaw) && !MotorFault(pitch);
-    const bool healthy = yaw.online && yaw.enabled && pitch.online && pitch.enabled;
+    const bool healthy = yaw.ready && pitch.ready;
     if (command.mode == GimbalMode::DISABLED)
     {
         SetState(Gimbal_Status_DISABLE, now);
-        Stop(now, yaw, pitch);
+        Stop();
         ctx.last_mode = GimbalMode::DISABLED;
         return;
     }
@@ -241,7 +214,7 @@ void UpdateControl(const TopicSnapshot<GimbalCmd> &message,
     }
     if (ctx.status == Gimbal_Status_FAULT)
     {
-        Stop(now, yaw, pitch);
+        Stop();
         if (valid && now - ctx.state_since_us >= BACKOFF_US)
         {
             SetState(Gimbal_Status_ENABLING, now);
@@ -254,20 +227,17 @@ void UpdateControl(const TopicSnapshot<GimbalCmd> &message,
     }
     if (ctx.status == Gimbal_Status_ENABLING)
     {
-        if (!ZeroOutput() || now - ctx.state_since_us >= ENABLE_TIMEOUT_US)
+        const bool yaw_ok = ctx.yaw_motor.RequestEnabled(true);
+        const bool pitch_ok = ctx.pitch_motor.RequestEnabled(true);
+        if (!yaw_ok || !pitch_ok || now - ctx.state_since_us >= ENABLE_TIMEOUT_US)
         {
             SetState(Gimbal_Status_FAULT, now);
-            Stop(now, yaw, pitch);
+            Stop();
             return;
         }
-        if (!ctx.enable_sent || now - ctx.last_enable_us >= RETRY_US)
-        {
-            if (!yaw.online || !yaw.enabled) { (void)ctx.yaw_motor.Enable(); }
-            if (!pitch.online || !pitch.enabled) { (void)ctx.pitch_motor.Enable(); }
-            ctx.last_enable_us = now;
-            ctx.enable_sent = true;
-        }
-        if (!healthy) { ctx.stabilizing = false; }
+        const bool motors_ready = ctx.yaw_motor.GetFeedbackSnapshot().ready &&
+                                  ctx.pitch_motor.GetFeedbackSnapshot().ready;
+        if (!motors_ready) { ctx.stabilizing = false; }
         else if (!ctx.stabilizing) { ctx.stable_since_us = now; ctx.stabilizing = true; }
         else if (now - ctx.stable_since_us >= STABLE_US)
         {
@@ -293,7 +263,7 @@ void UpdateControl(const TopicSnapshot<GimbalCmd> &message,
     if (!Control(pitch))
     {
         SetState(Gimbal_Status_FAULT, now);
-        Stop(now, yaw, pitch);
+        Stop();
     }
 }
 } // namespace
@@ -306,8 +276,6 @@ bool Gimbal_Init(const Struct_Gimbal_Config &requested)
         return false;
     }
     ctx.config = requested;
-    ctx.yaw_motor.SetAutoEnableOnOffline(false);
-    ctx.pitch_motor.SetAutoEnableOnOffline(false);
     ctx.yaw_registered = ctx.yaw_motor.Init(ctx.config.yaw.bus, ctx.config.yaw.id, ctx.config.yaw.feedback_id,
         Enum_DMMotor_Mode::MIT, ctx.config.yaw.reverse, ctx.config.yaw.position_max,
         ctx.config.yaw.velocity_max, ctx.config.yaw.torque_max);
@@ -353,8 +321,8 @@ void Gimbal_Update(void)
         }
         feedback.ins_valid = ctx.ins_valid;
 #if GIMBAL
-        feedback.enabled = ctx.yaw_snapshot.online && ctx.yaw_snapshot.enabled &&
-                           ctx.pitch_snapshot.online && ctx.pitch_snapshot.enabled;
+        feedback.enabled = ctx.yaw_motor.GetFeedbackSnapshot().ready &&
+                           ctx.pitch_motor.GetFeedbackSnapshot().ready;
 #endif
         MessageCenter::Gimbal_Feedback_Topic.Publish(feedback);
     }
