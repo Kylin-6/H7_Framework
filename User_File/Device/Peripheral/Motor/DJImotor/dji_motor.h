@@ -51,7 +51,7 @@ enum class Enum_DJIMotor_Feedback : uint8_t
 
 /**
  * @brief 电机配置；外部反馈和前馈仅保存指针，所指变量须在使用期间有效。
- * @note Init 成功后默认使能，收到有效反馈后才允许计算非零指令。
+ * @note Init 成功后默认禁止输出；请求使能并收到新鲜反馈后才计算非零指令。
  */
 struct Struct_DJIMotor_Init_Config
 {
@@ -126,7 +126,8 @@ struct Struct_DJIMotor_Motion_Snapshot
     float output_speed = 0.0f;
     uint64_t timestamp_us = 0U;
     bool online = false;
-    bool enabled = false;
+    bool requested_enabled = false;
+    bool ready = false;
 };
 
 class Class_DJIMotor
@@ -138,6 +139,7 @@ public:
     // 仅用于角度/速度目标：deg 或 deg/s；函数无条件转换为弧度制。
     void SetRef_Degree(float ref);
     void Control();
+    bool RequestEnabled(bool enabled);
     void Enable();
     bool Disable();
     void Set_Outer_Loop(Enum_DJIMotor_Loop loop);
@@ -189,7 +191,7 @@ protected:
     uint64_t feedback_timeout_us = 20000;
     bool has_temperature = false;
     bool reverse = false;
-    bool enabled = false;
+    bool requested_enabled = false;
     bool initialized = false;
     bool feedback_initialized = false;
     uint16_t last_encoder = 0;
@@ -229,6 +231,7 @@ public:
                         float ref4 = 0.0f);
     void Control();
     bool Send();
+    bool RequestEnabled(bool enabled);
     void Enable();
     bool Disable();
 

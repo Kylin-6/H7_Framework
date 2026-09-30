@@ -279,7 +279,7 @@ bool Class_DJIMotor::Init(const Struct_DJIMotor_Init_Config &config)
     DJI_Motor_Registrations[registration_index].hfdcan = config.hfdcan;
     DJI_Motor_Registrations[registration_index].rx_id = resolved_rx_id;
     DJI_Motor_Registrations[registration_index].used = true;
-    enabled = true;
+    requested_enabled = false;
     initialized = true;
     return true;
 }
@@ -351,7 +351,22 @@ void Class_DJIMotor::SetRef_Degree(float ref)
 /** @brief 恢复本地使能标志，保留目标值；后续 Control 仍需有效反馈。 */
 void Class_DJIMotor::Enable()
 {
-    enabled = true;
+    (void)RequestEnabled(true);
+}
+
+bool Class_DJIMotor::RequestEnabled(bool enable)
+{
+    requested_enabled = enable;
+    if (enable)
+    {
+        return initialized;
+    }
+    Clear_Command();
+    current_pid.Set_Integral_Error(0.0f);
+    speed_pid.Set_Integral_Error(0.0f);
+    angle_pid.Set_Integral_Error(0.0f);
+    Update_PID_Debug();
+    return initialized && CAN_Tx_Perform(&DJI_Motor_Tx_Groups[group].message);
 }
 
 bool Class_DJIMotor::IsOnline()
@@ -362,7 +377,7 @@ bool Class_DJIMotor::IsOnline()
 
 bool Class_DJIMotor::IsEnabled() const
 {
-    return initialized && enabled;
+    return initialized && requested_enabled;
 }
 
 bool Class_DJIMotor::IsDataValid()
@@ -408,8 +423,11 @@ Struct_DJIMotor_Motion_Snapshot Class_DJIMotor::GetMotionSnapshot() const
     snapshot.output_total_angle = feedback.output_total_angle;
     snapshot.output_speed = feedback.output_speed;
     snapshot.timestamp_us = last_feedback_timestamp_us;
-    snapshot.online = online;
-    snapshot.enabled = enabled;
+    const uint64_t now_us = SYS_Timestamp.Get_Now_Microsecond();
+    snapshot.online = initialized && online && now_us >= snapshot.timestamp_us &&
+                      now_us - snapshot.timestamp_us <= feedback_timeout_us;
+    snapshot.requested_enabled = requested_enabled;
+    snapshot.ready = initialized && snapshot.requested_enabled && snapshot.online;
     __DMB();
     __set_PRIMASK(interrupt_state);
     return snapshot;
@@ -519,7 +537,7 @@ bool Class_DJIMotor::Check_Feedback_Timeout()
     {
         online = false;
     }
-    bool ready = enabled && online;
+    bool ready = requested_enabled && online;
     DJI_Motor_Exit_Critical(interrupt_state);
     if (ready)
     {
@@ -619,13 +637,7 @@ void Class_DJIMotor::Control()
  */
 bool Class_DJIMotor::Disable()
 {
-    enabled = false;
-    if (!initialized)
-    {
-        return false;
-    }
-    Clear_Command();
-    return CAN_Tx_Perform(&DJI_Motor_Tx_Groups[group].message);
+    return RequestEnabled(false);
 }
 
 /**
@@ -798,7 +810,7 @@ bool Class_DJIMotor_Group::Control(float ref1, float ref2, float ref3, float ref
     bool ready = true;
     for (uint8_t i = 0; i < motor_count; ++i)
     {
-        if (!motors[i]->online || !motors[i]->enabled)
+        if (!motors[i]->GetMotionSnapshot().ready)
         {
             ready = false;
         }
@@ -822,7 +834,7 @@ bool Class_DJIMotor_Group::Control_Degree(float ref1, float ref2, float ref3, fl
     bool ready = true;
     for (uint8_t i = 0; i < motor_count; ++i)
     {
-        if (!motors[i]->online || !motors[i]->enabled)
+        if (!motors[i]->GetMotionSnapshot().ready)
         {
             ready = false;
         }
@@ -854,18 +866,11 @@ bool Class_DJIMotor_Group::Send()
 /** @brief 恢复组内各电机的本地使能标志，后续控制沿用已保存的目标。 */
 void Class_DJIMotor_Group::Enable()
 {
-    if (!initialized)
-    {
-        return;
-    }
-    for (uint8_t i = 0; i < motor_count; ++i)
-    {
-        motors[i]->Enable();
-    }
+    (void)RequestEnabled(true);
 }
 
-/** @brief 清零组内全部电机指令后统一发布，避免逐台失能时发布中间状态。 */
-bool Class_DJIMotor_Group::Disable()
+/** @brief 组内统一请求输出状态，失能时只发布一次共享报文。 */
+bool Class_DJIMotor_Group::RequestEnabled(bool enable)
 {
     if (!initialized)
     {
@@ -873,8 +878,20 @@ bool Class_DJIMotor_Group::Disable()
     }
     for (uint8_t i = 0; i < motor_count; ++i)
     {
-        motors[i]->enabled = false;
-        motors[i]->Clear_Command();
+        motors[i]->requested_enabled = enable;
+        if (!enable)
+        {
+            motors[i]->Clear_Command();
+            motors[i]->current_pid.Set_Integral_Error(0.0f);
+            motors[i]->speed_pid.Set_Integral_Error(0.0f);
+            motors[i]->angle_pid.Set_Integral_Error(0.0f);
+            motors[i]->Update_PID_Debug();
+        }
     }
-    return Send();
+    return enable || Send();
+}
+
+bool Class_DJIMotor_Group::Disable()
+{
+    return RequestEnabled(false);
 }

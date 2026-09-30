@@ -25,7 +25,7 @@ static constexpr uint32_t DM_POSITION_SPEED_MODE_ID_OFFSET = 0x100U;
 static constexpr uint32_t DM_FORCE_POSITION_MODE_ID_OFFSET = 0x300U;
 static constexpr uint32_t DM_PARAMETER_ID = 0x7FFU;
 static constexpr uint64_t DM_MODE_TIMEOUT_US = 250000; ///< 模式切换应答等待上限，单位 us。
-static constexpr uint64_t DM_RECOVER_RETRY_US = 50000;
+static constexpr uint64_t DM_LIFECYCLE_RETRY_US = 20000;
 static constexpr uint8_t DM_CMD_ENABLE = 0xFCU;
 static constexpr uint8_t DM_CMD_DISABLE = 0xFDU;
 static constexpr uint8_t DM_CMD_ZERO_POSITION = 0xFEU;
@@ -129,49 +129,33 @@ void Class_DMMotor::FeedbackCallback(FDCAN_HandleTypeDef *callback_hfdcan,
     motor->feedback_daemon.Feed();
 }
 
-/**
- * @brief Daemon 首次判定掉线时快速提交一帧使能命令。
- * @note 首次入队成功则不再重试；仅在队列已满时留给 StatusTask 限频重试。
- */
-void Class_DMMotor::OfflineCallback(void *owner)
-{
-    Class_DMMotor *motor = static_cast<Class_DMMotor *>(owner);
-    if (motor != nullptr && motor->auto_enable_on_offline)
-    {
-        motor->recover_pending = !motor->Enable();
-        motor->last_recover_attempt_us = SYS_Timestamp.Get_Now_Microsecond();
-    }
-}
-
-void Class_DMMotor::SetAutoEnableOnOffline(bool enable)
-{
-    auto_enable_on_offline = enable;
-    if (!enable)
-    {
-        recover_pending = false;
-    }
-}
-
 void Class_DMMotor::ServiceAll()
 {
     const uint64_t now_us = SYS_Timestamp.Get_Now_Microsecond();
     for (Class_DMMotor *motor = service_head; motor != nullptr;
          motor = motor->service_next)
     {
-        if (!motor->recover_pending)
+        if (!motor->lifecycle_requested)
         {
             continue;
         }
-        if (!motor->auto_enable_on_offline || motor->IsOnline())
+        const Struct_DMMotor_Snapshot snapshot = motor->GetFeedbackSnapshot();
+        if (snapshot.requested_enabled && !snapshot.ready)
         {
-            motor->recover_pending = false;
+            (void)motor->PublishSafeOutput();
+        }
+        if (snapshot.online &&
+            (snapshot.requested_enabled ? snapshot.actual_enabled : snapshot.feedback.state == 0U))
+        {
             continue;
         }
-        if (now_us >= motor->last_recover_attempt_us &&
-            now_us - motor->last_recover_attempt_us >= DM_RECOVER_RETRY_US)
+        if (!motor->lifecycle_attempted ||
+            (now_us >= motor->last_lifecycle_attempt_us &&
+             now_us - motor->last_lifecycle_attempt_us >= DM_LIFECYCLE_RETRY_US))
         {
-            motor->last_recover_attempt_us = now_us;
-            motor->recover_pending = !motor->Enable();
+            motor->lifecycle_attempted = true;
+            motor->last_lifecycle_attempt_us = now_us;
+            (void)motor->SendModeCommand(snapshot.requested_enabled ? DM_CMD_ENABLE : DM_CMD_DISABLE);
         }
     }
 }
@@ -254,7 +238,9 @@ Struct_DMMotor_Snapshot Class_DMMotor::GetFeedbackSnapshot() const
     const uint64_t now = SYS_Timestamp.Get_Now_Microsecond();
     snapshot.online = feedback_initialized && now >= last_feedback_us &&
                       now - last_feedback_us < 100000U;
-    snapshot.enabled = snapshot.feedback.state == 1U;
+    snapshot.requested_enabled = requested_enabled;
+    snapshot.actual_enabled = snapshot.feedback.state == 1U;
+    snapshot.ready = snapshot.requested_enabled && snapshot.online && snapshot.actual_enabled;
     __DMB();
     if (primask == 0U) { __enable_irq(); }
     return snapshot;
@@ -277,7 +263,7 @@ bool Class_DMMotor::IsDataValid() const
 
 bool Class_DMMotor::IsHealthy() const
 {
-    return IsOnline() && IsEnabled();
+    return GetFeedbackSnapshot().ready;
 }
 
 const Daemon &Class_DMMotor::GetDaemon() const
@@ -302,14 +288,35 @@ uint32_t Class_DMMotor::ControlId() const
     }
 }
 
-bool Class_DMMotor::Enable()
+bool Class_DMMotor::RequestEnabled(bool enabled)
 {
-    return SendModeCommand(DM_CMD_ENABLE);
+    const bool changed = requested_enabled != enabled;
+    requested_enabled = enabled;
+    lifecycle_requested = true;
+    if (changed)
+    {
+        lifecycle_attempted = false;
+    }
+    return enabled || PublishSafeOutput();
 }
 
-bool Class_DMMotor::Disable()
+bool Class_DMMotor::PublishSafeOutput()
 {
-    return SendModeCommand(DM_CMD_DISABLE);
+    switch (mode)
+    {
+    case Enum_DMMotor_Mode::MIT:
+        return SetMIT(0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+    case Enum_DMMotor_Mode::SPEED:
+        SetSpeed(0.0f);
+        return true;
+    case Enum_DMMotor_Mode::POSITION_SPEED:
+        SetPositionSpeed(feedback.position, 0.0f);
+        return true;
+    case Enum_DMMotor_Mode::FORCE_POSITION:
+        SetForcePosition(feedback.position, 0.0f, 0.0f);
+        return true;
+    }
+    return false;
 }
 
 bool Class_DMMotor::ClearError()
@@ -402,6 +409,10 @@ bool Class_DMMotor::SetMIT(float position_rad,
                            float kd,
                            float torque_nm)
 {
+    if (!GetFeedbackSnapshot().ready)
+    {
+        position_rad = velocity_rad_s = kp = kd = torque_nm = 0.0f;
+    }
     const float direction = reverse ? -1.0f : 1.0f;
     /** 位置量化为 16 位，速度、kp、kd、转矩各量化为 12 位，总计 64 位。 */
     const uint16_t position = (uint16_t)Basic_Math_Float_To_Int(
@@ -440,6 +451,11 @@ bool Class_DMMotor::SetMIT(float position_rad,
  */
 void Class_DMMotor::SetPositionSpeed(float position_rad, float velocity_rad_s)
 {
+    if (!GetFeedbackSnapshot().ready)
+    {
+        position_rad = feedback.position;
+        velocity_rad_s = 0.0f;
+    }
     const float direction = reverse ? -1.0f : 1.0f;
     position_rad *= direction;
     velocity_rad_s *= direction;
@@ -456,6 +472,10 @@ void Class_DMMotor::SetPositionSpeed(float position_rad, float velocity_rad_s)
 /** @brief 发布速度模式目标：4 字节小端 float，单位 rad/s；不自动切换模式。 */
 void Class_DMMotor::SetSpeed(float speed_rad_s)
 {
+    if (!GetFeedbackSnapshot().ready)
+    {
+        speed_rad_s = 0.0f;
+    }
     if (reverse)
     {
         speed_rad_s = -speed_rad_s;
@@ -480,6 +500,11 @@ void Class_DMMotor::SetForcePosition(float position_rad,
                                      float velocity_limit_rad_s,
                                      float current_limit_ratio)
 {
+    if (!GetFeedbackSnapshot().ready)
+    {
+        position_rad = feedback.position;
+        velocity_limit_rad_s = current_limit_ratio = 0.0f;
+    }
     const float direction = reverse ? -1.0f : 1.0f;
     position_rad *= direction;
     const uint16_t velocity_limit = (uint16_t)(

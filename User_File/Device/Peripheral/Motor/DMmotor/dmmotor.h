@@ -37,7 +37,9 @@ struct Struct_DMMotor_Snapshot
 {
     Struct_DMMotor_Feedback feedback{};
     bool online = false;
-    bool enabled = false;
+    bool requested_enabled = false;
+    bool actual_enabled = false;
+    bool ready = false;
 };
 
 class Class_DMMotor
@@ -52,12 +54,12 @@ public:
               float position_max = 12.5f,
               float velocity_max = 30.0f,
               float torque_max = 10.0f);
+    /** 更新期望状态；false 立即覆盖周期输出，协议命令由 ServiceAll 限频维护。 */
+    bool RequestEnabled(bool enabled);
     /** @name 离散命令
      *  @brief true 仅表示命令已进入软件 FIFO，不代表电机执行或确认；false 时由上层决定重试。
      */
     ///@{
-    bool Enable();
-    bool Disable();
     bool ClearError();
     bool SetZeroPosition();
     /** 参数非法、其他模式待应答或入队失败均返回 false。 */
@@ -83,11 +85,9 @@ public:
 
     ///@}
 
-    /** 获取一致快照；enabled 是协议状态，使用前还需检查 online。 */
+    /** 获取一致快照；actual_enabled 仅表示最近反馈的协议状态。 */
     Struct_DMMotor_Snapshot GetFeedbackSnapshot() const;
-    /** 初始化阶段设置；false 时由 Application 管理掉线恢复，默认保持原自动使能行为。 */
-    void SetAutoEnableOnOffline(bool enable);
-    /** 由现有 100 Hz StatusTask 调用，仅重试首次入队失败的离线使能帧。 */
+    /** 由现有 100 Hz StatusTask 调用，维护期望状态的协议命令。 */
     static void ServiceAll();
 
     /** 最近 100 ms 内收到过合法运动反馈时返回 true。 */
@@ -96,7 +96,7 @@ public:
     bool IsEnabled() const;
     /** 当前数据是否可用于控制；达妙驱动中等价于 IsOnline()。 */
     bool IsDataValid() const;
-    /** 同时在线且协议已使能时返回 true。 */
+    /** 请求使能、在线且协议已使能时返回 true。 */
     bool IsHealthy() const;
     /** 提供只读守护器状态，供诊断层读取离线时间和状态跃迁。 */
     const Daemon &GetDaemon() const;
@@ -109,10 +109,9 @@ private:
                                  uint8_t *data,
                                  uint32_t len,
                                  void *context);
-    /** Daemon 的 Online -> Offline 跃迁回调。 */
-    static void OfflineCallback(void *owner);
     bool SendModeCommand(uint8_t command);
     bool Publish(const Struct_CAN_Tx_Msg &message);
+    bool PublishSafeOutput();
     uint32_t ControlId() const;
 
     FDCAN_HandleTypeDef *hfdcan = nullptr;
@@ -126,9 +125,10 @@ private:
     float position_max = 12.5f;
     float velocity_max = 30.0f;
     float torque_max = 10.0f;
-    bool auto_enable_on_offline = true;
-    bool recover_pending = false;
-    uint64_t last_recover_attempt_us = 0U;
+    volatile bool requested_enabled = false;
+    volatile bool lifecycle_requested = false;
+    bool lifecycle_attempted = false;
+    uint64_t last_lifecycle_attempt_us = 0U;
     bool service_registered = false;
     Class_DMMotor *service_next = nullptr;
     static Class_DMMotor *service_head;
@@ -136,7 +136,7 @@ private:
     bool feedback_initialized = false;
     float last_position = 0.0f;
     int32_t total_round = 0;
-    Daemon feedback_daemon{100U, OfflineCallback, this}; ///< 仅合法运动反馈喂狗；掉线跃迁时首次尝试使能。
+    Daemon feedback_daemon{100U}; ///< 只跟踪合法运动反馈的在线状态。
 };
 
 #endif
