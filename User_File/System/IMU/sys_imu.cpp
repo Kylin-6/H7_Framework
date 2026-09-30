@@ -12,6 +12,7 @@
 
 #include "bsp_bmi088.h"
 #include "message_center.h"
+#include <cmath>
 
 /* Private macros ------------------------------------------------------------*/
 
@@ -100,6 +101,12 @@ void System_IMU_Publish_State()
         .gyro_y_rad_s = gyro_body.Data[1],
         .gyro_z_rad_s = gyro_body.Data[2],
     };
+    if (!std::isfinite(ins_state.yaw_rad) || !std::isfinite(ins_state.pitch_rad) ||
+        !std::isfinite(ins_state.roll_rad) || !std::isfinite(ins_state.gyro_x_rad_s) ||
+        !std::isfinite(ins_state.gyro_y_rad_s) || !std::isfinite(ins_state.gyro_z_rad_s))
+    {
+        return;
+    }
     /* 高频姿态使用静态 Topic，避免动态队列进入 1 kHz 闭环路径。 */
     INS_State_Publisher.Publish(ins_state);
 }
