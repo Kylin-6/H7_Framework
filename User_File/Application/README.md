@@ -39,12 +39,12 @@ Application 不应：
 | `Gimbal` | 云台模式、目标角/速度、达妙控制和反馈 | 两轴 Class_DMMotor、Yaw PID、INS Topic |
 | `Chassis` | 四舵轮运动学、最短转向和电机目标 | 8 个 DJI 电机及电机组 |
 | `Shoot` | 摩擦轮、拨弹连续模式和离散射击动作 | 3 个 DJI 电机、ShootEvent FIFO |
-| `Communication` | UART5 S.BUS 适配、固定来源输入状态与仲裁 | S.BUS、InputState |
+| `Input` | UART5 S.BUS 适配、固定来源输入状态与仲裁 | RemoteInput、InputState |
 
 Chassis 与 Shoot 的机械参数和 PID 初值分别放在 `Chassis_Config.h`、`Shoot_Config.h`；
 运行状态和设备实例由各自 `.cpp` 内的私有 Context 持有。BoardConfig 只提供总线等硬件
 资源，不存机构参数。Gimbal 保持现有 `Gimbal_Config.h` 与状态机组织，本轮不拆文件。
-`Communication` 目录本轮保留；老步兵分支合并稳定后可考虑改名为 `Input`。
+`Input` 保存 Remote 输入适配、输入状态和来源仲裁；设备协议仍由 Device/BSP 处理。
 
 单板固件的硬件路径由 `H7_APP_GIMBAL`、`H7_APP_CHASSIS`、`H7_APP_SHOOT` 控制，默认均关闭；
 双板固件由 CMake 在构建期分别选择应用和任务源码。板内命令通过 `LocalPublisher` 进入
@@ -55,10 +55,10 @@ Message Center，云台板的底盘命令通过 `RemotePublisher` 进入固定 C
 各板的 `Control_Task` 均由 1 ms 线程标志唤醒，当前初始化和更新顺序为：
 
 ```text
-SingleBoard: RobotCmd_Init → Communication_Init → Gimbal_Init(启用时) → Chassis_Init → Shoot_Init
-             Communication_Update → RobotCmd_Update → Gimbal_Update → Chassis_Update → Shoot_Update
-GimbalBoard: BoardTransport_Init → RobotCmd_Init → Communication_Init → Gimbal_Init → Shoot_Init
-             BoardTransport_Poll → Communication_Update → RobotCmd_Update → Gimbal_Update → Shoot_Update
+SingleBoard: RobotCmd_Init → RemoteInput_Init → Gimbal_Init(启用时) → Chassis_Init → Shoot_Init
+             RemoteInput_Update → RobotCmd_Update → Gimbal_Update → Chassis_Update → Shoot_Update
+GimbalBoard: BoardTransport_Init → RobotCmd_Init → RemoteInput_Init → Gimbal_Init → Shoot_Init
+             BoardTransport_Poll → RemoteInput_Update → RobotCmd_Update → Gimbal_Update → Shoot_Update
 ChassisBoard: BoardTransport_Init → Chassis_Init
               BoardTransport_Poll → Chassis_Update
 ```
@@ -72,7 +72,7 @@ Gimbal/Chassis 板间轮询复用该任务，不创建额外控制任务。
 RobotCmd 不直接访问电机、CAN 或 IMU。输入链现在是：
 
 ```text
-UART5 S.BUS → Communication_Update → InputState(Remote)
+UART5 S.BUS → RemoteInput_Update → InputState(Remote)
 VTM / Keyboard / Vision → InputState_Submit*（接入接口，当前未绑定设备）
 InputState → SourceArbitration_Resolve → RobotCmd_Update → Output
 ```
@@ -97,7 +97,7 @@ bool RobotCmd_PushShootEvent(const ShootEvent &event);
 连续命令写入本地缓存并设置 dirty 标志，`RobotCmd_Update()` 才通过已注入的 Output
 发布；底盘命令每 10 ms 刷新。Setter 当前没有并发保护，应由 ControlTask 上下文调用，
 不能直接从 ISR/UART 回调并发修改。S.BUS 驱动只在 UART 中断保存完整帧，
-Communication 在 ControlTask 中读取快照并提交 Remote 输入；VTM/键鼠/Vision 的
+RemoteInput 在 ControlTask 中读取快照并提交 Remote 输入；VTM/键鼠/Vision 的
 未来适配器同样必须在任务上下文提交状态。
 
 S.BUS 使用 UART5：帧新鲜度 50 ms，frame-lost/failsafe 立即锁定；连续 200 ms 健康且
@@ -134,9 +134,10 @@ false，并保持调用者输出不变。RobotCmd 不再维护应用反馈的二
 Yaw 使用 INS 角度/速度串级闭环，通过达妙 MIT 纯转矩指令输出 N·m；Pitch 将 INS
 姿态误差转换为 MIT 电机位置/速度目标，并限制机械范围。两轴预先配置为 MIT 模式。
 
-初始化仅校验配置和注册驱动。使能、两秒超时、一秒退避和自动恢复均由 Update
-非阻塞推进；恢复需反馈持续有效 100 ms，随后重置控制器并捕获当前姿态。IMU 模式
-需在恢复后发布新目标，避免旧目标重放；DISABLED 或故障时清零两轴 MIT 输出并重试失能。
+初始化仅校验配置和注册驱动。Gimbal 决定两秒就绪超时、一秒退避与恢复后的
+100 ms 整体稳定窗口；电机协议重试由 DMMotor 的低频服务完成。恢复后重置控制器
+并捕获当前姿态，IMU 模式等待新目标，避免旧目标重放；DISABLED 或故障时调用
+`RequestEnabled(false)`，由电机立即覆盖安全输出并维护失能命令。
 
 配置集中在 [Gimbal_Config.h](Gimbal/Gimbal_Config.h)。默认关闭云台编译选项；Yaw 转矩环
 增益全零，Pitch 增益和限位来自参考机构示例，均须实机标定。完整公式、参数来源、
@@ -145,7 +146,7 @@ Yaw 使用 INS 角度/速度串级闭环，通过达妙 MIT 纯转矩指令输�
 ### 5.3 反馈
 
 控制每 1 ms 更新，`GimbalFeedback` 每 10 个周期发布一次，包含姿态、角速度、INS
-有效性和电机使能状态。
+有效性和两轴电机的 `ready` 汇总；云台整体 READY 仍由 Gimbal 状态机决定。
 
 ## 6. Chassis
 
@@ -173,7 +174,8 @@ Yaw 使用 INS 角度/速度串级闭环，通过达妙 MIT 纯转矩指令输�
 表现视为等效基线。
 
 反馈由四个轮模块估算 `vx/vy/wz`，经过一阶平滑后每 10 ms 发布。`online` 只有八个
-电机均在线时为 true；在线状态来源仍是 Device/Daemon，而不是 Message Center。
+电机均在线时为 true；`enabled` 表示八个电机均 ready，且当前命令不是 `ZERO_FORCE`。
+在线状态来源仍是 Device，而不是 Message Center。
 
 ## 7. Shoot
 
@@ -200,7 +202,7 @@ Yaw 使用 INS 角度/速度串级闭环，通过达妙 MIT 纯转矩指令输�
 
 STOP 模式每周期最多消费一个事件：首次事件从当前反馈角建立目标，后续排队事件在已有
 目标上累加 1 或 3 个弹位。BURST/REVERSE 取消事件角度保持；OFF 禁用输出并排空当前
-队列，避免重新使能后补射。
+队列，避免重新使能后补射。`ShootFeedback.enabled` 表示三个电机均 ready 且总开关为 ON。
 每次成功 Push 只代表一个逻辑动作请求；事件按目标角累加，不等待前一发物理完成。
 当前没有摩擦轮就绪、卡弹检测/回退、热量限制、裁判系统互锁或完整 FEEDING 状态机。
 

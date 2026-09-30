@@ -88,9 +88,13 @@ if (motor.Init(config))
 单个电机的 `Control()` 只计算 PID 并更新共享帧槽。普通业务应把同一物理控制帧中的
 电机组成 `Class_DJIMotor_Group`，由 Group 完成一次计算和一次非阻塞发布。
 
-`Disable()` 清除本电机所占槽并立即发布整帧，保留其他电机槽的命令。Group 的
-`Disable()` 一次清除全部成员并只发布一次。返回值表示 BSP 周期槽是否接受本次零指令；
-失败时应重试失能或继续调用 Group 的 `Send()`，不能将调用返回等同于电机已经停转。
+`RequestEnabled(false)` 清除本电机所占槽和 PID 积分，并立即发布整帧，保留其他电机槽的命令。Group 的
+`RequestEnabled(false)` 一次清除全部成员并只发布一次。返回值表示 BSP 周期槽是否接受本次零指令；
+失败时应重试请求，不能将调用返回等同于电机已经停转。`Enable()`/`Disable()` 仅作旧调用方薄包装。
+
+DJI 无硬件 Enable/Disable 应答。`GetMotionSnapshot()` 中的 `requested_enabled` 是本地输出许可，
+`online` 是未超时的合法反馈，`ready` 是初始化、许可与在线同时成立；不提供虚构的
+`actual_enabled`。
 
 对象首次收到合法反馈前，以及超过 `feedback_timeout_ms` 没有反馈后，`Control()`
 都会保持该槽为零并清除 PID 积分。超时判断复用
@@ -152,7 +156,7 @@ gimbal.Control_Degree(yaw_deg, pitch_deg); // 位置环：deg；速度环：deg/
 
 `Class_DJIMotor_Group` 只保存 1~4 个已经初始化的电机指针，不复制对象、不分配动态
 内存，也不参与 PID。一个 Group 必须包含同一 `(FDCAN, TX ID)` 物理帧内的全部已注册
-电机，并独占该物理帧的常规控制发送权；单电机 `Disable()` 可主动发布清零后的整帧。
+电机，并独占该物理帧的常规控制发送权；单电机 `RequestEnabled(false)` 可主动发布清零后的整帧。
 跨物理帧、遗漏已有 slot、重复指针、空洞参数、未初始化
 电机，或第二个 Group 争用相同物理帧时，`Init()` 返回 `false`。Group 建立后也不允许再向
 该物理帧注册新电机。
@@ -261,7 +265,7 @@ chassis.Control(v1, v2, v3, v4);         // 只发布底盘的物理帧
 在后续发送任务周期重试。因此 Group 的返回值能反映周期槽提交结果，不能同步反映稍后发生
 的硬件 FIFO 状态。
 
-Group 的 `Enable()` 依次使能所有成员，`Disable()` 批量清零后一次发布。Group 不拥有
+Group 的 `RequestEnabled(bool)` 遍历所有成员；false 时批量清零后一次发布。Group 不拥有
 电机，因此成员电机对象的生命周期必须长于 Group；推荐都使用静态或全局对象。
 
 ## PID 调试

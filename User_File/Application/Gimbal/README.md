@@ -10,7 +10,7 @@ QD4310 驱动仍作为独立设备保留，云台不再依赖它。SingleBoard �
 也可在启动阶段传入一份 `Struct_Gimbal_Config`。初始化只调用一次，不等待电机、
 不自动设置机械零位、不切换控制模式、不写电机持久化参数。电机端须预先设置 MIT 模式。
 配置校验失败或驱动注册失败返回 false，`Gimbal_GetStatus()` 返回 CONFIG_ERROR。
-电机、PID、目标、Snapshot 和恢复计时由 `Gimbal.cpp` 的私有 `GimbalContext` 持有；
+电机、PID、目标、Snapshot 和云台状态计时由 `Gimbal.cpp` 的私有 `GimbalContext` 持有；
 外部只能通过初始化、周期入口和只读状态接口访问 Application。
 
 | 项目 | 示例 | 来源与限制 |
@@ -52,16 +52,16 @@ QD4310 驱动仍作为独立设备保留，云台不再依赖它。SingleBoard �
 发布 LOCK，因此打开云台编译选项后会自动进入此流程，不能把示例参数当作上板标定结果。
 
 - INS 必须不超过 10 ms；两轴运动反馈必须小于 100 ms，在线判断不等待 StatusTask。
-- 使能每 20 ms 尝试一次；两秒未完成进入 FAULT，等待一秒后重试。全程不阻塞控制任务。
+- DMMotor 在 100 Hz StatusTask 中至少间隔 20 ms 维护使能/失能命令；云台两秒未就绪进入 FAULT，等待一秒后重试。全程不阻塞控制任务。
 - 两轴在线且使能、INS 有效持续 100 ms 才进入 READY；中间失能会重新计算稳定时间。
-- DISABLED、故障或初始化部分失败时，覆盖已注册电机的周期槽为零刚度/阻尼/转矩，
-  每 20 ms 重试失能，直至收到新鲜失能反馈。发布失败下一周期继续尝试；停止帧不能
+- DISABLED、故障或初始化部分失败时，对已注册电机调用 `RequestEnabled(false)`；
+  DMMotor 立即覆盖周期槽为零刚度/阻尼/转矩，并在低频重试失能直至收到新鲜失能反馈。发布失败下一周期继续尝试；停止帧不能
   保证在物理断线时送达，也不会清除已经进入硬件 FIFO 的帧。
 - 活动模式下自动恢复。恢复先清空 PID 历史并捕获当前姿态；IMU 等待 READY 后重新
   发布目标，LOCK 直接保持新捕获的姿态，故障前目标不会重放。
-- 云台关闭达妙驱动的离线自动 Enable 回调，由上述状态机独占恢复决策；不自动 ClearError。
+- Daemon 只判断反馈活性；DMMotor 根据云台请求维护协议状态，不自动 ClearError。
 
-`GimbalFeedback` 仍为 100 Hz，字段布局不变。`enabled` 表示两轴当前新鲜反馈均为使能，
+`GimbalFeedback` 仍为 100 Hz，字段布局不变。`enabled` 表示两轴电机均 ready，
 不是软件状态 READY；`ins_valid=false` 时发布零姿态/速度。使能命令提交成功不代表已使能。
 
 本次没有增加命令来源心跳和整车输入仲裁；无新命令时保持最后模式和目标。自动恢复后

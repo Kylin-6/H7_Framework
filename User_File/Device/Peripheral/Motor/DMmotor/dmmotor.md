@@ -25,13 +25,13 @@ motor.Init(&hfdcan1,
            0x01,
            0x00,
            Enum_DMMotor_Mode::SPEED); // FDCAN、CAN ID、Master ID、模式
-motor.Enable();
-motor.Disable();
+motor.RequestEnabled(true);
+motor.RequestEnabled(false);
 motor.ClearError();
 motor.SetZeroPosition();
 ```
 
-`Enable()`、`Disable()`、`ClearError()` 和 `SetZeroPosition()` 返回命令入队结果：`true` 表示已入队，`false` 表示提交失败，可由调用方重试。入队成功不代表电机已经执行。`SetZeroPosition()` 仅在入队成功后重置本地位置展开状态，失败时保持原状态。
+`RequestEnabled(true)` 记录输出许可；`RequestEnabled(false)` 立即用当前模式的安全目标覆盖周期槽，并返回安全目标的发布结果。使能/失能离散命令由 100 Hz `ServiceAll()` 至少间隔 20 ms 重试，直到新鲜反馈确认期望状态。`ClearError()` 和 `SetZeroPosition()` 返回命令入队结果；入队成功不代表电机已经执行。`SetZeroPosition()` 仅在入队成功后重置本地位置展开状态。
 
 后续可选参数依次为反转、PMAX、VMAX 和 TMAX：
 
@@ -154,17 +154,16 @@ motor.feedback.rotor_temperature;
 
 MIT 的 `kp`、`kd` 是发给电机内部控制器的控制参数，不属于反馈；当前驱动没有本地 PID 对象。
 直接读取公开 feedback 结构体不保证跨中断一致性；控制计算应使用
-`GetFeedbackSnapshot()` 一次获取运动反馈、online 和 enabled。该接口在短临界区内
-复制，online 按最近一次运动反馈的 100 ms 截止时间计算，不等待 StatusTask。
+`GetFeedbackSnapshot()`。其中 `requested_enabled` 为 Application 请求，`online` 为
+100 ms 内的新鲜合法运动反馈，`actual_enabled` 为反馈 `state == 1`，`ready` 为
+三者同时成立；其他协议状态保存在 `feedback.state` 供故障诊断。`IsHealthy()` 等价于
+`ready`。失能或反馈失效时，正常控制入口只发布安全目标；MIT 安全目标的
+P/V/Kp/Kd/Torque 全为零。
 
-`SetMIT()`、`SetTorque()` 返回软件周期槽更新结果，false 时由应用处理；不表示设备已执行。
-在线电机发生 Online→Offline 跃迁时，Daemon 回调尝试将一次 `Enable()` 放入该总线的
-离散命令 FIFO。首次入队成功后不继续软件重发；仅当入队失败时标记
-`recover_pending`，由 100 Hz `StatusTask` 在 `CheckAll()` 后调用 `ServiceAll()`，每个
-待恢复实例至少间隔 50 ms 非阻塞重试入队。入队成功、电机重新在线或关闭自动恢复后
-停止重试。这不是“电机一直离线就不断重发 Enable”，也不代表对端已执行使能。
-云台两轴调用 `SetAutoEnableOnOffline(false)`，由 Gimbal 自己的
-`DISABLED/ENABLING/READY/FAULT/CONFIG_ERROR` 状态机负责恢复，不同时运行两套策略。
+`SetMIT()`、`SetTorque()` 返回软件周期槽更新结果，不表示设备已执行。
+`RequestEnabled(false)` 立即覆盖旧周期目标；`ServiceAll()` 在未就绪且请求使能时也覆盖旧周期目标，并维护设备协议期望状态，
+不会自行决定 Gimbal 的 READY/FAULT。Daemon 只判断反馈活性，不再通过离线回调自动使能。
+清错由上层在合适时机显式请求，驱动不把 fault 自动解释为整车恢复许可。
 
 ## 接入示例
 
@@ -187,7 +186,7 @@ bool motor_ready = dm_motor.Init(
 if (motor_ready)
 {
     osDelay(2000);
-    dm_motor.Enable();
+    dm_motor.RequestEnabled(true);
     dm_motor.SetSpeed(1.0f);
 }
 
@@ -201,11 +200,10 @@ for (;;)
 }
 ```
 
-应用请求停止时，应先停止正常目标更新，再将当前模式的目标输出置零并发送失能命令。例如速度模式：
+应用请求停止时调用电机的失能请求；电机立即覆盖安全周期目标，并在低频服务中维护失能命令：
 
 ```c
-motor.SetSpeed(0.0f);
-motor.Disable();
+motor.RequestEnabled(false);
 ```
 
 以上调用通过 CAN 发送，不构成独立的硬件急停机制。
