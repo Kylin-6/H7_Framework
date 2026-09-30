@@ -39,6 +39,7 @@ struct Struct_DMMotor_Snapshot
     bool online = false;
     bool requested_enabled = false;
     bool actual_enabled = false;
+    bool fault = false; ///< 新鲜反馈报告非失能、非使能的协议故障状态。
     bool ready = false;
 };
 
@@ -54,7 +55,7 @@ public:
               float position_max = 12.5f,
               float velocity_max = 30.0f,
               float torque_max = 10.0f);
-    /** 更新期望状态；false 立即覆盖周期输出，协议命令由 ServiceAll 限频维护。 */
+    /** 更新期望状态；false 立即覆盖周期输出，协议命令由 100 Hz ServiceAll 维护。 */
     bool RequestEnabled(bool enabled);
     /** @name 离散命令
      *  @brief true 仅表示命令已进入软件 FIFO，不代表电机执行或确认；false 时由上层决定重试。
@@ -127,8 +128,6 @@ private:
     float torque_max = 10.0f;
     volatile bool requested_enabled = false;
     volatile bool lifecycle_requested = false;
-    bool lifecycle_attempted = false;
-    uint64_t last_lifecycle_attempt_us = 0U;
     bool service_registered = false;
     Class_DMMotor *service_next = nullptr;
     static Class_DMMotor *service_head;

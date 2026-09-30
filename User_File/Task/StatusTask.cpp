@@ -2,7 +2,7 @@
  * @file StatusTask.cpp
  * @brief 低频设备在线状态检查任务。
  * @details Low 优先级、100 Hz，osDelayUntil 阻塞等待；输入是设备 Feed 时间戳和
- *          DM 请求状态，输出是在线跃迁检查及电机协议命令的限频重试。不解析 CAN，
+ *          DM 请求状态，输出是在线跃迁检查及 100 Hz 电机协议状态维护。不解析 CAN，
  *          不负责整车安全策略或电机控制算法。
  */
 

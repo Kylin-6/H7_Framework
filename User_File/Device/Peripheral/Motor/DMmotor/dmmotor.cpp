@@ -25,7 +25,6 @@ static constexpr uint32_t DM_POSITION_SPEED_MODE_ID_OFFSET = 0x100U;
 static constexpr uint32_t DM_FORCE_POSITION_MODE_ID_OFFSET = 0x300U;
 static constexpr uint32_t DM_PARAMETER_ID = 0x7FFU;
 static constexpr uint64_t DM_MODE_TIMEOUT_US = 250000; ///< 模式切换应答等待上限，单位 us。
-static constexpr uint64_t DM_LIFECYCLE_RETRY_US = 20000;
 static constexpr uint8_t DM_CMD_ENABLE = 0xFCU;
 static constexpr uint8_t DM_CMD_DISABLE = 0xFDU;
 static constexpr uint8_t DM_CMD_ZERO_POSITION = 0xFEU;
@@ -131,7 +130,6 @@ void Class_DMMotor::FeedbackCallback(FDCAN_HandleTypeDef *callback_hfdcan,
 
 void Class_DMMotor::ServiceAll()
 {
-    const uint64_t now_us = SYS_Timestamp.Get_Now_Microsecond();
     for (Class_DMMotor *motor = service_head; motor != nullptr;
          motor = motor->service_next)
     {
@@ -144,18 +142,18 @@ void Class_DMMotor::ServiceAll()
         {
             (void)motor->PublishSafeOutput();
         }
-        if (snapshot.online &&
-            (snapshot.requested_enabled ? snapshot.actual_enabled : snapshot.feedback.state == 0U))
+        if (snapshot.requested_enabled)
         {
-            continue;
+            // 已报告的明确故障即使随后掉线，也等待新反馈或显式清错。
+            if ((!snapshot.online || !snapshot.actual_enabled) &&
+                snapshot.feedback.state <= 1U)
+            {
+                (void)motor->SendModeCommand(DM_CMD_ENABLE);
+            }
         }
-        if (!motor->lifecycle_attempted ||
-            (now_us >= motor->last_lifecycle_attempt_us &&
-             now_us - motor->last_lifecycle_attempt_us >= DM_LIFECYCLE_RETRY_US))
+        else if (snapshot.online && snapshot.actual_enabled)
         {
-            motor->lifecycle_attempted = true;
-            motor->last_lifecycle_attempt_us = now_us;
-            (void)motor->SendModeCommand(snapshot.requested_enabled ? DM_CMD_ENABLE : DM_CMD_DISABLE);
+            (void)motor->SendModeCommand(DM_CMD_DISABLE);
         }
     }
 }
@@ -190,7 +188,8 @@ bool Class_DMMotor::Init(FDCAN_HandleTypeDef *motor_hfdcan,
                          float motor_velocity_max,
                          float motor_torque_max)
 {
-    if (motor_hfdcan == nullptr || motor_master_id > 0x7FFU)
+    if (motor_hfdcan == nullptr || motor_can_id == 0U || motor_master_id > 0x7FFU ||
+        static_cast<uint8_t>(motor_mode) < 1U || static_cast<uint8_t>(motor_mode) > 4U)
     {
         return false;
     }
@@ -240,7 +239,9 @@ Struct_DMMotor_Snapshot Class_DMMotor::GetFeedbackSnapshot() const
                       now - last_feedback_us < 100000U;
     snapshot.requested_enabled = requested_enabled;
     snapshot.actual_enabled = snapshot.feedback.state == 1U;
-    snapshot.ready = snapshot.requested_enabled && snapshot.online && snapshot.actual_enabled;
+    snapshot.fault = snapshot.online && snapshot.feedback.state > 1U;
+    snapshot.ready = snapshot.requested_enabled && snapshot.online &&
+                     snapshot.actual_enabled && !snapshot.fault;
     __DMB();
     if (primask == 0U) { __enable_irq(); }
     return snapshot;
@@ -290,14 +291,10 @@ uint32_t Class_DMMotor::ControlId() const
 
 bool Class_DMMotor::RequestEnabled(bool enabled)
 {
-    const bool changed = requested_enabled != enabled;
     requested_enabled = enabled;
     lifecycle_requested = true;
-    if (changed)
-    {
-        lifecycle_attempted = false;
-    }
-    return enabled || PublishSafeOutput();
+    // 每次请求先覆盖旧周期目标；Application 在全部设备 ready 后再写正常目标。
+    return PublishSafeOutput();
 }
 
 bool Class_DMMotor::PublishSafeOutput()
