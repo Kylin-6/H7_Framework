@@ -27,6 +27,7 @@ float Clamp(float value, float minimum, float maximum)
 
 float Axis(int16_t channel)
 {
+    // 原始通道先限幅到 [-1, 1]，再设置中心死区；物理速度量程由调用处换算。
     const float normalized = Clamp(static_cast<float>(channel) / CHANNEL_RANGE,
                                    -1.0f, 1.0f);
     return normalized > -0.04f && normalized < 0.04f ? 0.0f : normalized;
@@ -54,6 +55,7 @@ bool RemoteInput_Init(void)
     last_unhealthy_ms = HAL_GetTick();
     InputState_Reset();
     InputState_SetTime(last_unhealthy_ms);
+    // S.BUS Device 负责协议解析，并通过 BSP UART 接收；应用只读取完整帧快照。
     receiver_ready = SBUS_Init(&huart5);
     return receiver_ready;
 }
@@ -76,6 +78,7 @@ void RemoteInput_Update(void)
 
     if (!armed)
     {
+        // 健康帧且摇杆连续回中 200 ms 才解锁；失联或未回中都会重新计时。
         if (!Neutral(frame))
         {
             last_unhealthy_ms = now;
@@ -90,6 +93,7 @@ void RemoteInput_Update(void)
         armed = true;
     }
 
+    // 速度档映射到 [0, 1]，只缩放 SI 速度目标；此处尚未接入云台和发射通道。
     const float gear = Clamp((static_cast<float>(frame.channels[SPEED_GEAR]) +
                               CHANNEL_RANGE) / (2.0f * CHANNEL_RANGE), 0.0f, 1.0f);
     ChassisCmd chassis{};

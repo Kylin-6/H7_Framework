@@ -39,7 +39,7 @@ struct ShootContext
     Class_DJIMotor_Group friction_group;
     Class_DJIMotor_Group loader_group;
     bool initialized = false;
-    bool event_angle_active = false;
+    bool event_angle_active = false; // 表示正在保持事件累加的角目标，不表示弹丸已完成发射。
     float loader_angle_target_rad = 0.0f;
 #endif
 };
@@ -87,6 +87,7 @@ static void Shoot_ApplyCommand(void)
     {
     case LoaderMode::BURST:
     {
+        // 连发以角速度控制，退出之前的事件角度保持；射速乘单弹角得到 rad/s。
         ctx.event_angle_active = false;
         ctx.loader.Set_Outer_Loop(DJI_MOTOR_SPEED_LOOP);
         const float rate = ctx.command.shoot_rate_hz > 0.0f
@@ -114,6 +115,7 @@ static void Shoot_ApplyCommand(void)
         {
             if (!ctx.event_angle_active)
             {
+                // 首次动作从当前反馈角起步；后续动作继续累加，避免覆盖排队的弹位。
                 ctx.loader_angle_target_rad =
                     ctx.loader_snapshot.output_total_angle;
             }
@@ -135,6 +137,7 @@ static void Shoot_ApplyCommand(void)
     }
     }
 
+    // 应用只选择目标和外环；角度/速度/电流 PID 及 CAN 发布复用 DJI 电机组接口。
     if (ctx.event_angle_active)
     {
         ctx.loader_group.Control(ctx.loader_angle_target_rad);
@@ -225,6 +228,7 @@ void Shoot_Update(void)
 
     if (ctx.command.shoot_mode == ShootMode::OFF)
     {
+        // 清除本周期开始时已有的事件，避免重新使能后补射；按队列快照限制循环次数。
         ShootEvent discarded_event;
         size_t pending_events = MessageCenter::Shoot_Event_Queue.Size();
         while (pending_events-- > 0U &&

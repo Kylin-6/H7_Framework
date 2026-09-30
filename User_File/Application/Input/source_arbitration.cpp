@@ -14,11 +14,13 @@ bool Fresh(bool valid, uint32_t timestamp, uint32_t now, uint32_t max_age)
 
 bool AtOrAfter(uint32_t timestamp, uint32_t boundary)
 {
+    // 用无符号差处理毫秒计数回绕；两时刻间隔须小于半个 uint32_t 计数周期。
     return timestamp - boundary < 0x80000000U;
 }
 
 bool CommandValid(const ControlInput &input)
 {
+    // 在输入边界统一校验枚举和数值，后续机构控制使用已通过仲裁的命令。
     const ChassisCmd &c = input.chassis;
     const GimbalCmd &g = input.gimbal;
     const ShootCmd &s = input.shoot;
@@ -43,6 +45,7 @@ bool CommandValid(const ControlInput &input)
 
 InputDecision SourceArbitration_Resolve(const InputState &state)
 {
+    // 默认结果不授予控制许可；遥控或选中控制来源校验失败时返回该安全结果。
     InputDecision decision{};
     decision.source = state.selected;
     /* Remote 失联始终停机，VTM/键鼠不能绕过 Remote 安全许可。 */
@@ -66,6 +69,7 @@ InputDecision SourceArbitration_Resolve(const InputState &state)
         return decision;
     }
 
+    // 命令时间戳须不早于来源切换时刻；过期或无效时不自动回退到其他来源。
     if (!Fresh(selected->valid, selected->received_ms, state.now_ms,
                selected == &state.remote ? REMOTE_MAX_AGE_MS : OTHER_MAX_AGE_MS) ||
         !AtOrAfter(selected->received_ms, state.selected_at_ms) || !CommandValid(*selected))

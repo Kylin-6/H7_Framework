@@ -102,12 +102,14 @@ void CapturePose(uint32_t sequence)
 
 void Stop()
 {
+    // 首次失能请求或失能边沿立即尝试发布安全目标；补交与协议纠正交给 ServiceAll。
     if (ctx.yaw_registered) { (void)ctx.yaw_motor.RequestEnabled(false); }
     if (ctx.pitch_registered) { (void)ctx.pitch_motor.RequestEnabled(false); }
 }
 
 void Control(const Struct_DMMotor_Snapshot &pitch)
 {
+    // Yaw 复用现有 PID：最短角误差生成角速度，再由速度环生成转矩。
     const float error = std::remainder(ctx.target_yaw_angle_rad - ctx.ins.yaw_rad, 2 * GIMBAL_PI);
     ctx.yaw_angle_pid.Set_Target(error);
     ctx.yaw_angle_pid.Set_Now(0);
@@ -117,6 +119,7 @@ void Control(const Struct_DMMotor_Snapshot &pitch)
     ctx.yaw_speed_pid.Set_Now(Gyro(ctx.config.yaw_gyro_axis, ctx.config.yaw_gyro_sign));
     ctx.yaw_speed_pid.TIM_Calculate_PeriodElapsedCallback();
     const float torque = ctx.yaw_speed_pid.Get_Out();
+    // Pitch 将 INS 姿态/角速度误差换算为电机目标；位置、速度均基于同一次反馈快照。
     const float position = pitch.feedback.position + ctx.config.pitch_motor_per_imu *
                           (ctx.target_pitch_angle_rad - ctx.ins.pitch_rad);
     const float velocity = pitch.feedback.velocity + ctx.config.pitch_motor_per_imu *
@@ -128,6 +131,7 @@ void Control(const Struct_DMMotor_Snapshot &pitch)
 
 void UpdateTarget(const TopicSnapshot<GimbalCmd> &message)
 {
+    // LOCK 只在进入时捕获姿态；IMU 只接受新序号，避免恢复后重放旧目标。
     if (ctx.command.mode == GimbalMode::LOCK && ctx.last_mode != GimbalMode::LOCK)
     {
         CapturePose(message.sequence);
@@ -167,6 +171,7 @@ bool Gimbal_Init(const Struct_Gimbal_Config &requested)
 
 Enum_Gimbal_Status Gimbal_GetStatus(void)
 {
+    // 状态由当前输入与电机快照推导，仅用于观察，不安排重试或驱动状态迁移。
     if (!ctx.initialized) { return Gimbal_Status_CONFIG_ERROR; }
     if (ctx.command.mode == GimbalMode::DISABLED) { return Gimbal_Status_DISABLE; }
     if (!ctx.ins_valid || ctx.yaw_snapshot.fault || ctx.pitch_snapshot.fault)
@@ -226,12 +231,14 @@ void Gimbal_Update(void)
         return;
     }
 
+    // 每周期表达输出许可；驱动只处理请求边沿，重复使能不会覆盖正常周期目标。
     (void)ctx.yaw_motor.RequestEnabled(true);
     (void)ctx.pitch_motor.RequestEnabled(true);
     ctx.yaw_snapshot = ctx.yaw_motor.GetFeedbackSnapshot();
     ctx.pitch_snapshot = ctx.pitch_motor.GetFeedbackSnapshot();
     if (!ctx.yaw_snapshot.ready || !ctx.pitch_snapshot.ready)
     {
+        // 等待两轴反馈就绪；安全输出和低频协议纠正由 DMMotor 维护。
         ctx.was_ready = false;
         PublishFeedback();
         return;

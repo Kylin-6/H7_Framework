@@ -90,6 +90,7 @@ static void Chassis_CalculateTargets(float wheel_target_rad_s[4],
             ctx.steer_snapshot[index].output_total_angle;
         if (velocity_m_s < kChassisConfig.stop_speed_m_s)
         {
+            // 近零轮速时保持当前舵角，避免 atan2 的方向随微小输入跳变。
             wheel_target_rad_s[index] = 0.0f;
             steer_target_rad[index] = current_angle_rad;
             continue;
@@ -116,6 +117,7 @@ static void Chassis_CalculateTargets(float wheel_target_rad_s[4],
         }
 
         steer_target_rad[index] = current_angle_rad + difference_rad;
+        // 线速度除以轮半径得到输出轴 rad/s；后续闭环由 DJI 驱动的现有 PID 执行。
         wheel_target_rad_s[index] = (velocity_m_s / kChassisConfig.wheel_radius_m) *
                                     ctx.wheel_direction[index];
     }
@@ -152,6 +154,8 @@ static void Chassis_UpdateFeedback(void)
                         (wheel_vy[3] - wheel_vy[2])) /
                        (4.0f * kChassisConfig.half_length_m);
 
+    // 一阶平滑 y += alpha * (x - y)，在 1 kHz 控制周期更新；100 Hz 仅是发布频率。
+    // 初始输出沿用初始化时的零值，feedback_alpha 是每个控制周期的权重。
     ctx.feedback.velocity_x_m_s += kChassisConfig.feedback_alpha *
         (vx - ctx.feedback.velocity_x_m_s);
     ctx.feedback.velocity_y_m_s += kChassisConfig.feedback_alpha *
@@ -216,7 +220,7 @@ bool Chassis_Init(void)
 
 void Chassis_Update(void)
 {
-    /* A held target may only drive motors while its local Topic is fresh. */
+    /* 仅在命令 Topic 仍新鲜时沿用目标；过期后使用默认 ZERO_FORCE 关闭输出。 */
     ChassisCmd command{};
     if (MessageCenter::Chassis_Command_Topic.ReadFresh(
             command, CHASSIS_COMMAND_MAX_AGE_US))
