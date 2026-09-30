@@ -43,7 +43,7 @@ QD4310 驱动仍作为独立设备保留，云台不再依赖它。SingleBoard �
 - 电机反馈及目标均使用经过 reverse 统一的逻辑方向，协议编码只在驱动中翻转一次。
 - 姿态轴和选用的机体系角速度须与机构约定匹配；当前不是任意安装姿态的完整坐标变换器。
 - LOCK 捕获并保持当前姿态，忽略随后发布的目标字段；IMU 使用新发布的目标。
-- 输入边界校验命令与 INS 数值，DM 驱动解码合法反馈；云台保留控制计算结果检查，DISABLED 始终优先停机。
+- 输入边界校验外部命令与 INS 数值，DM 驱动解码合法反馈；云台控制路径只判断命令模式、INS 新鲜度及电机快照，DISABLED 始终优先停机。
 
 ## 状态与恢复
 
@@ -53,10 +53,11 @@ QD4310 驱动仍作为独立设备保留，云台不再依赖它。SingleBoard �
 
 - INS 必须不超过 10 ms；两轴运动反馈必须小于 100 ms，在线判断不等待 StatusTask。INS 发布端拒绝非有限姿态或角速度。
 - 云台每周期读取命令、INS 与两轴快照；活动模式请求两轴使能，两轴 ready 后立即捕获当前姿态并执行控制。没有就绪超时、退避或稳定窗口。
-- `Gimbal_GetStatus()` 根据当前命令、INS 新鲜度、两轴 `ready/fault` 和本周期控制结果给出 DISABLE、ENABLING、READY、FAULT 或 CONFIG_ERROR；状态只用于观察，不驱动恢复流程。
-- DMMotor 在 100 Hz StatusTask 中维护设备期望状态；`RequestEnabled()` 每次先覆盖旧周期目标为安全输出，云台只有在两轴 ready 后才写正常目标。
+- `Gimbal_GetStatus()` 根据初始化结果、当前命令、INS 新鲜度和两轴 `ready/fault` 给出 DISABLE、ENABLING、READY、FAULT 或 CONFIG_ERROR；状态只用于观察，不驱动恢复流程。CAN 软件周期槽是否接受目标不改变云台状态。
+- DMMotor 的 `RequestEnabled()` 每次先覆盖旧周期目标为安全输出，只在请求状态边沿立即提交 Enable/Disable；云台只有在两轴 ready 后才写正常目标。
+- 100 Hz StatusTask 调用 `ServiceAll()`：在线反馈与请求不一致时再次提交协议命令；离线时不新增 Enable/Disable。已进入硬件 FIFO 的帧由 FDCAN Auto Retransmission 处理总线级重发。
 - DISABLED、故障或初始化部分失败时，对已注册电机调用 `RequestEnabled(false)`；
-  DMMotor 立即覆盖周期槽为零刚度/阻尼/转矩；在线反馈仍显示使能时，低频服务继续发送失能。离线时不反复刷失能命令；停止帧不能
+  DMMotor 立即覆盖周期槽为零刚度/阻尼/转矩，并在请求边沿提交一次失能；在线反馈仍显示使能时，低频服务继续发送失能。离线时不反复刷失能命令；停止帧不能
   保证在物理断线时送达，也不会清除已经进入硬件 FIFO 的帧。
 - 活动模式下按当前设备状态恢复。恢复先清空 PID 历史并捕获当前姿态；IMU 等待 READY 后重新
   发布目标，LOCK 直接保持新捕获的姿态，故障前目标不会重放。

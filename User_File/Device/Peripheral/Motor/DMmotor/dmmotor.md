@@ -31,7 +31,9 @@ motor.ClearError();
 motor.SetZeroPosition();
 ```
 
-`RequestEnabled(bool)` 记录输出许可，并立即用当前模式的安全目标覆盖周期槽；应用在电机 ready 后再写正常目标。100 Hz `ServiceAll()` 在请求使能且尚未收到已使能反馈时尝试 Enable；请求失能时，仅在在线反馈仍显示已使能时尝试 Disable。离线且请求失能时保持安全周期目标，不反复发送 Disable。明确故障状态不会自动 ClearError 或 Enable。`ClearError()` 和 `SetZeroPosition()` 返回命令入队结果；入队成功不代表电机已经执行。`SetZeroPosition()` 仅在入队成功后重置本地位置展开状态。
+`RequestEnabled(bool)` 记录输出许可，并每次用当前模式的安全目标覆盖周期槽；应用在电机 ready 后再写正常目标。仅在 `false→true` 边沿立即尝试一次 Enable、`true→false` 边沿立即尝试一次 Disable；重复调用不会重复提交离散命令。返回值要求安全周期目标和本次边沿命令（若有）均成功进入各自的软件发送通道，不代表电机执行。
+
+100 Hz StatusTask 调用 `ServiceAll()`：在线且请求使能、实际失能时再次尝试 Enable；在线且请求失能、实际使能时再次尝试 Disable。离线期间保留安全周期目标，不新增 Enable/Disable。已进入 FDCAN 硬件 FIFO 的帧由硬件 Auto Retransmission 负责总线级重发；软件服务仍须依据新鲜反馈判断设备实际状态。明确故障状态不会自动 ClearError。`ClearError()` 和 `SetZeroPosition()` 返回命令入队结果；入队成功不代表电机已经执行。`SetZeroPosition()` 仅在入队成功后重置本地位置展开状态。
 
 后续可选参数依次为反转、PMAX、VMAX 和 TMAX：
 
@@ -161,7 +163,7 @@ MIT 的 `kp`、`kd` 是发给电机内部控制器的控制参数，不属于反
 P/V/Kp/Kd/Torque 全为零。
 
 所有 `SetXXX()` 控制入口都返回软件周期槽更新结果，不表示设备已执行。
-`RequestEnabled(false)` 立即覆盖旧周期目标；`ServiceAll()` 在未就绪且请求使能时也覆盖旧周期目标，并维护设备协议期望状态，
+`RequestEnabled(false)` 立即覆盖旧周期目标；`ServiceAll()` 在未就绪且请求使能时也覆盖旧周期目标，并根据在线反馈维护设备协议期望状态，
 不会自行决定 Gimbal 的 READY/FAULT。Daemon 只判断反馈活性，不再通过离线回调自动使能。
 清错由上层在合适时机显式请求，驱动不把 fault 自动解释为整车恢复许可。
 

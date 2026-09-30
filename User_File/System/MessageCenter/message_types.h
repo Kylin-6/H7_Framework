@@ -90,7 +90,7 @@ struct ShootCmd
     LoaderMode loader_mode = LoaderMode::STOP;
 };
 
-/** 姿态来自 INS；enabled 表示两轴电机均 ready，不等同于云台 FSM 已 READY。
+/** 姿态来自 INS；enabled 表示两轴电机均 ready，不表示 CAN 目标已被硬件发送。
  * gyro 轴由云台配置选择；INS 无效时姿态/速度清零，调用者须检查 ins_valid。
  */
 struct GimbalFeedback
