@@ -3,12 +3,14 @@
 #include <string.h>
 #include "bsp_uart.h"
 #include "crc_ref.h"
+#include "referee_daemon.h"
 
 #define VTM_RX_BUFFER_SIZE 255u // 图传接收缓冲区大小
 #define RC_FRAME_LEN 21u        // 遥控数据帧固定长度(字节)
 
 static UART_HandleTypeDef *vtm_uart; // 图传串口实例
 static vtm_info_t vtm_info;						// 图传数据
+static uint8_t vtm_has_valid_frame;
 
 /**
  * @brief  读取图传数据,中断中读取保证速度
@@ -39,6 +41,8 @@ static void VTMReadData(uint8_t *buff, uint16_t length)
             if (Verify_CRC16_Check_Sum(frame, RC_FRAME_LEN) == TRUE)
             {
                 memcpy(&vtm_info.rc_ctrl, frame, sizeof(RC_ctrl_t));
+                vtm_has_valid_frame = 1U;
+                if (vtm_uart != NULL) { VTMDaemonFeed(); }
             }
             // 遥控帧固定21字节,偏移量前移至下一帧
             read_offset += RC_FRAME_LEN;
@@ -50,26 +54,27 @@ static void VTMReadData(uint8_t *buff, uint16_t length)
             if (read_offset + LEN_HEADER > length)
                 break;
 
-            memcpy(&vtm_info.FrameHeader, frame, LEN_HEADER);
-
-            if (Verify_CRC8_Check_Sum(frame, LEN_HEADER) == TRUE)
+            if (Verify_CRC8_Check_Sum(frame, LEN_HEADER) != TRUE)
             {
-                vtm_length = (uint16_t)(vtm_info.FrameHeader.DataLength + LEN_HEADER + LEN_CMDID + LEN_TAIL);
-
-                // 越界保护: 当前帧完整长度不能超出缓冲区剩余空间
-                if (read_offset + vtm_length > length)
-                    break;
-
-                if (Verify_CRC16_Check_Sum(frame, vtm_length) == TRUE)
-                {
-                    vtm_info.CmdID = (frame[6] << 8 | frame[5]);
-                    // TODO: 图传链路数据解析(未实现)
-                }
+                read_offset++;
+                continue;
             }
-
-            // 按帧头中声明的长度跳过当前帧,无论校验是否通过
-            uint16_t frame_len = (uint16_t)(sizeof(xFrameHeader) + LEN_CMDID + vtm_info.FrameHeader.DataLength + LEN_TAIL);
-            read_offset += frame_len;
+            // 先用宽整数检查完整长度，避免声明长度溢出后误把短帧当作合法数据。
+            const uint32_t frame_length = (uint32_t)frame[DATA_LENGTH] |
+                                          ((uint32_t)frame[DATA_LENGTH + 1U] << 8U);
+            const uint32_t total_length = frame_length + LEN_HEADER + LEN_CMDID + LEN_TAIL;
+            if (total_length > (uint32_t)(length - read_offset))
+                break;
+            vtm_length = (uint16_t)total_length;
+            if (Verify_CRC16_Check_Sum(frame, vtm_length) == TRUE)
+            {
+                memcpy(&vtm_info.FrameHeader, frame, LEN_HEADER);
+                vtm_info.CmdID = (frame[6] << 8 | frame[5]);
+                vtm_has_valid_frame = 1U;
+                if (vtm_uart != NULL) { VTMDaemonFeed(); }
+                // TODO: 图传链路业务载荷解析(未实现)
+            }
+            read_offset += vtm_length;
         }
         else
         {
@@ -89,7 +94,13 @@ vtm_info_t *VTMInit(UART_HandleTypeDef *vtm_usart_handle)
     if (vtm_usart_handle == NULL)
         return NULL;
 
+    if (!VTMDaemonRegister())
+    {
+        vtm_uart = NULL;
+        return NULL;
+    }
     memset(&vtm_info, 0, sizeof(vtm_info));
+    vtm_has_valid_frame = 0U;
     vtm_uart = vtm_usart_handle;
     UART_Init(vtm_usart_handle, VTMRxCallback);
 
@@ -114,3 +125,11 @@ void VTMReceiveData(uint8_t *data, uint16_t length)
 {
     VTMReadData(data, length);
 }
+
+uint8_t VTMIsEnabled(void) { return vtm_uart != NULL; }
+uint8_t VTMIsOnline(void)
+{
+    return VTMIsEnabled() && vtm_has_valid_frame && VTMDaemonIsOnline();
+}
+uint8_t VTMIsDataValid(void) { return VTMIsOnline(); }
+uint8_t VTMIsHealthy(void) { return VTMIsEnabled() && VTMIsDataValid(); }

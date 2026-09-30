@@ -12,6 +12,7 @@
 
 #include "bsp_bmi088.h"
 #include "message_center.h"
+#include "daemon.h"
 #include <cmath>
 
 /* Private macros ------------------------------------------------------------*/
@@ -21,6 +22,9 @@
 /* Private variables ---------------------------------------------------------*/
 
 static Publisher<INS_State> INS_State_Publisher(MessageCenter::INS_State_Topic);
+// INS 按约 1 kHz 输出；30 ms 用于链路诊断，云台控制仍单独要求 10 ms 新鲜度。
+static Daemon ins_daemon{30U};
+static bool ins_registered;
 
 /* Private function declarations ---------------------------------------------*/
 
@@ -33,8 +37,10 @@ static Publisher<INS_State> INS_State_Publisher(MessageCenter::INS_State_Topic);
  * 此处只选择整机参数并交给BMI088，不包含传感器操作或算法实现。
  * 参数在BSP_BMI088.Init()中用于初始化VQF，因此必须先配置、后初始化。
  */
-void System_IMU_Configure()
+bool System_IMU_Configure()
 {
+    ins_registered = DaemonManager::Register(ins_daemon);
+    if (!ins_registered) { return false; }
     Struct_BMI088_VQF_Config config;
 
     // VQF更新周期。陀螺仪按2 kHz逐帧积分，加速度计按250 Hz修正重力方向。
@@ -77,6 +83,12 @@ void System_IMU_Configure()
     config.Parameter.Rest_Threshold_Accel = 0.5f;
 
     BSP_BMI088.Set_VQF_Config(config);
+    return true;
+}
+
+bool System_IMU_IsOnline()
+{
+    return ins_registered && ins_daemon.IsOnline();
 }
 
 /**
@@ -87,7 +99,7 @@ void System_IMU_Configure()
  */
 void System_IMU_Publish_State()
 {
-    if (!BSP_BMI088.Is_Initialized())
+    if (!ins_registered || !BSP_BMI088.Is_Initialized())
     {
         return;
     }
@@ -108,5 +120,6 @@ void System_IMU_Publish_State()
         return;
     }
     /* 高频姿态使用静态 Topic，避免动态队列进入 1 kHz 闭环路径。 */
+    ins_daemon.Feed();
     INS_State_Publisher.Publish(ins_state);
 }

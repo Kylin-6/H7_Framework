@@ -177,6 +177,7 @@ set(H7_GIMBAL_TASK_DEVICE_SOURCES
     User_File/Device/Peripheral/Remote/remote_control.c
     User_File/Device/Peripheral/Remote/sbus.cpp)
 set(H7_CHASSIS_DEVICE_SOURCES
+    User_File/Device/Peripheral/Referee/referee_daemon.cpp
     User_File/Device/Peripheral/Referee/crc_ref.c
     User_File/Device/Peripheral/Referee/referee_26.c
     User_File/Device/Peripheral/Referee/referee_UI_26.c

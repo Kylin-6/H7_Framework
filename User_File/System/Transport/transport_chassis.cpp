@@ -1,6 +1,7 @@
 #include "board_transport.h"
 
 #include "bsp_can.h"
+#include "daemon.h"
 #include "message_center.h"
 #include "stm32h7xx.h"
 #include "sys_timestamp.h"
@@ -16,7 +17,8 @@ volatile uint64_t pending_rx_us;
 bool initialized;
 bool has_sequence;
 uint8_t last_sequence;
-uint64_t last_accepted_rx_us;
+uint64_t last_valid_rx_us;
+Daemon transport_daemon{TransportProtocol::kCommandMaxAgeUs / 1000U};
 Subscriber<ChassisFeedback> feedback_subscriber(MessageCenter::Chassis_Feedback_Topic);
 uint8_t feedback_sequence;
 
@@ -72,19 +74,20 @@ void ProcessCommand(const uint8_t *bytes, uint64_t received_us)
     {
         return;
     }
-    // 超时重建只看已通过解码/当前时效检查的实际 RX 时间；无会话标识，旧合法帧仍可能被重建接受。
-    if (has_sequence && received_us - last_accepted_rx_us >
+    // 合法重复帧只证明链路活性；连续数据流不中断时不能重建基准并刷新旧 Topic。
+    transport_daemon.Feed();
+    if (has_sequence && received_us - last_valid_rx_us >
                             TransportProtocol::kCommandMaxAgeUs)
     {
         has_sequence = false;
     }
+    last_valid_rx_us = received_us;
     if (has_sequence && !TransportProtocol::SequenceNewer(sequence, last_sequence))
     {
         return;
     }
     MessageCenter::Chassis_Command_Topic.PublishAt(command, received_us);
     last_sequence = sequence;
-    last_accepted_rx_us = received_us;
     has_sequence = true;
 }
 }
@@ -94,17 +97,30 @@ FDCAN_HandleTypeDef *TransportConfig_Bus(void)
     return &hfdcan3;
 }
 
-void BoardTransport_Init(void)
+bool BoardTransport_Init(void)
 {
     if (!initialized)
     {
         initialized = BSP_CAN_RegisterCallback(TransportConfig::kChassisCmdCanId,
-            TransportConfig_Bus(), Receive, nullptr);
+            TransportConfig_Bus(), Receive, nullptr) &&
+            DaemonManager::Register(transport_daemon);
     }
+    return initialized;
+}
+
+bool BoardTransport_IsOnline(void)
+{
+    return initialized && transport_daemon.IsOnline();
+}
+
+uint32_t BoardTransport_OfflineDurationMs(void)
+{
+    return transport_daemon.OfflineDurationMs();
 }
 
 void BoardTransport_Poll(void)
 {
+    if (!initialized) { return; }
     uint8_t bytes[TransportProtocol::kPayloadSize];
     uint64_t received_us = 0U;
     const uint32_t primask = __get_PRIMASK();

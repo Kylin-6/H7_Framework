@@ -261,7 +261,9 @@ bool Class_DJIMotor::Init(const Struct_DJIMotor_Init_Config &config)
     Apply_PID_Debug_Gains();
     Update_PID_Debug();
 
-    if (!BSP_CAN_RegisterCallback(resolved_rx_id, config.hfdcan, CAN_RxCpltCallback, this))
+    if (!feedback_daemon.SetTimeoutMs(config.feedback_timeout_ms) ||
+        !BSP_CAN_RegisterCallback(resolved_rx_id, config.hfdcan, CAN_RxCpltCallback, this) ||
+        !DaemonManager::Register(feedback_daemon))
     {
         return false;
     }
@@ -371,8 +373,12 @@ bool Class_DJIMotor::RequestEnabled(bool enable)
 
 bool Class_DJIMotor::IsOnline()
 {
-    Check_Feedback_Timeout();
-    return online;
+    return GetMotionSnapshot().online;
+}
+
+const Daemon &Class_DJIMotor::GetDaemon() const
+{
+    return feedback_daemon;
 }
 
 bool Class_DJIMotor::IsEnabled() const
@@ -424,7 +430,7 @@ Struct_DJIMotor_Motion_Snapshot Class_DJIMotor::GetMotionSnapshot() const
     snapshot.output_speed = feedback.output_speed;
     snapshot.timestamp_us = last_feedback_timestamp_us;
     const uint64_t now_us = SYS_Timestamp.Get_Now_Microsecond();
-    snapshot.online = initialized && online && now_us >= snapshot.timestamp_us &&
+    snapshot.online = initialized && feedback_initialized && now_us >= snapshot.timestamp_us &&
                       now_us - snapshot.timestamp_us <= feedback_timeout_us;
     snapshot.requested_enabled = requested_enabled;
     snapshot.ready = initialized && snapshot.requested_enabled && snapshot.online;
@@ -444,7 +450,7 @@ void Class_DJIMotor::CAN_RxCpltCallback(FDCAN_HandleTypeDef *hfdcan,
                                         void *context)
 {
     Class_DJIMotor *motor = (Class_DJIMotor *)context;
-    if (motor == nullptr || data == nullptr || len != 8 ||
+    if (motor == nullptr || !motor->initialized || data == nullptr || len != 8 ||
         hfdcan != motor->hfdcan || id != motor->rx_id)
     {
         return;
@@ -501,7 +507,7 @@ void Class_DJIMotor::CAN_RxCpltCallback(FDCAN_HandleTypeDef *hfdcan,
     }
     uint32_t interrupt_state = DJI_Motor_Enter_Critical();
     motor->last_feedback_timestamp_us = SYS_Timestamp.Get_Now_Microsecond();
-    motor->online = true;
+    motor->feedback_daemon.Feed();
     DJI_Motor_Exit_Critical(interrupt_state);
 }
 
@@ -521,8 +527,8 @@ void Class_DJIMotor::Clear_Command()
 }
 
 /**
- * @brief 检查电机是否已使能且反馈未超时；未就绪时清零指令与各环积分。
- * @note online 由有效反馈置位，超时后收到新反馈即可恢复；此处只修改本地报文缓冲。
+ * @brief 用即时快照检查输出许可与反馈时效；未就绪时清零指令与各环积分。
+ * @note 不保存第二份 online 缓存，也不等待 100 Hz Daemon 状态检查。
  */
 bool Class_DJIMotor::Check_Feedback_Timeout()
 {
@@ -531,15 +537,7 @@ bool Class_DJIMotor::Check_Feedback_Timeout()
         return false;
     }
 
-    uint32_t interrupt_state = DJI_Motor_Enter_Critical();
-    uint64_t now_us = SYS_Timestamp.Get_Now_Microsecond();
-    if (online && now_us - last_feedback_timestamp_us > feedback_timeout_us)
-    {
-        online = false;
-    }
-    bool ready = requested_enabled && online;
-    DJI_Motor_Exit_Critical(interrupt_state);
-    if (ready)
+    if (GetMotionSnapshot().ready)
     {
         return true;
     }

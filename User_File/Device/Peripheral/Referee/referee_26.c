@@ -14,16 +14,14 @@
 #include "crc_ref.h"
 #include "bsp_uart.h"
 #include "cmsis_os.h"
+#include "referee_daemon.h"
 
 #define RE_RX_BUFFER_SIZE 320u // 覆盖当前协议最长 300 字节数据段及 9 字节包头/尾
 
 static UART_HandleTypeDef *referee_uart; // 裁判系统串口实例
 static referee_info_t referee_info;			  // 裁判系统数据
-static uint32_t referee_last_valid_tick;
 static uint8_t referee_rx_buffer[RE_RX_BUFFER_SIZE];
 static uint16_t referee_rx_length;
-
-#define REFEREE_OFFLINE_TIMEOUT_MS 500U
 
 /* 已校验 CRC 的已知命令必须匹配该命令的固定载荷长度；未知命令只计链路在线。 */
 static uint8_t JudgeStoreFrame(const uint8_t *frame, uint16_t payload_length)
@@ -63,7 +61,7 @@ static uint8_t JudgeStoreFrame(const uint8_t *frame, uint16_t payload_length)
     memcpy(&referee_info.FrameHeader, frame, LEN_HEADER);
     referee_info.CmdID = command_id;
     referee_info.init_flag = 1U;
-    referee_last_valid_tick = HAL_GetTick();
+    if (referee_uart != NULL) { RefereeDaemonFeed(); }
     return TRUE;
 }
 
@@ -132,8 +130,12 @@ referee_info_t *RefereeInit(UART_HandleTypeDef *referee_usart_handle)
     if (referee_usart_handle == NULL)
         return NULL;
 
+    if (!RefereeDaemonRegister())
+    {
+        referee_uart = NULL;
+        return NULL;
+    }
     memset(&referee_info, 0, sizeof(referee_info));
-    referee_last_valid_tick = 0U;
     referee_rx_length = 0U;
     referee_uart = referee_usart_handle;
     UART_Init(referee_usart_handle, RefereeRxCallback);
@@ -159,7 +161,7 @@ uint8_t RefereeIsEnabled(void) { return referee_uart != NULL; }
 uint8_t RefereeIsOnline(void)
 {
     return RefereeIsEnabled() && referee_info.init_flag &&
-           (uint32_t)(HAL_GetTick() - referee_last_valid_tick) <= REFEREE_OFFLINE_TIMEOUT_MS;
+           RefereeDaemonIsOnline();
 }
 
 uint8_t RefereeIsDataValid(void) { return RefereeIsOnline(); }

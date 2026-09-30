@@ -27,10 +27,11 @@
  * @brief 将整机选定的VQF参数写入BMI088
  *
  * @details
- * 必须在Class_BMI088::Init()之前调用。该函数只写入配置，便于在一个位置调整
+ * 必须在Class_BMI088::Init()之前调用。该函数注册 INS Daemon 并写入配置，便于在一个位置调整
  * 采样周期、姿态修正速度、零偏估计和静止判定策略。
  */
-void System_IMU_Configure();
+bool System_IMU_Configure(); ///< Daemon 注册失败时返回 false，禁止发布 INS。
+bool System_IMU_IsOnline(); ///< 有效 INS 输出链路活性；不替代控制 Topic freshness。
 
 /**
  * @brief 将最新姿态解算结果发布为INS_State

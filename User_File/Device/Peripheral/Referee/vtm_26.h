@@ -114,5 +114,9 @@ vtm_info_t *VTMInit(UART_HandleTypeDef *vtm_usart_handle);
 void VTMSend(uint8_t *send, uint16_t tx_len);
 
 void VTMReceiveData(uint8_t *data, uint16_t length);
+uint8_t VTMIsEnabled(void);   ///< 已完成 UART 与 Daemon 注册，无硬件 enable 语义。
+uint8_t VTMIsOnline(void);    ///< 最近 300 ms 收到 CRC 合法的完整帧，门限待实机验证。
+uint8_t VTMIsDataValid(void); ///< 当前等价于 Online，不保证遥控业务载荷均已更新。
+uint8_t VTMIsHealthy(void);   ///< Initialized && Online。
 
 #endif // !VTM_26_H

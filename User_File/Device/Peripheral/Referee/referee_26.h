@@ -51,7 +51,7 @@ typedef struct
 /**
  * @brief 向 UART BSP 注册裁判数据接收回调；当前 System_Init 不自动调用。
  * @param referee_usart_handle 已配置 RX DMA 的 UART 句柄，由板级接线选择。
- * @return 静态反馈对象指针；空句柄返回 NULL。
+ * @return 静态反馈对象指针；空句柄或 Daemon 注册失败返回 NULL。
  * @note 回调在 UART 中断中运行有界流式解析；跨回调保留半帧，已知命令校验固定载荷长度。
  */
 referee_info_t *RefereeInit(UART_HandleTypeDef *referee_usart_handle);

@@ -5,6 +5,7 @@
 #include "sbus.h"
 
 #include "bsp_uart.h"
+#include "daemon.h"
 
 #include <cstring>
 
@@ -23,6 +24,7 @@ uint8_t stream_length;
 Struct_SBUS_Frame latest_frame;
 Struct_SBUS_Diagnostics diagnostics;
 bool frame_available;
+Daemon sbus_daemon{SBUS_RX_TIMEOUT_MS};
 
 uint32_t EnterCritical()
 {
@@ -68,6 +70,8 @@ void PublishFrame(const uint8_t *bytes)
     decoded.sequence = latest_frame.sequence + 1U;
     latest_frame = decoded;
     frame_available = true;
+    // frame-lost/failsafe 仍证明接收链路有结构合法数据，不授予业务控制许可。
+    sbus_daemon.Feed();
     diagnostics.valid_frames++;
     if (decoded.frame_lost != 0U)
     {
@@ -145,6 +149,11 @@ extern "C" bool SBUS_Init(UART_HandleTypeDef *huart)
         return false;
     }
 
+    if (!DaemonManager::Register(sbus_daemon))
+    {
+        sbus_uart = nullptr;
+        return false;
+    }
     const uint32_t primask = EnterCritical();
     sbus_uart = huart;
     stream_length = 0U;
@@ -193,9 +202,8 @@ extern "C" bool SBUS_IsOnline(void)
 {
     const uint32_t primask = EnterCritical();
     const bool available = frame_available;
-    const uint32_t timestamp_ms = latest_frame.timestamp_ms;
     ExitCritical(primask);
-    return available && (HAL_GetTick() - timestamp_ms <= SBUS_RX_TIMEOUT_MS);
+    return SBUS_IsEnabled() && available && sbus_daemon.IsOnline();
 }
 
 extern "C" bool SBUS_IsEnabled(void)
