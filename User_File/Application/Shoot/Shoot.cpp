@@ -39,7 +39,6 @@ struct ShootContext
     Class_DJIMotor_Group friction_group;
     Class_DJIMotor_Group loader_group;
     bool initialized = false;
-    bool output_enabled = false;
     bool event_angle_active = false;
     float loader_angle_target_rad = 0.0f;
 #endif
@@ -62,30 +61,12 @@ static PID_InitTypeDef Shoot_MakePID(const ShootPidConfig &config)
     return pid;
 }
 
-static void Shoot_SetEnabled(bool enabled)
-{
-    if (enabled == ctx.output_enabled)
-    {
-        return;
-    }
-    ctx.output_enabled = enabled;
-    if (enabled)
-    {
-        ctx.friction_group.Enable();
-        ctx.loader_group.Enable();
-    }
-    else
-    {
-        ctx.friction_group.Disable();
-        ctx.loader_group.Disable();
-    }
-}
-
 static void Shoot_ApplyCommand(void)
 {
     /* ShootMode 是总使能；关闭后摩擦轮和拨弹盘都停止主动输出。 */
     const bool enabled = ctx.command.shoot_mode == ShootMode::ON;
-    Shoot_SetEnabled(enabled);
+    (void)ctx.friction_group.RequestEnabled(enabled);
+    (void)ctx.loader_group.RequestEnabled(enabled);
     if (!enabled)
     {
         ctx.event_angle_active = false;
@@ -172,7 +153,9 @@ static void Shoot_UpdateFeedback(void)
         ctx.friction_right_snapshot.output_speed;
     ctx.feedback.loader_angle_rad = ctx.loader_snapshot.output_total_angle;
     ctx.feedback.loader_speed_rad_s = ctx.loader_snapshot.output_speed;
-    ctx.feedback.enabled = ctx.output_enabled;
+    ctx.feedback.enabled = ctx.command.shoot_mode == ShootMode::ON &&
+                           ctx.friction_left_snapshot.ready &&
+                           ctx.friction_right_snapshot.ready && ctx.loader_snapshot.ready;
     ctx.feedback.online = ctx.friction_left_snapshot.online &&
                             ctx.friction_right_snapshot.online &&
                             ctx.loader_snapshot.online;
@@ -218,10 +201,10 @@ bool Shoot_Init(void)
     ctx.initialized = left_initialized && right_initialized && loader_initialized &&
         ctx.friction_group.Init(&ctx.friction_left, &ctx.friction_right) &&
         ctx.loader_group.Init(&ctx.loader);
-    ctx.output_enabled = true;
     if (ctx.initialized)
     {
-        Shoot_SetEnabled(false);
+        (void)ctx.friction_group.RequestEnabled(false);
+        (void)ctx.loader_group.RequestEnabled(false);
     }
     ctx.event_angle_active = false;
     ctx.loader_angle_target_rad = 0.0f;

@@ -40,7 +40,6 @@ struct ChassisContext
     Class_DJIMotor_Group wheel_group;
     Class_DJIMotor_Group steer_group;
     bool initialized = false;
-    bool output_enabled = false;
     int8_t wheel_direction[4] = {1, 1, 1, 1};
 #endif
 };
@@ -60,25 +59,6 @@ static PID_InitTypeDef Chassis_MakePID(const ChassisPidConfig &config)
     pid.Out_Max = config.output_limit;
     pid.D_T = 0.001f;
     return pid;
-}
-
-static void Chassis_SetEnabled(bool enabled)
-{
-    if (enabled == ctx.output_enabled)
-    {
-        return;
-    }
-    ctx.output_enabled = enabled;
-    if (enabled)
-    {
-        ctx.wheel_group.Enable();
-        ctx.steer_group.Enable();
-    }
-    else
-    {
-        ctx.wheel_group.Disable();
-        ctx.steer_group.Disable();
-    }
 }
 
 static void Chassis_CalculateTargets(float wheel_target_rad_s[4],
@@ -146,6 +126,7 @@ static void Chassis_UpdateFeedback(void)
     float wheel_vx[4];
     float wheel_vy[4];
     bool online = true;
+    bool ready = true;
     for (uint8_t index = 0; index < 4; ++index)
     {
         const float heading_rad =
@@ -158,6 +139,8 @@ static void Chassis_UpdateFeedback(void)
         wheel_vy[index] = linear_speed_m_s * std::sin(heading_rad);
         online = online && ctx.wheel_snapshot[index].online &&
                  ctx.steer_snapshot[index].online;
+        ready = ready && ctx.wheel_snapshot[index].ready &&
+                ctx.steer_snapshot[index].ready;
     }
 
     const float vx = (wheel_vx[0] + wheel_vx[1] + wheel_vx[2] + wheel_vx[3]) * 0.25f;
@@ -175,7 +158,7 @@ static void Chassis_UpdateFeedback(void)
         (vy - ctx.feedback.velocity_y_m_s);
     ctx.feedback.angular_velocity_rad_s += kChassisConfig.feedback_alpha *
         (0.5f * (wz_x + wz_y) - ctx.feedback.angular_velocity_rad_s);
-    ctx.feedback.enabled = ctx.output_enabled;
+    ctx.feedback.enabled = ctx.command.mode != ChassisMode::ZERO_FORCE && ready;
     ctx.feedback.online = online;
 }
 #endif
@@ -220,10 +203,10 @@ bool Chassis_Init(void)
         &ctx.steer_motor[0], &ctx.steer_motor[1],
         &ctx.steer_motor[2], &ctx.steer_motor[3]);
     ctx.initialized = initialized;
-    ctx.output_enabled = true;
     if (initialized)
     {
-        Chassis_SetEnabled(false);
+        (void)ctx.wheel_group.RequestEnabled(false);
+        (void)ctx.steer_group.RequestEnabled(false);
     }
     return initialized;
 #else
@@ -254,7 +237,8 @@ void Chassis_Update(void)
             ctx.steer_snapshot[index] = ctx.steer_motor[index].GetMotionSnapshot();
         }
         const bool enabled = ctx.command.mode != ChassisMode::ZERO_FORCE;
-        Chassis_SetEnabled(enabled);
+        (void)ctx.wheel_group.RequestEnabled(enabled);
+        (void)ctx.steer_group.RequestEnabled(enabled);
         if (enabled)
         {
             float wheel_target_rad_s[4];

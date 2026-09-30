@@ -90,7 +90,7 @@ struct ShootCmd
     LoaderMode loader_mode = LoaderMode::STOP;
 };
 
-/** 姿态来自 INS；enabled 表示两轴新鲜反馈均为使能，不等同于控制已 READY。
+/** 姿态来自 INS；enabled 表示两轴电机均 ready，不等同于云台 FSM 已 READY。
  * gyro 轴由云台配置选择；INS 无效时姿态/速度清零，调用者须检查 ins_valid。
  */
 struct GimbalFeedback
@@ -108,7 +108,7 @@ struct ChassisFeedback
     float velocity_x_m_s = 0.0f;
     float velocity_y_m_s = 0.0f;
     float angular_velocity_rad_s = 0.0f;
-    bool enabled = false;
+    bool enabled = false; ///< 八个 DJI 电机均 ready；ZERO_FORCE 或任一反馈过期时为 false。
     bool online = false;
 };
 
@@ -119,7 +119,7 @@ struct ShootFeedback
     float friction_right_speed_rad_s = 0.0f;
     float loader_angle_rad = 0.0f;
     float loader_speed_rad_s = 0.0f;
-    bool enabled = false;
+    bool enabled = false; ///< 摩擦轮和拨弹盘三个 DJI 电机均 ready；OFF 时为 false。
     bool online = false;
 };
 
