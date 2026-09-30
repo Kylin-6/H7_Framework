@@ -26,8 +26,6 @@ struct GimbalContext
     GimbalMode last_mode = GimbalMode::DISABLED;
     bool initialized = false;
     bool was_ready = false;
-    bool control_failed = false;
-    bool command_valid = true;
     float target_yaw_angle_rad = 0.0f;
     float target_pitch_angle_rad = 0.0f;
     float target_yaw_speed_rad_s = 0.0f;
@@ -70,13 +68,9 @@ bool ConfigValid(const Struct_Gimbal_Config &c)
            c.yaw_gyro_axis <= GimbalGyroAxis::Z && c.pitch_gyro_axis <= GimbalGyroAxis::Z &&
            (c.yaw_gyro_sign == 1 || c.yaw_gyro_sign == -1) &&
            (c.pitch_gyro_sign == 1 || c.pitch_gyro_sign == -1) &&
-           c.yaw_speed_limit <= c.yaw.velocity_max &&
-           c.yaw_torque_limit <= c.yaw.torque_max &&
            c.yaw_integral_limit <= c.yaw_torque_limit &&
-           c.pitch_kp <= 500 && c.pitch_kd <= 5 &&
            std::isfinite(c.pitch_min) && std::isfinite(c.pitch_max) &&
-           c.pitch_min < c.pitch_max && c.pitch_min >= -c.pitch.position_max &&
-           c.pitch_max <= c.pitch.position_max && c.pitch_speed_limit <= c.pitch.velocity_max;
+           c.pitch_min < c.pitch_max;
 }
 
 float Gyro(GimbalGyroAxis axis, float sign)
@@ -112,15 +106,13 @@ void Stop()
     if (ctx.pitch_registered) { (void)ctx.pitch_motor.RequestEnabled(false); }
 }
 
-bool Control(const Struct_DMMotor_Snapshot &pitch)
+void Control(const Struct_DMMotor_Snapshot &pitch)
 {
     const float error = std::remainder(ctx.target_yaw_angle_rad - ctx.ins.yaw_rad, 2 * GIMBAL_PI);
-    if (!std::isfinite(error)) { return false; }
     ctx.yaw_angle_pid.Set_Target(error);
     ctx.yaw_angle_pid.Set_Now(0);
     ctx.yaw_angle_pid.TIM_Calculate_PeriodElapsedCallback();
     const float speed = ctx.yaw_angle_pid.Get_Out() + ctx.target_yaw_speed_rad_s;
-    if (!std::isfinite(speed)) { return false; }
     ctx.yaw_speed_pid.Set_Target(Clamp(speed, -ctx.config.yaw_speed_limit, ctx.config.yaw_speed_limit));
     ctx.yaw_speed_pid.Set_Now(Gyro(ctx.config.yaw_gyro_axis, ctx.config.yaw_gyro_sign));
     ctx.yaw_speed_pid.TIM_Calculate_PeriodElapsedCallback();
@@ -129,11 +121,9 @@ bool Control(const Struct_DMMotor_Snapshot &pitch)
                           (ctx.target_pitch_angle_rad - ctx.ins.pitch_rad);
     const float velocity = pitch.feedback.velocity + ctx.config.pitch_motor_per_imu *
                           (ctx.target_pitch_speed_rad_s - Gyro(ctx.config.pitch_gyro_axis, ctx.config.pitch_gyro_sign));
-    if (!std::isfinite(torque) || !std::isfinite(position) || !std::isfinite(velocity)) { return false; }
-    const bool yaw_ok = ctx.yaw_motor.SetTorque(Clamp(torque, -ctx.config.yaw_torque_limit, ctx.config.yaw_torque_limit));
-    const bool pitch_ok = ctx.pitch_motor.SetMIT(Clamp(position, ctx.config.pitch_min, ctx.config.pitch_max),
+    (void)ctx.yaw_motor.SetTorque(Clamp(torque, -ctx.config.yaw_torque_limit, ctx.config.yaw_torque_limit));
+    (void)ctx.pitch_motor.SetMIT(Clamp(position, ctx.config.pitch_min, ctx.config.pitch_max),
         Clamp(velocity, -ctx.config.pitch_speed_limit, ctx.config.pitch_speed_limit), ctx.config.pitch_kp, ctx.config.pitch_kd, 0);
-    return yaw_ok && pitch_ok;
 }
 
 void UpdateTarget(const TopicSnapshot<GimbalCmd> &message)
@@ -171,7 +161,6 @@ bool Gimbal_Init(const Struct_Gimbal_Config &requested)
     ctx.initialized = ctx.yaw_registered && ctx.pitch_registered;
     ctx.command = {};
     ctx.was_ready = false;
-    ctx.control_failed = false;
     ResetControllers();
     return ctx.initialized;
 }
@@ -180,8 +169,10 @@ Enum_Gimbal_Status Gimbal_GetStatus(void)
 {
     if (!ctx.initialized) { return Gimbal_Status_CONFIG_ERROR; }
     if (ctx.command.mode == GimbalMode::DISABLED) { return Gimbal_Status_DISABLE; }
-    if (!ctx.command_valid || !ctx.ins_valid || ctx.yaw_snapshot.fault ||
-        ctx.pitch_snapshot.fault || ctx.control_failed) { return Gimbal_Status_FAULT; }
+    if (!ctx.ins_valid || ctx.yaw_snapshot.fault || ctx.pitch_snapshot.fault)
+    {
+        return Gimbal_Status_FAULT;
+    }
     return ctx.yaw_snapshot.ready && ctx.pitch_snapshot.ready
         ? Gimbal_Status_READY : Gimbal_Status_ENABLING;
 }
@@ -219,15 +210,11 @@ void Gimbal_Update(void)
 #if GIMBAL
     const auto message = MessageCenter::Gimbal_Command_Topic.ReadWithMeta();
     ctx.command = message.valid ? message.data : GimbalCmd{};
-    ctx.command_valid = ctx.command.mode == GimbalMode::DISABLED ||
-                        ctx.command.mode == GimbalMode::LOCK ||
-                        ctx.command.mode == GimbalMode::IMU;
-    ctx.control_failed = false;
     ctx.yaw_snapshot = ctx.yaw_motor.GetFeedbackSnapshot();
     ctx.pitch_snapshot = ctx.pitch_motor.GetFeedbackSnapshot();
 
-    if (!ctx.initialized || ctx.command.mode == GimbalMode::DISABLED ||
-        !ctx.command_valid || !ctx.ins_valid ||
+    if (!ctx.initialized || !message.valid ||
+        ctx.command.mode == GimbalMode::DISABLED || !ctx.ins_valid ||
         ctx.yaw_snapshot.fault || ctx.pitch_snapshot.fault)
     {
         Stop();
@@ -257,14 +244,7 @@ void Gimbal_Update(void)
         ctx.was_ready = true;
     }
     UpdateTarget(message);
-    if (!Control(ctx.pitch_snapshot))
-    {
-        ctx.control_failed = true;
-        Stop();
-        ctx.was_ready = false;
-        ctx.yaw_snapshot = ctx.yaw_motor.GetFeedbackSnapshot();
-        ctx.pitch_snapshot = ctx.pitch_motor.GetFeedbackSnapshot();
-    }
+    Control(ctx.pitch_snapshot);
 #endif
     PublishFeedback();
 }
