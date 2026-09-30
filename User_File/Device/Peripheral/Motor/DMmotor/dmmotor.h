@@ -55,8 +55,8 @@ public:
               float position_max = 12.5f,
               float velocity_max = 30.0f,
               float torque_max = 10.0f);
-    /** 相同请求无动作并返回 true；使能边沿提交 Enable，失能边沿发布安全目标并提交 Disable。
-     *  返回本次边沿所需提交的结果，100 Hz ServiceAll 依据反馈纠正，不代表电机执行。
+    /** 首次请求或状态边沿立即提交；失能时先发布安全目标，提交失败由 100 Hz ServiceAll 补交。
+     *  相同请求不执行收发；存在待提交项时返回 false，全部提交成功后返回 true，不代表电机执行。
      */
     bool RequestEnabled(bool enabled);
     /** @name 离散命令
@@ -130,6 +130,8 @@ private:
     float torque_max = 10.0f;
     volatile bool requested_enabled = false;
     volatile bool lifecycle_requested = false;
+    bool safe_output_pending = false;
+    bool lifecycle_command_pending = false;
     bool service_registered = false;
     Class_DMMotor *service_next = nullptr;
     static Class_DMMotor *service_head;

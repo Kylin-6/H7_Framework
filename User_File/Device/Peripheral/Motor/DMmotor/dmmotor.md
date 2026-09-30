@@ -31,15 +31,16 @@ motor.ClearError();
 motor.SetZeroPosition();
 ```
 
-`RequestEnabled(bool)` 只处理期望状态的变化，并在状态边沿设置协议维护标志；应用在电机 ready 后再写正常目标。
+`RequestEnabled(bool)` 在首次请求时建立期望状态并启动协议维护，之后只处理状态变化；应用在电机 ready 后再写正常目标。
 
 - `false→true`：记录使能请求，立即尝试一次 Enable，不主动发布安全目标；返回命令入队结果。
 - `true→false`：记录失能请求，立即发布当前模式的安全目标，再尝试一次 Disable；两次提交都会执行，返回两者均成功的结果。
-- `true→true` 和 `false→false`：no-op，返回 `true`，不提交离散命令、不刷新周期槽，也不启动协议维护。
+- 首次 `false`：即使本地默认值已是 `false`，仍立即发布安全目标并尝试一次 Disable，避免遗漏启动时的失能要求。
+- 已建立请求后的 `true→true` 和 `false→false`：不提交离散命令、不刷新周期槽。有待提交项时返回 `false`，否则返回 `true`。
 
-边沿提交失败仍保留期望状态，后续由 `ServiceAll()` 根据新鲜反馈纠正；重复相同请求不重试。返回成功不代表电机执行或确认。
+安全目标发布和离散命令入队分别记录失败，成功项不会仅因另一项失败而重交。重复相同请求不重试、不掩盖未提交结果；后续由 100 Hz `ServiceAll()` 补交失败项。新的期望状态替换旧请求的待提交项；恢复 ready 后，不再补写未就绪期间失败的安全目标。返回成功不代表电机执行或确认。
 
-100 Hz StatusTask 调用 `ServiceAll()`：在线且请求使能、实际失能时再次尝试 Enable；在线且请求失能、实际使能时再次尝试 Disable。离线期间保留安全周期目标，不新增 Enable/Disable。已进入 FDCAN 硬件 FIFO 的帧由硬件 Auto Retransmission 负责总线级重发；软件服务仍须依据新鲜反馈判断设备实际状态。明确故障状态不会自动 ClearError。`ClearError()` 和 `SetZeroPosition()` 返回命令入队结果；入队成功不代表电机已经执行。`SetZeroPosition()` 仅在入队成功后重置本地位置展开状态。
+100 Hz StatusTask 调用 `ServiceAll()`：在线且无故障时，补交失败的当前 Enable/Disable 命令；即使反馈已符合期望，尚未成功入队的命令也会补交。没有待提交命令时，在线且请求使能、实际失能则再次尝试 Enable；在线且请求失能、实际使能则再次尝试 Disable。失能安全目标发布失败时，即使离线或故障也继续补交；成功后不再重复刷新。离线或故障期间不新增 Enable/Disable，也不会自动 ClearError。已进入 FDCAN 硬件 FIFO 的帧由硬件 Auto Retransmission 负责总线级重发；软件服务仍须依据新鲜反馈判断设备实际状态。`ClearError()` 和 `SetZeroPosition()` 返回命令入队结果；入队成功不代表电机已经执行。`SetZeroPosition()` 仅在入队成功后重置本地位置展开状态。
 
 后续可选参数依次为反转、PMAX、VMAX 和 TMAX：
 
@@ -169,7 +170,7 @@ MIT 的 `kp`、`kd` 是发给电机内部控制器的控制参数，不属于反
 P/V/Kp/Kd/Torque 全为零。
 
 所有 `SetXXX()` 控制入口都返回软件周期槽更新结果，不表示设备已执行。
-`RequestEnabled(false)` 仅在 `true→false` 边沿立即覆盖旧周期目标；`ServiceAll()` 在未就绪且请求使能时也覆盖旧周期目标，并根据在线反馈维护设备协议期望状态，
+`RequestEnabled(false)` 在首次请求或 `true→false` 边沿立即尝试覆盖旧周期目标；失败时由 `ServiceAll()` 补交。`ServiceAll()` 在未就绪且请求使能时也覆盖旧周期目标，并根据在线反馈维护设备协议期望状态，
 不会自行决定 Gimbal 的 READY/FAULT。Daemon 只判断反馈活性，不再通过离线回调自动使能。
 清错由上层在合适时机显式请求，驱动不把 fault 自动解释为整车恢复许可。
 
@@ -208,7 +209,7 @@ for (;;)
 }
 ```
 
-应用请求停止时调用电机的失能请求；电机在 `true→false` 边沿立即覆盖安全周期目标并尝试一次 Disable，之后低频服务根据在线反馈纠正失能状态：
+应用请求停止时调用电机的失能请求；电机在首次请求或 `true→false` 边沿立即尝试发布安全周期目标并提交一次 Disable，之后低频服务补交失败项，并根据在线反馈纠正失能状态：
 
 ```c
 motor.RequestEnabled(false);

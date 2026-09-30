@@ -91,7 +91,7 @@ CAN 接收回调在中断上下文执行。UART 的 DMA 接收须同时具备 Cu
 
 达妙动作/模式请求及 QDrive 命令接口返回 `bool`，表示是否成功提交到软件发送通道。提交失败时保留相应状态，调用方可据此重试；达妙置零仅在提交成功后重置位置展开状态。返回成功不代表电机已经执行或确认命令。
 
-达妙反馈以 `(FDCAN, master_id)` 注册接收入口，并用反馈首字节低四位匹配 `can_id`；电机 ID 使用非零 8 位值，高四位仍用于发送 ID。只有总线、ID、DLC 和节点号全部合法的运动反馈才刷新在线状态。Application 用 `RequestEnabled(bool)` 指定输出许可；DMMotor 仅在请求状态边沿执行协议动作，失能边沿立即覆盖安全周期目标，相同状态重复请求无动作；具体语义见 [达妙电机驱动](User_File/Device/Peripheral/Motor/DMmotor/dmmotor.md)，由 `StatusTask` 的 `ServiceAll()` 以 100 Hz 依据新鲜反馈维护 Enable/Disable 协议状态。Daemon 只判断活性，Gimbal 根据当前 INS 与电机快照决定是否控制。
+达妙反馈以 `(FDCAN, master_id)` 注册接收入口，并用反馈首字节低四位匹配 `can_id`；电机 ID 使用非零 8 位值，高四位仍用于发送 ID。只有总线、ID、DLC 和节点号全部合法的运动反馈才刷新在线状态。Application 用 `RequestEnabled(bool)` 指定输出许可；DMMotor 在首次请求或状态边沿执行协议动作，失能请求立即尝试覆盖安全周期目标，相同状态重复请求不执行收发；具体语义见 [达妙电机驱动](User_File/Device/Peripheral/Motor/DMmotor/dmmotor.md)，由 `StatusTask` 的 `ServiceAll()` 以 100 Hz 补交失败项并依据新鲜反馈维护 Enable/Disable 协议状态。Daemon 只判断活性，Gimbal 根据当前 INS 与电机快照决定是否控制。
 
 ### 板载设备与外接工具
 

@@ -128,33 +128,39 @@ void Class_DMMotor::FeedbackCallback(FDCAN_HandleTypeDef *callback_hfdcan,
     motor->feedback_daemon.Feed();
 }
 
+/** @brief 由 100 Hz StatusTask 根据新鲜反馈纠正协议状态，故障时不自动清错。 */
 void Class_DMMotor::ServiceAll()
 {
     for (Class_DMMotor *motor = service_head; motor != nullptr;
          motor = motor->service_next)
     {
-        if (!motor->lifecycle_requested)
+        // 与 ControlTask 的请求更新互斥，避免补交过时命令或覆盖新的待提交标志。
+        const uint32_t primask = __get_PRIMASK();
+        __disable_irq();
+        if (motor->lifecycle_requested)
         {
-            continue;
+            const Struct_DMMotor_Snapshot snapshot = motor->GetFeedbackSnapshot();
+            if (snapshot.ready)
+            {
+                // 已恢复正常输出许可，不再补写未就绪期间失败的安全目标。
+                motor->safe_output_pending = false;
+            }
+            else if (motor->safe_output_pending || snapshot.requested_enabled)
+            {
+                // 失能安全发布失败也必须补交，包括离线和故障期间。
+                motor->safe_output_pending = !motor->PublishSafeOutput();
+            }
+            // 离线或故障时不追加离散命令；硬件 FIFO 内的帧由 FDCAN 自动重发。
+            if (snapshot.online && !snapshot.fault &&
+                (motor->lifecycle_command_pending ||
+                 snapshot.requested_enabled != snapshot.actual_enabled))
+            {
+                motor->lifecycle_command_pending = !motor->SendModeCommand(
+                    snapshot.requested_enabled ? DM_CMD_ENABLE : DM_CMD_DISABLE);
+            }
         }
-        const Struct_DMMotor_Snapshot snapshot = motor->GetFeedbackSnapshot();
-        if (snapshot.requested_enabled && !snapshot.ready)
-        {
-            (void)motor->PublishSafeOutput();
-        }
-        // 离线期间只保留安全周期目标；已进入硬件 FIFO 的帧由 FDCAN 自动重发。
-        if (!snapshot.online || snapshot.fault)
-        {
-            continue;
-        }
-        if (snapshot.requested_enabled && !snapshot.actual_enabled)
-        {
-            (void)motor->SendModeCommand(DM_CMD_ENABLE);
-        }
-        else if (!snapshot.requested_enabled && snapshot.actual_enabled)
-        {
-            (void)motor->SendModeCommand(DM_CMD_DISABLE);
-        }
+        __DMB();
+        if (primask == 0U) { __enable_irq(); }
     }
 }
 
@@ -291,21 +297,27 @@ uint32_t Class_DMMotor::ControlId() const
 
 bool Class_DMMotor::RequestEnabled(bool enabled)
 {
-    if (requested_enabled == enabled)
+    // 请求状态、非阻塞提交和待提交标志一起更新，与低频服务互斥。
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    if (!lifecycle_requested || requested_enabled != enabled)
     {
-        return true;
+        // 首次 false 也建立失能请求；新请求替换旧请求尚未提交的内容。
+        requested_enabled = enabled;
+        lifecycle_requested = true;
+        safe_output_pending = false;
+        if (!enabled)
+        {
+            // 安全发布失败仍尝试 Disable；两项独立记录，成功项不重复补交。
+            safe_output_pending = !PublishSafeOutput();
+        }
+        lifecycle_command_pending = !SendModeCommand(enabled ? DM_CMD_ENABLE : DM_CMD_DISABLE);
     }
-
-    requested_enabled = enabled;
-    lifecycle_requested = true;
-    if (enabled)
-    {
-        return SendModeCommand(DM_CMD_ENABLE);
-    }
-
-    const bool safe_published = PublishSafeOutput();
-    const bool command_submitted = SendModeCommand(DM_CMD_DISABLE);
-    return safe_published && command_submitted;
+    // 相同请求不执行收发；失败结果保留到 ServiceAll 补交成功，不伪报成功。
+    const bool submitted = !safe_output_pending && !lifecycle_command_pending;
+    __DMB();
+    if (primask == 0U) { __enable_irq(); }
+    return submitted;
 }
 
 bool Class_DMMotor::PublishSafeOutput()
