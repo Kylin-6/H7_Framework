@@ -69,7 +69,7 @@ CAN 的两条发送通道适用于不同数据语义：
 
 - `CAN_Tx_Perform()` 更新 `(FDCAN, ID)` 对应的周期槽，同一键保留最新数据，适合连续控制目标。
 - `CAN_Tx_Submit()` 将离散命令复制到 FDCAN1/2/3 各自的 FIFO；同总线按序重试，单总线拥塞不阻断其他总线或周期槽。
-- `CanTxTask` 每 1 ms 调用 `BSP_CAN_SendAsync()` / `BSP_CAN_SendPer()`。软件提交成功、写入硬件 FIFO、总线发送、对端收到和设备执行是不同阶段；调用方须检查提交结果。
+- `CanTxTask` 每 1 ms 调用 `BSP_CAN_SendAsync()` / `BSP_CAN_SendPer()`。三路 FDCAN 已启用硬件 Auto Retransmission；软件队列只重试 HAL 尚未接受的帧。软件提交成功、写入硬件 FIFO、总线发送、对端收到和设备执行是不同阶段；调用方须检查提交结果。
 
 CAN 接收回调在中断上下文执行。UART 的 DMA 接收须同时具备 CubeMX 的 RX DMA 配置和 BSP 管理入口，接入新端口时需同步核对。
 
@@ -91,7 +91,7 @@ CAN 接收回调在中断上下文执行。UART 的 DMA 接收须同时具备 Cu
 
 达妙动作/模式请求及 QDrive 命令接口返回 `bool`，表示是否成功提交到软件发送通道。提交失败时保留相应状态，调用方可据此重试；达妙置零仅在提交成功后重置位置展开状态。返回成功不代表电机已经执行或确认命令。
 
-达妙反馈以 `(FDCAN, master_id)` 注册接收入口，并用反馈首字节低四位匹配 `can_id`；电机 ID 使用 8 位值，高四位仍用于发送 ID。只有总线、ID、DLC 和节点号全部合法的运动反馈才刷新在线状态。Application 用 `RequestEnabled(bool)` 指定输出许可；DMMotor 立即覆盖失能时的安全周期目标，由 `StatusTask` 的 `ServiceAll()` 至少间隔 20 ms 维护 Enable/Disable 协议命令。Daemon 只判断活性，Gimbal 状态机决定整机构件何时恢复 READY。
+达妙反馈以 `(FDCAN, master_id)` 注册接收入口，并用反馈首字节低四位匹配 `can_id`；电机 ID 使用非零 8 位值，高四位仍用于发送 ID。只有总线、ID、DLC 和节点号全部合法的运动反馈才刷新在线状态。Application 用 `RequestEnabled(bool)` 指定输出许可；DMMotor 立即覆盖安全周期目标，由 `StatusTask` 的 `ServiceAll()` 以 100 Hz 维护 Enable/Disable 协议状态。Daemon 只判断活性，Gimbal 根据当前 INS 与电机快照决定是否控制。
 
 ### 板载设备与外接工具
 
@@ -202,13 +202,13 @@ Control_Task 调度顺序、RobotCmd 所有权、Gimbal/Chassis/Shoot 行为和�
 | `Online` | 在设备规定的超时窗口内收到过合法反馈 |
 | `RequestedEnabled` | 电机的 Application 输出许可；DJI 只有软件 gate，DM 另有协议实际使能反馈 |
 | `DataValid` | 当前反馈可供上层使用；现有驱动通常要求 Online |
-| `Ready` | 电机初始化、请求使能且反馈新鲜；DM 还要求协议报告已使能 |
+| `Ready` | 电机初始化、请求使能且反馈新鲜；DM 还要求协议报告已使能且无故障 |
 
 `Daemon` 只负责时间窗及在线/离线跃迁。设备收到完整合法反馈后自行 `Feed()`，`StatusTask` 每 10 ms 统一 `CheckAll()`，有 DM 电机时随后执行电机协议期望状态服务。它不决定全车停机、云台 READY、消息路由或故障上报；业务安全策略仍由拥有设备的 Application 决定，并需实机拔线验证时限。
 
 ### 数据新鲜度、发送与可观测性
 
-- `Topic<T>::ReadFresh()` 用发布时间戳拒绝过期数据。云台对 INS 使用 10 ms 新鲜度门限；失效时向两轴达妙请求失能，电机立即发布安全 MIT 输出并在低频重试失能；反馈持续有效后由云台状态机捕获当前姿态，IMU 模式等待新目标。见 [云台说明](User_File/Application/Gimbal/README.md)。
+- `Topic<T>::ReadFresh()` 用发布时间戳拒绝过期数据。云台对 INS 使用 10 ms 新鲜度门限；失效时向两轴达妙请求失能，电机立即发布安全 MIT 输出；INS 恢复且两轴 ready 后捕获当前姿态，IMU 模式等待新目标。见 [云台说明](User_File/Application/Gimbal/README.md)。
 - 连续控制目标走 `CAN_Tx_Perform()`，同一 `(FDCAN, ID)` 只保留最新值；使能、失能、清错和模式设置走 `CAN_Tx_Submit()` FIFO。软件接收成功、写入硬件 FIFO 和设备实际执行是三个不同阶段。
 - `BSP_CAN_GetTxStats()` 提供命令队列满、周期槽满、硬件 FIFO 满和 HAL 发送失败的饱和计数快照。计数只提供证据，不自动改变调度或执行安全策略。
 - 主机测试可以确认协议编解码、ID/DLC 隔离、超时边界、队列溢出和数据新鲜度；真实波特率/采样点、终端电阻、总线仲裁、供电时序、电机参数和 EMC 必须在目标板上确认。

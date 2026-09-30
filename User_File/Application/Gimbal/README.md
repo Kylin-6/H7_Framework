@@ -10,7 +10,7 @@ QD4310 驱动仍作为独立设备保留，云台不再依赖它。SingleBoard �
 也可在启动阶段传入一份 `Struct_Gimbal_Config`。初始化只调用一次，不等待电机、
 不自动设置机械零位、不切换控制模式、不写电机持久化参数。电机端须预先设置 MIT 模式。
 配置校验失败或驱动注册失败返回 false，`Gimbal_GetStatus()` 返回 CONFIG_ERROR。
-电机、PID、目标、Snapshot 和云台状态计时由 `Gimbal.cpp` 的私有 `GimbalContext` 持有；
+电机、PID、目标和 Snapshot 由 `Gimbal.cpp` 的私有 `GimbalContext` 持有；
 外部只能通过初始化、周期入口和只读状态接口访问 Application。
 
 | 项目 | 示例 | 来源与限制 |
@@ -43,7 +43,7 @@ QD4310 驱动仍作为独立设备保留，云台不再依赖它。SingleBoard �
 - 电机反馈及目标均使用经过 reverse 统一的逻辑方向，协议编码只在驱动中翻转一次。
 - 姿态轴和选用的机体系角速度须与机构约定匹配；当前不是任意安装姿态的完整坐标变换器。
 - LOCK 捕获并保持当前姿态，忽略随后发布的目标字段；IMU 使用新发布的目标。
-- 非有限命令、INS、运动反馈或计算结果不会继续驱动闭环；DISABLED 始终优先停机。
+- 输入边界校验命令与 INS 数值，DM 驱动解码合法反馈；云台保留控制计算结果检查，DISABLED 始终优先停机。
 
 ## 状态与恢复
 
@@ -51,18 +51,19 @@ QD4310 驱动仍作为独立设备保留，云台不再依赖它。SingleBoard �
 `Gimbal_Init()` 不发送使能；收到活动模式后才启动就绪流程。现有 RobotCmd 启动默认
 发布 LOCK，因此打开云台编译选项后会自动进入此流程，不能把示例参数当作上板标定结果。
 
-- INS 必须不超过 10 ms；两轴运动反馈必须小于 100 ms，在线判断不等待 StatusTask。
-- DMMotor 在 100 Hz StatusTask 中至少间隔 20 ms 维护使能/失能命令；云台两秒未就绪进入 FAULT，等待一秒后重试。全程不阻塞控制任务。
-- 两轴在线且使能、INS 有效持续 100 ms 才进入 READY；中间失能会重新计算稳定时间。
+- INS 必须不超过 10 ms；两轴运动反馈必须小于 100 ms，在线判断不等待 StatusTask。INS 发布端拒绝非有限姿态或角速度。
+- 云台每周期读取命令、INS 与两轴快照；活动模式请求两轴使能，两轴 ready 后立即捕获当前姿态并执行控制。没有就绪超时、退避或稳定窗口。
+- `Gimbal_GetStatus()` 根据当前命令、INS 新鲜度、两轴 `ready/fault` 和本周期控制结果给出 DISABLE、ENABLING、READY、FAULT 或 CONFIG_ERROR；状态只用于观察，不驱动恢复流程。
+- DMMotor 在 100 Hz StatusTask 中维护设备期望状态；`RequestEnabled()` 每次先覆盖旧周期目标为安全输出，云台只有在两轴 ready 后才写正常目标。
 - DISABLED、故障或初始化部分失败时，对已注册电机调用 `RequestEnabled(false)`；
-  DMMotor 立即覆盖周期槽为零刚度/阻尼/转矩，并在低频重试失能直至收到新鲜失能反馈。发布失败下一周期继续尝试；停止帧不能
+  DMMotor 立即覆盖周期槽为零刚度/阻尼/转矩；在线反馈仍显示使能时，低频服务继续发送失能。离线时不反复刷失能命令；停止帧不能
   保证在物理断线时送达，也不会清除已经进入硬件 FIFO 的帧。
-- 活动模式下自动恢复。恢复先清空 PID 历史并捕获当前姿态；IMU 等待 READY 后重新
+- 活动模式下按当前设备状态恢复。恢复先清空 PID 历史并捕获当前姿态；IMU 等待 READY 后重新
   发布目标，LOCK 直接保持新捕获的姿态，故障前目标不会重放。
 - Daemon 只判断反馈活性；DMMotor 根据云台请求维护协议状态，不自动 ClearError。
 
-`GimbalFeedback` 仍为 100 Hz，字段布局不变。`enabled` 表示两轴电机均 ready，
-不是软件状态 READY；`ins_valid=false` 时发布零姿态/速度。使能命令提交成功不代表已使能。
+`GimbalFeedback` 仍为 100 Hz，字段布局不变。`enabled` 表示两轴电机均 ready；
+`ins_valid=false` 时发布零姿态/速度。使能命令提交成功不代表已使能。
 
 本次没有增加命令来源心跳和整车输入仲裁；无新命令时保持最后模式和目标。自动恢复后
 需要新目标这一规则，也不能替代上层的遥控失联策略。

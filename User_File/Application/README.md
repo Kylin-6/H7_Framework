@@ -18,7 +18,7 @@ Application、Algorithm、Message Center 和 Transport 的物理量统一使用 
 
 Application 可以：
 
-- 保存控制目标、反馈缓存和应用状态。
+- 保存控制目标、反馈缓存和必要的应用状态。
 - 组合 PID、轨迹、滤波等算法。
 - 初始化并直接控制自己拥有的 Device。
 - 通过 Message Center 与同级 Application 交换状态、命令和事件。
@@ -29,6 +29,7 @@ Application 不应：
 - 解析底层 CAN/UART/SPI 协议帧。
 - 创建另一套消息总线或用字符串查找 Topic。
 - 把设备在线检测迁入应用消息中心。
+- 维护电机协议重试、退避或 CAN 发送细节；用电机快照决定何时计算机构目标。
 - 在多个模块中争用同一电机或同一命令所有权。
 
 ## 2. 当前目录
@@ -43,7 +44,7 @@ Application 不应：
 
 Chassis 与 Shoot 的机械参数和 PID 初值分别放在 `Chassis_Config.h`、`Shoot_Config.h`；
 运行状态和设备实例由各自 `.cpp` 内的私有 Context 持有。BoardConfig 只提供总线等硬件
-资源，不存机构参数。Gimbal 保持现有 `Gimbal_Config.h` 与状态机组织，本轮不拆文件。
+资源，不存机构参数。Gimbal 的配置保存在 `Gimbal_Config.h`，状态根据当前命令、INS 和电机快照计算。
 `Input` 保存 Remote 输入适配、输入状态和来源仲裁；设备协议仍由 Device/BSP 处理。
 
 单板固件的硬件路径由 `H7_APP_GIMBAL`、`H7_APP_CHASSIS`、`H7_APP_SHOOT` 控制，默认均关闭；
@@ -134,8 +135,8 @@ false，并保持调用者输出不变。RobotCmd 不再维护应用反馈的二
 Yaw 使用 INS 角度/速度串级闭环，通过达妙 MIT 纯转矩指令输出 N·m；Pitch 将 INS
 姿态误差转换为 MIT 电机位置/速度目标，并限制机械范围。两轴预先配置为 MIT 模式。
 
-初始化仅校验配置和注册驱动。Gimbal 决定两秒就绪超时、一秒退避与恢复后的
-100 ms 整体稳定窗口；电机协议重试由 DMMotor 的低频服务完成。恢复后重置控制器
+初始化校验机构关系并注册驱动；设备参数由 DMMotor 初始化校验。Gimbal 不维护
+就绪超时、退避或稳定窗口；电机协议纠正由 DMMotor 的 100 Hz 服务完成。恢复后重置控制器
 并捕获当前姿态，IMU 模式等待新目标，避免旧目标重放；DISABLED 或故障时调用
 `RequestEnabled(false)`，由电机立即覆盖安全输出并维护失能命令。
 
@@ -146,7 +147,7 @@ Yaw 使用 INS 角度/速度串级闭环，通过达妙 MIT 纯转矩指令输�
 ### 5.3 反馈
 
 控制每 1 ms 更新，`GimbalFeedback` 每 10 个周期发布一次，包含姿态、角速度、INS
-有效性和两轴电机的 `ready` 汇总；云台整体 READY 仍由 Gimbal 状态机决定。
+有效性和两轴电机的 `ready` 汇总；`Gimbal_GetStatus()` 根据当前事实提供诊断状态。
 
 ## 6. Chassis
 

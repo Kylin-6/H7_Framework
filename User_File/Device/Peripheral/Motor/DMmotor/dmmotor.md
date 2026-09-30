@@ -14,7 +14,7 @@
 
 PMAX/VMAX/TMAX 是协议映射范围，不代表电机的额定或峰值能力；输出力矩、速度和控制增益应由应用层按电机和负载单独限制。所有模式的反馈解码均使用这些范围。
 
-三个映射范围参数必须是有限正数。`can_id` 使用 8 位值（`0x00~0xFF`），反馈首字节只以低四位核对节点号；`master_id` 是标准 CAN ID（`0x000~0x7FF`）。同一 CAN 总线上的各电机应使用不同的发送 ID 和反馈 ID，并检查 `Init()` 返回值。
+三个映射范围参数必须是有限正数。`can_id` 使用非零 8 位值（`0x01~0xFF`），反馈首字节只以低四位核对节点号；`master_id` 是标准 CAN ID（`0x000~0x7FF`）。`Init()` 拒绝非法模式、总线、ID 和映射范围。同一 CAN 总线上的各电机应使用不同的发送 ID 和反馈 ID，并检查返回值。
 
 ## 初始化和通用命令
 
@@ -31,7 +31,7 @@ motor.ClearError();
 motor.SetZeroPosition();
 ```
 
-`RequestEnabled(true)` 记录输出许可；`RequestEnabled(false)` 立即用当前模式的安全目标覆盖周期槽，并返回安全目标的发布结果。使能/失能离散命令由 100 Hz `ServiceAll()` 至少间隔 20 ms 重试，直到新鲜反馈确认期望状态。`ClearError()` 和 `SetZeroPosition()` 返回命令入队结果；入队成功不代表电机已经执行。`SetZeroPosition()` 仅在入队成功后重置本地位置展开状态。
+`RequestEnabled(bool)` 记录输出许可，并立即用当前模式的安全目标覆盖周期槽；应用在电机 ready 后再写正常目标。100 Hz `ServiceAll()` 在请求使能且尚未收到已使能反馈时尝试 Enable；请求失能时，仅在在线反馈仍显示已使能时尝试 Disable。离线且请求失能时保持安全周期目标，不反复发送 Disable。明确故障状态不会自动 ClearError 或 Enable。`ClearError()` 和 `SetZeroPosition()` 返回命令入队结果；入队成功不代表电机已经执行。`SetZeroPosition()` 仅在入队成功后重置本地位置展开状态。
 
 后续可选参数依次为反转、PMAX、VMAX 和 TMAX：
 
@@ -155,8 +155,8 @@ motor.feedback.rotor_temperature;
 MIT 的 `kp`、`kd` 是发给电机内部控制器的控制参数，不属于反馈；当前驱动没有本地 PID 对象。
 直接读取公开 feedback 结构体不保证跨中断一致性；控制计算应使用
 `GetFeedbackSnapshot()`。其中 `requested_enabled` 为 Application 请求，`online` 为
-100 ms 内的新鲜合法运动反馈，`actual_enabled` 为反馈 `state == 1`，`ready` 为
-三者同时成立；其他协议状态保存在 `feedback.state` 供故障诊断。`IsHealthy()` 等价于
+100 ms 内的新鲜合法运动反馈，`actual_enabled` 为反馈 `state == 1`，`fault` 为在线且状态既非失能也非使能，`ready` 为
+请求使能、在线、实际使能且无故障；协议状态仍保存在 `feedback.state` 供诊断。`IsHealthy()` 等价于
 `ready`。失能或反馈失效时，正常控制入口只发布安全目标；MIT 安全目标的
 P/V/Kp/Kd/Torque 全为零。
 
