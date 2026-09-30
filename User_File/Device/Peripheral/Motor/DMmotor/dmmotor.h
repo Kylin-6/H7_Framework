@@ -55,7 +55,7 @@ public:
               float position_max = 12.5f,
               float velocity_max = 30.0f,
               float torque_max = 10.0f);
-    /** 更新期望状态；false 立即覆盖周期输出，协议命令由 100 Hz ServiceAll 维护。 */
+    /** 每次覆盖安全周期目标；状态边沿立即提交协议命令，100 Hz ServiceAll 依据反馈纠正。 */
     bool RequestEnabled(bool enabled);
     /** @name 离散命令
      *  @brief true 仅表示命令已进入软件 FIFO，不代表电机执行或确认；false 时由上层决定重试。

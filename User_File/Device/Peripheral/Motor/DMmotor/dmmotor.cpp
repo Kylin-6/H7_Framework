@@ -142,16 +142,16 @@ void Class_DMMotor::ServiceAll()
         {
             (void)motor->PublishSafeOutput();
         }
-        if (snapshot.requested_enabled)
+        // 离线期间只保留安全周期目标；已进入硬件 FIFO 的帧由 FDCAN 自动重发。
+        if (!snapshot.online || snapshot.fault)
         {
-            // 已报告的明确故障即使随后掉线，也等待新反馈或显式清错。
-            if ((!snapshot.online || !snapshot.actual_enabled) &&
-                snapshot.feedback.state <= 1U)
-            {
-                (void)motor->SendModeCommand(DM_CMD_ENABLE);
-            }
+            continue;
         }
-        else if (snapshot.online && snapshot.actual_enabled)
+        if (snapshot.requested_enabled && !snapshot.actual_enabled)
+        {
+            (void)motor->SendModeCommand(DM_CMD_ENABLE);
+        }
+        else if (!snapshot.requested_enabled && snapshot.actual_enabled)
         {
             (void)motor->SendModeCommand(DM_CMD_DISABLE);
         }
@@ -291,10 +291,17 @@ uint32_t Class_DMMotor::ControlId() const
 
 bool Class_DMMotor::RequestEnabled(bool enabled)
 {
+    const bool changed = requested_enabled != enabled;
     requested_enabled = enabled;
     lifecycle_requested = true;
-    // 每次请求先覆盖旧周期目标；Application 在全部设备 ready 后再写正常目标。
-    return PublishSafeOutput();
+    // 每次请求先覆盖旧周期目标；离散协议命令只在状态边沿提交。
+    const bool safe_published = PublishSafeOutput();
+    if (!changed)
+    {
+        return safe_published;
+    }
+    const bool command_submitted = SendModeCommand(enabled ? DM_CMD_ENABLE : DM_CMD_DISABLE);
+    return safe_published && command_submitted;
 }
 
 bool Class_DMMotor::PublishSafeOutput()
