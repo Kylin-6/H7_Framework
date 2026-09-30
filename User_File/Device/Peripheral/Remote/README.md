@@ -9,4 +9,6 @@
 
 两者不可互换输入。BSP 的 ReceiveToIdle 回调只交付 DMA chunk，不保证一回调等于一帧；DBUS 如需实车接入，应先补有界流式解析，并验证断线输出。S.BUS 的 CH1/CH2/CH7/CH10 已映射底盘调试目标；50 ms 帧时效、failsafe 和 200 ms 回中去抖由 RemoteInput 与仲裁检查。它不直接发布 Topic。
 
+S.BUS 初始化时注册静态 100 ms Daemon，注册失败返回 false 并保持不可用；完整帧通过 header/footer 检查后才 Feed，噪声和不完整帧不 Feed。`SBUS_IsOnline()` 统一使用 Daemon 当前时间判断（age<100 ms），`IsDataValid()` 等价于 Online；frame-lost/failsafe 帧仍维持 Online，但 `IsHealthy()` 为 false。`latest_frame.timestamp_ms` 保留给 RemoteInput 的 50 ms 实时时效和 200 ms 回中恢复，Daemon 不接管 RobotCmd 安全许可，也不重启 UART。StatusTask 100 Hz CheckAll，UART 恢复仍由 BSP 负责。参见 [Daemon](../../../System/Daemon/README.md)。
+
 旧资料中的拨轮、左右开关与键鼠/视觉模式映射是**历史设计示例**。当前 VTM/键鼠/Vision 只有安全禁用的 InputState 接口，尚未配置实机模式开关和接收协议。

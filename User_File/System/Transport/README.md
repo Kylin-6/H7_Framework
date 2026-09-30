@@ -57,15 +57,20 @@ Transport 只在读到新的 Topic 状态时更新 CAN 最新值槽。云台接�
 `RobotCmd_GetChassisFeedback()` 只返回 100 ms 内的新鲜 Topic 数据。
 
 Transport 是构建期选定的固定协议适配层，不是 Router 或动态 Topic 路由。
-两方向均在有效帧**实际接收时间**距上次接受超过 100 ms 后重建序号基准；
-未超时的重复/回退序号、非法帧及延迟处理时已过期的帧不能刷新 Topic 或重建基准。
+两方向均在有效帧**实际接收时间**距上次合法及时帧超过 100 ms 后重建序号基准；
+持续合法重复/回退序号只维持链路活性，不刷新 Topic 或重建基准。非法帧及延迟处理时已过期的帧也不能延长链路活性。
 现有 8 字节协议没有会话标识，因此超时后新到达的合法旧帧无法与重启板首帧区分；
-若持续收到合法重复旧帧，超过 100 ms 后也可能重新建立序号基准。这是当前协议边界，
-并非已解决的会话防重放机制。
+只有合法数据流中断后才允许重建基准；当前协议仍未解决会话防重放。
 本协议无 ACK、重传、独立心跳或分包。命令和反馈均为 **latest-value** 连续状态；
 将来不能丢的跨板事件应使用独立 FIFO，本次没有实现跨板事件传输。
 CAN BSP 的离散命令 FIFO 已按 FDCAN1/2/3 分开，一条总线阻塞不影响其他总线，
 但每条总线每次 1 ms 轮询最多尝试一帧。
+
+## 链路在线与业务时效
+
+两种板型各自持有静态 100 ms Daemon。`BoardTransport_Init()` 注册 CAN 回调及 Daemon，任一失败返回 false，Poll/Send 保持不可用。`BoardTransport_IsOnline()` 与 `BoardTransport_OfflineDurationMs()` 是薄只读诊断接口；Application 继续消费业务 Topic，不持有 Daemon。
+
+Poll 在 bus、ID、大小、接收时效与 Decode 全部通过后 Feed，再检查序号。合法及时的重复序号能维持链路 Online，但不 Publish Topic；没有新序号时 Topic 仍会 stale。RX 时间戳保留，用于拒绝延迟处理的旧帧、按实际接收时间 PublishAt 和判断合法数据流是否中断。StatusTask 100 Hz CheckAll 统一报告跃迁，无堆分配、离线恢复 callback 或整车安全策略。详见 [Daemon](../Daemon/README.md)。
 
 硬件实测需抓取 `0x141` 和 `0x222` 帧确认约 10 ms 刷新；断开板间 CAN
 确认底盘超过 100 ms 时效门限后进入 `ZERO_FORCE`；单独重启云台板验证首帧恢复；

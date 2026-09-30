@@ -165,7 +165,7 @@ EricTool 的 USB/UART 解析均只读取回调传入的缓冲区及有效长度�
 
 业务类型和唯一静态通道统一定义在 [MessageCenter](User_File/System/MessageCenter)。`INS_State_Topic` 由 BMI088 链路发布，云台读取最新姿态；RobotCmd 通过 Output 发布 Gimbal、Chassis、Shoot 连续命令并汇总反馈，底盘命令在云台板由固定 Transport 送往底盘板 Topic。单发和三连发通过固定容量 `ShootEvent` FIFO 传递。完整 API、并发语义、通道所有权、示例和验证清单见 [Message Center 专篇](User_File/System/MessageCenter/README.md)。
 
-Daemon 只负责在线状态判断，不负责整车停机、安全策略或消息路由。设备在收到合法反馈后直接 `Feed()`；`StatusTask` 每 10 ms 调用 `CheckAll()`，并在包含 DM 电机的目标上调用 `Class_DMMotor::ServiceAll()`。管理器采用固定容量注册，无动态分配。
+所有正常工作时应持续收到反馈、心跳或数据流的模块优先注册静态 Daemon，只在收到合法数据时 `Feed()`。当前已接入 DM、DJI、S.BUS、有效 INS 输出、双板 Transport 及可选 Referee/VTM；`StatusTask` 每 10 ms（100 Hz）统一 `CheckAll()`，有 DM 电机时再调用原有 `Class_DMMotor::ServiceAll()`。Daemon 只负责 liveness，不负责整车停机、清错、重启、安全策略或消息路由。管理器保持 32 个固定槽位，无动态分配；当前三板最坏注册数为 17/8/11。在线查询不替代 Topic ReadFresh 或电机反馈的微秒 freshness，详见 [Daemon 说明](User_File/System/Daemon/README.md)。
 
 ### Application
 
