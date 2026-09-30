@@ -42,13 +42,16 @@ public:
     /** @brief 收到一帧确认有效的数据后喂狗，并立即把设备标记为在线。 */
     void Feed();
 
+    /** 仅在初始化、首次 Feed 前设置；零超时或已有反馈时返回 false。 */
+    bool SetTimeoutMs(uint32_t timeout_ms);
+
     /**
      * @brief 根据当前时间检查一次超时和状态变化。
      * @return 本次检查产生的跃迁；稳定状态返回 None。
      */
     DaemonTransition Check();
 
-    /** @brief 获取当前在线状态。 */
+    /** @brief 按当前时间判断在线，不等待 Check；跃迁和回调仍只由 Check 报告。 */
     bool IsOnline() const;
 
     /** @brief 获取最近一次有效 Feed() 的毫秒时间戳。 */
@@ -61,10 +64,11 @@ public:
     DaemonTransition LastTransition() const;
 
 private:
-    const uint32_t timeout_ms_; ///< 当前设备独立的超时门限。
+    uint32_t timeout_ms_; ///< 当前设备独立的超时门限，仅初始化阶段可配置。
     uint32_t last_feed_ms_ = 0U; ///< 最近一次有效通信时间。
     uint32_t offline_since_ms_ = 0U; ///< 最近一次离线跃迁发生时间。
     bool online_ = false; ///< 当前在线状态。
+    bool has_feed_ = false; ///< 首次反馈后禁止修改监控门限。
     bool online_transition_pending_ = false; ///< 等待 Check() 报告上线跃迁。
     DaemonTransition last_transition_ = DaemonTransition::None; ///< 最近检查结果。
     OfflineCallback offline_callback_ = nullptr; ///< 离线跃迁回调，不包含设备协议。

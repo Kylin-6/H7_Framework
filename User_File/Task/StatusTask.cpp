@@ -20,7 +20,7 @@ extern "C" void Status_Task(void *argument)
 
     for (;;)
     {
-        // 100 Hz 足以覆盖当前最短 100 ms 设备超时，并远低于 1 kHz 控制频率。
+        // 100 Hz 统一记录跃迁；实时控制的新鲜度检查不等待此任务。
         DaemonManager::CheckAll();
 #if H7_HAS_DM_MOTOR
         Class_DMMotor::ServiceAll();

@@ -54,11 +54,11 @@ Daemon::Daemon(uint32_t timeout_ms,
 
 void Daemon::Feed()
 {
-    // 时间读取放在临界区外，临界区内只更新少量标量，缩短关中断时间。
-    const uint32_t now_ms = DaemonNowMs();
     const uint32_t primask = DaemonEnterCritical();
+    const uint32_t now_ms = DaemonNowMs();
 
     last_feed_ms_ = now_ms;
+    has_feed_ = true;
     if (!online_)
     {
         // Feed 立即恢复在线状态；跃迁留给下一次 Check() 统一报告一次。
@@ -70,10 +70,20 @@ void Daemon::Feed()
     DaemonExitCritical(primask);
 }
 
+bool Daemon::SetTimeoutMs(uint32_t timeout_ms)
+{
+    const uint32_t primask = DaemonEnterCritical();
+    const bool allowed = timeout_ms != 0U && !has_feed_;
+    if (allowed) { timeout_ms_ = timeout_ms; }
+    DaemonExitCritical(primask);
+    return allowed;
+}
+
 DaemonTransition Daemon::Check()
 {
-    const uint32_t now_ms = DaemonNowMs();
     const uint32_t primask = DaemonEnterCritical();
+    // 与 ISR Feed 一起保护时间读取，避免较旧 now 与较新 last_feed 相减误判超时。
+    const uint32_t now_ms = DaemonNowMs();
     DaemonTransition transition = DaemonTransition::None;
     OfflineCallback callback = nullptr;
     void *owner = nullptr;
@@ -83,7 +93,7 @@ DaemonTransition Daemon::Check()
     {
         online_ = false;
         online_transition_pending_ = false;
-        offline_since_ms_ = now_ms;
+        offline_since_ms_ = last_feed_ms_ + timeout_ms_;
         transition = DaemonTransition::OnlineToOffline;
         callback = offline_callback_;
         owner = owner_;
@@ -109,7 +119,7 @@ DaemonTransition Daemon::Check()
 bool Daemon::IsOnline() const
 {
     const uint32_t primask = DaemonEnterCritical();
-    const bool online = online_;
+    const bool online = online_ && (DaemonNowMs() - last_feed_ms_) < timeout_ms_;
     DaemonExitCritical(primask);
     return online;
 }
@@ -124,12 +134,15 @@ uint32_t Daemon::LastFeedMs() const
 
 uint32_t Daemon::OfflineDurationMs() const
 {
-    const uint32_t now_ms = DaemonNowMs();
     const uint32_t primask = DaemonEnterCritical();
-    const bool online = online_;
-    const uint32_t offline_since_ms = offline_since_ms_;
+    const uint32_t now_ms = DaemonNowMs();
+    const uint32_t age_ms = now_ms - last_feed_ms_;
+    // 即使 StatusTask 尚未 Check，也按真正超时点计算离线时长。
+    const uint32_t duration = online_
+        ? (age_ms < timeout_ms_ ? 0U : age_ms - timeout_ms_)
+        : now_ms - offline_since_ms_;
     DaemonExitCritical(primask);
-    return online ? 0U : now_ms - offline_since_ms;
+    return duration;
 }
 
 DaemonTransition Daemon::LastTransition() const
