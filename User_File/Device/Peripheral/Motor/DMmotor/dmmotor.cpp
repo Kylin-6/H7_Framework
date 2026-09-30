@@ -291,16 +291,20 @@ uint32_t Class_DMMotor::ControlId() const
 
 bool Class_DMMotor::RequestEnabled(bool enabled)
 {
-    const bool changed = requested_enabled != enabled;
+    if (requested_enabled == enabled)
+    {
+        return true;
+    }
+
     requested_enabled = enabled;
     lifecycle_requested = true;
-    // 每次请求先覆盖旧周期目标；离散协议命令只在状态边沿提交。
-    const bool safe_published = PublishSafeOutput();
-    if (!changed)
+    if (enabled)
     {
-        return safe_published;
+        return SendModeCommand(DM_CMD_ENABLE);
     }
-    const bool command_submitted = SendModeCommand(enabled ? DM_CMD_ENABLE : DM_CMD_DISABLE);
+
+    const bool safe_published = PublishSafeOutput();
+    const bool command_submitted = SendModeCommand(DM_CMD_DISABLE);
     return safe_published && command_submitted;
 }
 

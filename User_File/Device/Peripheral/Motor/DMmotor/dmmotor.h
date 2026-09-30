@@ -55,7 +55,9 @@ public:
               float position_max = 12.5f,
               float velocity_max = 30.0f,
               float torque_max = 10.0f);
-    /** 每次覆盖安全周期目标；状态边沿立即提交协议命令，100 Hz ServiceAll 依据反馈纠正。 */
+    /** 相同请求无动作并返回 true；使能边沿提交 Enable，失能边沿发布安全目标并提交 Disable。
+     *  返回本次边沿所需提交的结果，100 Hz ServiceAll 依据反馈纠正，不代表电机执行。
+     */
     bool RequestEnabled(bool enabled);
     /** @name 离散命令
      *  @brief true 仅表示命令已进入软件 FIFO，不代表电机执行或确认；false 时由上层决定重试。
