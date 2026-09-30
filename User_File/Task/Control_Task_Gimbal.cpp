@@ -7,7 +7,7 @@
  */
 #include "Gimbal.h"
 #include "RobotCmd.h"
-#include "Com.h"
+#include "remote_input.h"
 #include "Shoot.h"
 #include "Init.h"
 #include "board_transport.h"
@@ -32,7 +32,7 @@ extern "C" void Control_Task(void *)
     {
         for (;;) osDelay(1000U);
     }
-    (void)Communication_Init();
+    (void)RemoteInput_Init();
     Gimbal_Init();
     (void)Shoot_Init();
 
@@ -40,7 +40,7 @@ extern "C" void Control_Task(void *)
     {
         osThreadFlagsWait(0x0001, osFlagsWaitAny, osWaitForever);
         BoardTransport_Poll();
-        Communication_Update();
+        RemoteInput_Update();
         RobotCmd_Update();
         Gimbal_Update();
         Shoot_Update();

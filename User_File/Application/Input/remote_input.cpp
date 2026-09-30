@@ -1,4 +1,4 @@
-#include "Com.h"
+#include "remote_input.h"
 
 #include "input_state.h"
 #include "sbus.h"
@@ -48,7 +48,7 @@ bool Neutral(const Struct_SBUS_Frame &frame)
 }
 }
 
-bool Communication_Init(void)
+bool RemoteInput_Init(void)
 {
     armed = false;
     last_unhealthy_ms = HAL_GetTick();
@@ -58,7 +58,7 @@ bool Communication_Init(void)
     return receiver_ready;
 }
 
-void Communication_Update(void)
+void RemoteInput_Update(void)
 {
     Struct_SBUS_Frame frame{};
     const uint32_t now = HAL_GetTick();

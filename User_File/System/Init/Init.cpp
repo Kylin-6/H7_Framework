@@ -1,7 +1,6 @@
 #include "Init.h"
 #include "board_config.h"
 
-#include "Com.h"
 #include "SEGGER_SYSVIEW.h"
 #include "bsp_adc.h"
 #include "bsp_bmi088.h"

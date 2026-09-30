@@ -10,7 +10,7 @@
 #include "Chassis.h"
 #include "Gimbal.h"
 #include "RobotCmd.h"
-#include "Com.h"
+#include "remote_input.h"
 #include "Shoot.h"
 #include "Init.h"
 #include "message_center.h"
@@ -37,7 +37,7 @@ extern "C" void Control_Task(void* argument)
     {
         for (;;) osDelay(1000U);
     }
-    (void)Communication_Init();
+    (void)RemoteInput_Init();
 #if GIMBAL
     Gimbal_Init();
 #endif
@@ -49,7 +49,7 @@ extern "C" void Control_Task(void* argument)
     {
         /* 由 1 ms 定时回调唤醒；阻塞等待期间不占用 CPU。 */
         osThreadFlagsWait(0x0001, osFlagsWaitAny, osWaitForever);
-        Communication_Update();
+        RemoteInput_Update();
         /* 命令所有者先发布最新目标，再由各 Application 消费并执行。 */
         RobotCmd_Update();
         Gimbal_Update();

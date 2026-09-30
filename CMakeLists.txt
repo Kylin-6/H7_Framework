@@ -192,9 +192,9 @@ if(H7_BOARD STREQUAL "SingleBoard")
         ${H7_CHASSIS_DEVICE_SOURCES}
         User_File/Task/Control_Task.cpp
         User_File/Application/RobotCmd/RobotCmd.cpp
-        User_File/Application/Communication/Com.cpp
-        User_File/Application/Communication/input_state.cpp
-        User_File/Application/Communication/source_arbitration.cpp
+        User_File/Application/Input/remote_input.cpp
+        User_File/Application/Input/input_state.cpp
+        User_File/Application/Input/source_arbitration.cpp
         User_File/Application/Gimbal/Gimbal.cpp
         User_File/Application/Chassis/Chassis.cpp
         User_File/Application/Shoot/Shoot.cpp)
@@ -206,9 +206,9 @@ elseif(H7_BOARD STREQUAL "GimbalBoard")
         User_File/System/Transport/transport_gimbal.cpp
         User_File/Task/Control_Task_Gimbal.cpp
         User_File/Application/RobotCmd/RobotCmd.cpp
-        User_File/Application/Communication/Com.cpp
-        User_File/Application/Communication/input_state.cpp
-        User_File/Application/Communication/source_arbitration.cpp
+        User_File/Application/Input/remote_input.cpp
+        User_File/Application/Input/input_state.cpp
+        User_File/Application/Input/source_arbitration.cpp
         User_File/Application/Gimbal/Gimbal.cpp
         User_File/Application/Shoot/Shoot.cpp)
 else()
@@ -281,7 +281,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
         User_File/Application/Gimbal/
         User_File/Application/Chassis/
         User_File/Application/Shoot/
-        User_File/Application/Communication/
+        User_File/Application/Input/
         User_File/Application/Balance/
 )
 
