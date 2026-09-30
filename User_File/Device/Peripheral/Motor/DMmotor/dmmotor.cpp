@@ -307,14 +307,11 @@ bool Class_DMMotor::PublishSafeOutput()
     case Enum_DMMotor_Mode::MIT:
         return SetMIT(0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
     case Enum_DMMotor_Mode::SPEED:
-        SetSpeed(0.0f);
-        return true;
+        return SetSpeed(0.0f);
     case Enum_DMMotor_Mode::POSITION_SPEED:
-        SetPositionSpeed(feedback.position, 0.0f);
-        return true;
+        return SetPositionSpeed(feedback.position, 0.0f);
     case Enum_DMMotor_Mode::FORCE_POSITION:
-        SetForcePosition(feedback.position, 0.0f, 0.0f);
-        return true;
+        return SetForcePosition(feedback.position, 0.0f, 0.0f);
     }
     return false;
 }
@@ -449,7 +446,7 @@ bool Class_DMMotor::SetMIT(float position_rad,
  * @brief 发布位置速度模式目标，前 4 字节为位置 rad，后 4 字节为速度 rad/s。
  * @note 两个 float 直接按 STM32 小端内存布局复制，不经过 MIT 整数量化；不自动切换模式。
  */
-void Class_DMMotor::SetPositionSpeed(float position_rad, float velocity_rad_s)
+bool Class_DMMotor::SetPositionSpeed(float position_rad, float velocity_rad_s)
 {
     if (!GetFeedbackSnapshot().ready)
     {
@@ -466,11 +463,11 @@ void Class_DMMotor::SetPositionSpeed(float position_rad, float velocity_rad_s)
     message.len = 8U;
     memcpy(&message.data[0], &position_rad, sizeof(position_rad));
     memcpy(&message.data[4], &velocity_rad_s, sizeof(velocity_rad_s));
-    Publish(message);
+    return Publish(message);
 }
 
 /** @brief 发布速度模式目标：4 字节小端 float，单位 rad/s；不自动切换模式。 */
-void Class_DMMotor::SetSpeed(float speed_rad_s)
+bool Class_DMMotor::SetSpeed(float speed_rad_s)
 {
     if (!GetFeedbackSnapshot().ready)
     {
@@ -486,7 +483,7 @@ void Class_DMMotor::SetSpeed(float speed_rad_s)
     message.id = DM_SPEED_MODE_ID_OFFSET + can_id;
     message.len = sizeof(speed_rad_s);
     memcpy(message.data, &speed_rad_s, sizeof(speed_rad_s));
-    Publish(message);
+    return Publish(message);
 }
 
 /**
@@ -496,7 +493,7 @@ void Class_DMMotor::SetSpeed(float speed_rad_s)
  * @param current_limit_ratio 电流上限比例，限制在 0~1 后编码为 0~10000。
  * @note 两个上限为非负幅值，不随方向翻转；本函数不自动切换模式。
  */
-void Class_DMMotor::SetForcePosition(float position_rad,
+bool Class_DMMotor::SetForcePosition(float position_rad,
                                      float velocity_limit_rad_s,
                                      float current_limit_ratio)
 {
@@ -521,7 +518,7 @@ void Class_DMMotor::SetForcePosition(float position_rad,
     message.data[5] = (uint8_t)(velocity_limit >> 8);
     message.data[6] = (uint8_t)current_limit;
     message.data[7] = (uint8_t)(current_limit >> 8);
-    Publish(message);
+    return Publish(message);
 }
 
 /** @brief 复用 MIT 帧实现纯转矩目标：kp/kd 置零，仅保留转矩项，电机需处于 MIT 模式。 */

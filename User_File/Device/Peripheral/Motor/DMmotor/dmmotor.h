@@ -68,7 +68,7 @@ public:
 
     /** @name 连续控制目标
      *  @brief 更新对应 CAN 周期槽；同一总线和 ID 的旧目标会被最新值覆盖。
-     *         SetMIT/SetTorque 返回是否成功更新软件槽，不代表硬件执行。
+     *         返回值只表示软件槽是否接受目标，不代表硬件执行。
      */
     ///@{
     bool SetMIT(float position_rad,
@@ -76,9 +76,9 @@ public:
                 float kp,
                 float kd,
                 float torque_nm);
-    void SetPositionSpeed(float position_rad, float velocity_rad_s);
-    void SetSpeed(float speed_rad_s);
-    void SetForcePosition(float position_rad,
+    bool SetPositionSpeed(float position_rad, float velocity_rad_s);
+    bool SetSpeed(float speed_rad_s);
+    bool SetForcePosition(float position_rad,
                           float velocity_limit_rad_s,
                           float current_limit_ratio);
     bool SetTorque(float torque_nm);
