@@ -1,5 +1,12 @@
 # H7_BSP
 
+> **第一次使用 H7_RM？从这里开始**
+>
+> 1. 阅读 [30～60 分钟快速上手](GETTING_STARTED.md)，先构建并找到控制任务。
+> 2. 看 [新人控制数据流图](Assets/Architecture/H7_RM_GettingStarted.svg)（[交互版](Assets/Architecture/H7_RM_GettingStarted.html)），理解控制、姿态和在线监控三条链。
+> 3. 需要完整工程分层时，看 [H7_RM / H7_BSP 总览图](Assets/Architecture/H7_BSP.svg)（[交互版](Assets/Architecture/H7_BSP.html)）。
+> 4. 具体开发再进入下方各模块 reference；快速上手不替代接口与硬件约定。
+
 面向达妙 MC-02 开发板的 STM32H7 板级支持与机器人控制框架，基于 **STM32H723VGT6 / Cortex-M7 / 480 MHz**。工程围绕外设通信、设备驱动、控制与估计算法、系统服务组织代码，供机器人项目组合和复用。
 
 底层使用 STM32CubeMX、HAL 与 FreeRTOS，任务接口采用 CMSIS-RTOS V2，构建使用 CMake + Ninja。用户层保持 C 风格运算、结构体与自由函数，设备和算法保留简洁的 `Class_` 封装。
@@ -151,6 +158,7 @@ EricTool 的 USB/UART 解析均只读取回调传入的缓冲区及有效长度�
 | 参数配置 | 集中维护当前 IMU 采样、姿态与零偏估计参数 | [System/IMU](User_File/System/IMU) |
 | 消息中心 | 静态 Latest-Value Topic 与事件 FIFO | [System/MessageCenter](User_File/System/MessageCenter) |
 | 在线检测 | 固定容量设备注册、Feed 与超时状态检查 | [System/Daemon](User_File/System/Daemon) |
+| 板间 Transport | 构建期固定的双板命令与反馈协议 | [Transport](User_File/System/Transport/README.md) |
 | 调试数据 | 导出便于 Watch、绘图与遥测读取的状态 | [System/debug](User_File/System/debug) |
 | 周期与任务 | CMSIS-RTOS V2 任务入口、线程标志和周期回调 | [Task](User_File/Task) |
 
@@ -327,19 +335,54 @@ git switch RoboMaster_Test
 
 本框架的分层设计、设备抽象与工程组织参考了[湖南大学 RoboMaster 跃鹿战队 `basic_framework`](https://github.com/HNUYueLuRM/basic_framework)、中国科学技术大学 RoboWalker 的开源框架，以及 [Meta-Team 的 `Meta-Embedded-NG`](https://github.com/Meta-Team/Meta-Embedded-NG)。感谢这些团队对 RoboMaster 电控社区的开放分享与长期贡献。
 
+<a id="维护架构图"></a>
+
 <details>
 <summary>维护架构图</summary>
 
-架构图由 Archify 生成。编辑 [H7_BSP.architecture.json](Assets/Architecture/H7_BSP.architecture.json)，在 Archify skill 目录执行：
+两张图共用已有 **Archify** 工具链（当前产物生成版本 `2.17.0-dev.1`），仓库没有架构图专用 `package.json` / npm script，也没有 Python 生成器：
+
+- [H7_BSP.architecture.json](Assets/Architecture/H7_BSP.architecture.json)：工程分层总览，保留原文件名。
+- [H7_RM_GettingStarted.architecture.json](Assets/Architecture/H7_RM_GettingStarted.architecture.json)：新人控制、姿态、在线监控三条链。
+- [Export_Svg.mjs](Tools/Architecture/Export_Svg.mjs)：通过 Archify HTML 的浏览器导出接口生成 SVG，保留字体、主题和拓扑。
+
+**只修改 JSON 图源，不手改 SVG / HTML。** 图源使用 Archify `schemas/architecture.schema.json` 和 `schemas/common.schema.json`：`schema_version: 1`、`diagram_type: architecture`，主要字段为 `meta`、`components`、`boundaries`、`connections`、`cards`。
+component type 是固定枚举；本工程用 `meta.legend.entries.<type>.label` 显示嵌入式层次，不沿用 Web 图例。方向相反的关系用两条连接表达。
+`meta.repository.revision` 固定源码证据版本；更新架构时同步为已核对的 commit，`sources` 指向该版本中的真实文件。
+
+准备 Node.js 18+、已有 Archify skill 目录和 Chrome / Chromium（SVG 导出及浏览器验证需要；必要时用 `ARCHIFY_CHROME` 指定浏览器路径）。在**仓库根目录**执行以下命令，先将 `ARCHIFY_ROOT` 改为本机 skill 目录：
 
 ```bash
-node bin/archify.mjs validate architecture \
-  <仓库>/Assets/Architecture/H7_BSP.architecture.json --quality showcase --json
-node bin/archify.mjs deliver architecture \
-  <仓库>/Assets/Architecture/H7_BSP.architecture.json \
-  <仓库>/Assets/Architecture/H7_BSP.html --quality showcase --json
+ARCHIFY_ROOT=/path/to/archify
+
+# 每份 JSON 独立校验并生成交互式 HTML
+for diagram in H7_BSP H7_RM_GettingStarted; do
+  node "$ARCHIFY_ROOT/bin/archify.mjs" validate architecture \
+    "Assets/Architecture/$diagram.architecture.json" \
+    --quality showcase --repo-root . --json || break
+  node "$ARCHIFY_ROOT/bin/archify.mjs" deliver architecture \
+    "Assets/Architecture/$diagram.architecture.json" \
+    "Assets/Architecture/$diagram.html" \
+    --quality showcase --repo-root . --json || break
+done
+
+# 从已成功交付的 HTML 生成 SVG
+for diagram in H7_BSP H7_RM_GettingStarted; do
+  node Tools/Architecture/Export_Svg.mjs "$ARCHIFY_ROOT" \
+    "Assets/Architecture/$diagram.html" \
+    "Assets/Architecture/$diagram.svg" || break
+done
+
+# 记录多分辨率浏览器证据
+for diagram in H7_BSP H7_RM_GettingStarted; do
+  node "$ARCHIFY_ROOT/bin/archify.mjs" visual-check \
+    "Assets/Architecture/$diagram.html" --json || break
+done
 ```
 
-交付后运行 `visual-check` 记录多分辨率浏览器证据，再人工检查亮色与暗色主题。
+校验失败时先修复 JSON，再重新生成；不要从失败交付后保留的旧 HTML 导出 SVG。
+HTML 支持亮/暗主题、搜索、聚焦、关系追踪、三条链的引导视图和导出。
+两份 JSON 及对应的 SVG、HTML **一并提交 git**，方便 GitHub 阅读和离线交互。
+浏览器 QA 生成的截图与 receipt 是本地验证证据，不作为图源；交付前检查两种主题、文字和箭头，并运行 `git diff --check`。
 
 </details>

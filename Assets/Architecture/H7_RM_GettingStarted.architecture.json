@@ -1,0 +1,144 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "H7_RM · 新人控制数据流",
+    "locale": "zh-CN",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1380,
+      850
+    ],
+    "repository": {
+      "url": "https://github.com/Kylin-6/H7_RM.git",
+      "provider": "github",
+      "link_mode": "web",
+      "revision": "3555075a86f04b010710deb53508b8c9b9087012"
+    },
+    "legend": {
+      "mode": "auto",
+      "entries": {
+        "frontend": {
+          "label": "Application"
+        },
+        "backend": {
+          "label": "Device"
+        },
+        "database": {
+          "label": "System"
+        },
+        "cloud": {
+          "label": "Task"
+        },
+        "security": {
+          "label": "BSP / HAL"
+        },
+        "messagebus": {
+          "label": "Message Center"
+        },
+        "external": {
+          "label": "Hardware"
+        }
+      }
+    },
+    "views": [
+      {
+        "id": "control",
+        "label": "① 机器人控制",
+        "focus": [
+          "remote",
+          "optional",
+          "input",
+          "robotcmd",
+          "gimbal",
+          "chassis",
+          "shoot",
+          "motor",
+          "bsp",
+          "bus"
+        ],
+        "note": "ControlTask High1 1 kHz 调度 Input → RobotCmd → Application；命令经 Topic / EventQueue 传递。"
+      },
+      {
+        "id": "attitude",
+        "label": "② 姿态",
+        "focus": [
+          "bmi088",
+          "spi",
+          "bmi_task",
+          "ins",
+          "ins_topic",
+          "ins_gimbal"
+        ],
+        "note": "Sensor → Task → System state → Message Center → Application。没有独立 InsTask 解算。"
+      },
+      {
+        "id": "liveness",
+        "label": "③ 在线监控",
+        "focus": [
+          "monitored",
+          "feed",
+          "manager",
+          "status",
+          "online"
+        ],
+        "note": "StatusTask 调用 DaemonManager::CheckAll()；Daemon 只判断 liveness。"
+      }
+    ]
+  },
+  "components": [
+    { "id": "remote", "type": "backend", "label": "Remote / S.BUS", "sublabel": "UART5 · 已接入（仅底盘）", "pos": [40, 50], "size": [200, 100], "sources": [{ "path": "User_File/Device/Peripheral/Remote/sbus.h" }], "tag": "当前只映射底盘输入" },
+    { "id": "optional", "type": "frontend", "label": "Vision / VTM", "sublabel": "未来适配器 · 尚未绑定 Input", "pos": [40, 260], "size": [220, 100], "tag": "optional / future adapter" },
+    { "id": "input", "type": "frontend", "label": "Input", "sublabel": "RemoteInput / InputState", "pos": [290, 165], "size": [200, 90], "sources": [{ "path": "User_File/Application/Input/remote_input.cpp" }] },
+    { "id": "robotcmd", "type": "frontend", "label": "RobotCmd", "sublabel": "唯一命令发布者", "pos": [550, 165], "size": [200, 90], "sources": [{ "path": "User_File/Application/RobotCmd/RobotCmd.cpp" }], "tag": "Topic / EventQueue" },
+    { "id": "gimbal", "type": "frontend", "label": "Gimbal", "sublabel": "云台目标 + INS", "pos": [830, 50], "size": [175, 90], "sources": [{ "path": "User_File/Application/Gimbal/Gimbal.cpp" }] },
+    { "id": "chassis", "type": "frontend", "label": "Chassis", "sublabel": "底盘目标", "pos": [830, 165], "size": [175, 90], "sources": [{ "path": "User_File/Application/Chassis/Chassis.cpp" }] },
+    { "id": "shoot", "type": "frontend", "label": "Shoot", "sublabel": "连续模式 + 射击事件", "pos": [830, 280], "size": [175, 90], "sources": [{ "path": "User_File/Application/Shoot/Shoot.cpp" }] },
+    { "id": "motor", "type": "backend", "label": "Motor", "sublabel": "DM / DJI · 目标与输出许可", "pos": [1080, 165], "size": [230, 90], "sources": [{ "path": "User_File/Device/Peripheral/Motor/DJImotor/dji_motor.h" }] },
+    { "id": "bsp", "type": "security", "label": "BSP / HAL", "sublabel": "总线缓冲与发送", "pos": [1080, 310], "size": [230, 80], "tag": "CanTxTask 1 kHz" },
+    { "id": "bus", "type": "external", "label": "CAN / UART", "sublabel": "硬件收发", "pos": [1080, 425], "size": [230, 70] },
+    { "id": "bmi088", "type": "external", "label": "BMI088", "sublabel": "Sensor · gyro 约 2 kHz", "pos": [40, 530], "size": [180, 80] },
+    { "id": "spi", "type": "security", "label": "SPI DMA / FIFO", "sublabel": "采集 · 缓冲 · 回调唤醒", "pos": [265, 530], "size": [180, 80] },
+    { "id": "bmi_task", "type": "cloud", "label": "BMI088_Task", "sublabel": "High2 · 事件驱动", "pos": [485, 530], "size": [190, 80], "sources": [{ "path": "User_File/Task/BMI088_Task.cpp" }] },
+    { "id": "ins", "type": "database", "label": "VQF / INS", "sublabel": "解算 → System 发布", "pos": [715, 530], "size": [190, 80], "sources": [{ "path": "User_File/System/IMU/sys_imu.cpp" }] },
+    { "id": "ins_topic", "type": "messagebus", "label": "INS_State Topic", "sublabel": "Latest-Value 姿态", "pos": [940, 530], "size": [185, 80], "sources": [{ "path": "User_File/System/MessageCenter/message_center.h" }] },
+    { "id": "monitored", "type": "backend", "label": "DM · DJI · SBUS · INS", "sublabel": "BoardTransport · Referee / VTM¹", "pos": [40, 680], "size": [260, 90], "tag": "Transport · Referee / VTM¹" },
+    { "id": "feed", "type": "database", "label": "Daemon::Feed()", "sublabel": "合法周期数据到达后喂入", "pos": [365, 680], "size": [210, 90], "tag": "liveness · 非整车安全策略" },
+    { "id": "manager", "type": "database", "label": "DaemonManager", "sublabel": "持有已注册 Daemon", "pos": [640, 680], "size": [210, 90], "sources": [{ "path": "User_File/System/Daemon/daemon.cpp" }] },
+    { "id": "status", "type": "cloud", "label": "StatusTask 100 Hz", "sublabel": "Low · CheckAll()", "pos": [915, 680], "size": [200, 90], "sources": [{ "path": "User_File/Task/StatusTask.cpp" }] },
+    { "id": "online", "type": "database", "label": "Online / Offline", "sublabel": "Transition · 活性", "pos": [1180, 680], "size": [180, 90] },
+    { "id": "ins_gimbal", "type": "frontend", "label": "Gimbal", "sublabel": "同上 · ReadFresh 10 ms", "pos": [1160, 530], "size": [185, 80], "sources": [{ "path": "User_File/Application/Gimbal/Gimbal.cpp" }] }
+  ],
+  "connections": [
+    { "id": "remote_input", "from": "remote", "to": "input", "fromSide": "right", "toSide": "left" },
+    { "id": "optional_input", "from": "optional", "to": "input", "variant": "dashed", "fromSide": "right", "toSide": "left" },
+    { "id": "input_robotcmd", "from": "input", "to": "robotcmd", "fromSide": "right", "toSide": "left" },
+    { "id": "robotcmd_gimbal", "from": "robotcmd", "to": "gimbal", "fromSide": "right", "toSide": "left" },
+    { "id": "gimbal_motor", "from": "gimbal", "to": "motor", "fromSide": "right", "toSide": "left" },
+    { "id": "robotcmd_chassis", "from": "robotcmd", "to": "chassis", "fromSide": "right", "toSide": "left" },
+    { "id": "chassis_motor", "from": "chassis", "to": "motor", "fromSide": "right", "toSide": "left" },
+    { "id": "robotcmd_shoot", "from": "robotcmd", "to": "shoot", "fromSide": "right", "toSide": "left" },
+    { "id": "shoot_motor", "from": "shoot", "to": "motor", "fromSide": "right", "toSide": "left" },
+    { "id": "motor_bsp", "from": "motor", "to": "bsp", "fromSide": "bottom", "toSide": "top" },
+    { "id": "bsp_bus", "from": "bsp", "to": "bus", "fromSide": "bottom", "toSide": "top" },
+    { "id": "bmi088_spi", "from": "bmi088", "to": "spi", "fromSide": "right", "toSide": "left" },
+    { "id": "spi_bmi_task", "from": "spi", "to": "bmi_task", "fromSide": "right", "toSide": "left" },
+    { "id": "bmi_task_ins", "from": "bmi_task", "to": "ins", "fromSide": "right", "toSide": "left" },
+    { "id": "ins_ins_topic", "from": "ins", "to": "ins_topic", "fromSide": "right", "toSide": "left" },
+    { "id": "ins_topic_gimbal", "from": "ins_topic", "to": "ins_gimbal", "fromSide": "right", "toSide": "left" },
+    { "id": "monitored_feed", "from": "monitored", "to": "feed", "fromSide": "right", "toSide": "left" },
+    { "id": "feed_manager", "from": "feed", "to": "manager", "fromSide": "right", "toSide": "left" },
+    { "id": "manager_status", "from": "manager", "to": "status", "fromSide": "right", "toSide": "left" },
+    { "id": "status_online", "from": "status", "to": "online", "fromSide": "right", "toSide": "left" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "① 命令与层次", "items": ["ControlTask High1 1 kHz 调度；命令走 Topic / EventQueue"] },
+    { "dot": "emerald", "title": "② 当前接入边界", "items": ["S.BUS 仅底盘；单板默认关闭电机；虚线适配器未接入"] },
+    { "dot": "amber", "title": "③ 活性与策略", "items": ["Daemon 只诊断活性；¹ Referee / VTM 显式 Init，Transport 仅双板"] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "① 机器人控制", "wraps": ["remote", "optional", "input", "robotcmd", "gimbal", "chassis", "shoot", "motor", "bsp", "bus"], "pad": 12 },
+    { "kind": "region", "label": "② 姿态", "wraps": ["bmi088", "spi", "bmi_task", "ins", "ins_topic", "ins_gimbal"], "pad": 12 },
+    { "kind": "region", "label": "③ 在线监控 · 非整车安全策略", "wraps": ["monitored", "feed", "manager", "status", "online"], "pad": 12 }
+  ]
+}

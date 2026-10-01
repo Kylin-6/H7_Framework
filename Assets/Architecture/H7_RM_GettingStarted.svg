@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg viewBox="0 0 1390 760" role="img" lang="zh-CN" aria-labelledby="archify-diagram-title archify-diagram-description" data-preset="classic" data-quality-profile="showcase" style="" width="1390" height="760" xmlns="http://www.w3.org/2000/svg"><style>
+<svg viewBox="0 0 1380 850" role="img" lang="zh-CN" aria-labelledby="archify-diagram-title archify-diagram-description" data-preset="classic" data-quality-profile="showcase" style="" width="1380" height="850" xmlns="http://www.w3.org/2000/svg"><style>
 /*
 JetBrains Mono variable WOFF2 subsets from Google Fonts service revision v24.
 These fixed bytes are shared by the viewer and its SVG/raster exports.
@@ -416,7 +416,7 @@ svg[data-theme="light"] { --bg: #f8fafc; --grid: #e2e8f0; --text: #0f172a; --tex
 svg[data-theme="dark"] { --bg: #020617; --grid: #1e293b; --text: #ffffff; --text-muted: #94a3b8; --text-dim: #475569; --text-faint: #7d8da1; --panel: rgba(15, 23, 42, 0.5); --panel-border: #1e293b; --lane-fill: rgba(15, 23, 42, 0.22); --lane-stroke: #334155; --arrow: #64748b; --arrow-emphasis: #34d399; --mask: #0f172a; --frontend-fill: rgba(8, 51, 68, 0.4); --frontend-stroke: #22d3ee; --backend-fill: rgba(6, 78, 59, 0.4); --backend-stroke: #34d399; --database-fill: rgba(76, 29, 149, 0.4); --database-stroke: #a78bfa; --cloud-fill: rgba(120, 53, 15, 0.3); --cloud-stroke: #fbbf24; --security-fill: rgba(136, 19, 55, 0.4); --security-stroke: #fb7185; --messagebus-fill: rgba(251, 146, 60, 0.3); --messagebus-stroke: #fb923c; --external-fill: rgba(30, 41, 59, 0.5); --external-stroke: #94a3b8; --toolbar-bg: rgba(15, 23, 42, 0.8); --toolbar-border: #334155; --toolbar-text: #e2e8f0; --toolbar-hover: rgba(15, 23, 42, 0.95); --toolbar-menu-bg: #0f172a; }
 rect.c-bg-rect { fill: var(--bg); }
 </style><rect width="100%" height="100%" class="c-bg-rect"/>
-        <title id="archify-diagram-title">H7_RM / H7_BSP · 工程架构总览</title>
+        <title id="archify-diagram-title">H7_RM · 新人控制数据流</title>
         <desc id="archify-diagram-description">由 Archify 生成的架构图。</desc>
         <!-- Definitions -->
         <defs>
@@ -441,269 +441,372 @@ rect.c-bg-rect { fill: var(--bg); }
         <rect width="100%" height="100%" fill="url(#grid)"/>
 
         <!-- Boundaries (behind everything) -->
-        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="0" data-composition-frame-label="H7_RM Firmware Project" x="205" y="55" width="1090" height="596" rx="12" class="c-region" stroke-width="1"/>
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="0" data-composition-frame-label="① 机器人控制" x="28" y="26" width="1294" height="489" rx="12" class="c-region" stroke-width="1"/>
+
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="1" data-composition-frame-label="② 姿态" x="28" y="506" width="1329" height="124" rx="12" class="c-region" stroke-width="1"/>
+
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="2" data-composition-frame-label="③ 在线监控 · 非整车安全策略" x="28" y="656" width="1344" height="134" rx="12" class="c-region" stroke-width="1"/>
 
         <!-- Connection paths (before components for correct z-order) -->
-        <path data-edge-from="hardware" data-edge-to="hal" data-edge-label="寄存器 / IRQ / DMA" data-edge-key="0" data-edge-id="hardware_hal" data-composition-points="200,371;245,371" d="M 200 371 L 245 371" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path data-edge-from="hal" data-edge-to="bsp" data-edge-label="HAL Handle 与回调" data-edge-key="1" data-edge-id="hal_bsp" data-composition-points="410,371;455,371" d="M 410 371 L 455 371" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="bsp" data-edge-to="device" data-edge-label="收发、缓冲与资源绑定" data-edge-key="2" data-edge-id="bsp_device" data-composition-points="650,371;710,371" d="M 650 371 L 710 371" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="device" data-edge-to="application" data-edge-label="Snapshot / Ready / Feedback" data-edge-key="3" data-edge-id="device_app" data-composition-points="915,371;1040,371" d="M 915 371 L 1040 371" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path data-edge-from="hal" data-edge-to="callbacks" data-edge-label="完成 / 错误 / EXTI" data-edge-key="4" data-edge-id="hal_callback" data-composition-points="327.5,330;327.5,306;431,306;431,141;455,141" d="M 327.5 330 L 327.5 314 Q 327.5 306 335.5 306 L 423 306 Q 431 306 431 298 L 431 149 Q 431 141 439 141 L 455 141" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="callbacks" data-edge-to="bsp" data-edge-key="5" data-edge-id="callback_bsp" data-composition-points="545.5,177;545.5,330" d="M 545.5 177 L 545.5 330" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="callbacks" data-edge-to="tasks" data-edge-label="线程标志" data-edge-key="6" data-edge-id="callback_tasks" data-composition-points="650,141;674,141;674,159;711,159;711,143;735,143" d="M 650 141 L 666 141 Q 674 141 674 149 L 674 151 Q 674 159 682 159 L 703 159 Q 711 159 711 151 L 711 151 Q 711 143 719 143 L 735 143" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="tasks" data-edge-to="device" data-edge-label="采样 / 服务 / 状态检查" data-edge-key="7" data-edge-id="tasks_device" data-composition-points="910,191;910,260.5;812.5,260.5;812.5,330" d="M 910 191 L 910 252.5 Q 910 260.5 902 260.5 L 820.5 260.5 Q 812.5 260.5 812.5 268.5 L 812.5 330" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="tasks" data-edge-to="application" data-edge-label="1 kHz 调度" data-edge-key="8" data-edge-id="tasks_app" data-composition-points="1085,143;1147.5,143;1147.5,330" d="M 1085 143 L 1139.5 143 Q 1147.5 143 1147.5 151 L 1147.5 330" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path data-edge-from="algorithms" data-edge-to="device" data-edge-label="估计与信号处理" data-edge-key="9" data-edge-id="alg_device" data-composition-points="552.5,555;552.5,483.5;805.5,483.5;805.5,412" d="M 552.5 555 L 552.5 491.5 Q 552.5 483.5 560.5 483.5 L 797.5 483.5 Q 805.5 483.5 805.5 475.5 L 805.5 412" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="algorithms" data-edge-to="application" data-edge-label="控制与轨迹" data-edge-key="10" data-edge-id="alg_app" data-composition-points="552.5,631;552.5,700;1370,700;1370,371;1255,371" d="M 552.5 631 L 552.5 692 Q 552.5 700 560.5 700 L 1362 700 Q 1370 700 1370 692 L 1370 379 Q 1370 371 1362 371 L 1255 371" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="system" data-edge-to="device" data-edge-label="初始化、时间与在线状态" data-edge-key="11" data-edge-id="system_device" data-composition-points="819.5,555;819.5,412" d="M 819.5 555 L 819.5 412" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="system" data-edge-to="message_center" data-edge-label="INS_State 发布" data-edge-key="12" data-edge-id="system_messages" data-composition-points="985,593;1009,593;1009,609;991,609;991,583;1015,583" d="M 985 593 L 1001 593 Q 1009 593 1009 601 L 1009 601 Q 1009 609 1001 609 L 999 609 Q 991 609 991 601 L 991 591 Q 991 583 999 583 L 1015 583" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="message_center" data-edge-to="application" data-edge-label="Consume · Latest-Value / FIFO" data-edge-key="13" data-edge-id="messages_app" data-composition-points="1015,583;991,583;991,436;1147.5,436;1147.5,412" d="M 1015 583 L 999 583 Q 991 583 991 575 L 991 444 Q 991 436 999 436 L 1139.5 436 Q 1147.5 436 1147.5 428 L 1147.5 412" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path data-edge-from="memory" data-edge-to="bsp" data-edge-label="DMA 可达性与链接布局" data-edge-key="14" data-edge-id="memory_bsp" data-composition-points="327.5,555;327.5,483.5;552.5,483.5;552.5,412" d="M 327.5 555 L 327.5 491.5 Q 327.5 483.5 335.5 483.5 L 544.5 483.5 Q 552.5 483.5 552.5 475.5 L 552.5 412" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="application" data-edge-to="device" data-edge-label="目标 / 输出许可 / Control" data-edge-key="15" data-edge-id="app_device" data-composition-points="1040,371;915,371" d="M 1040 371 L 915 371" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="application" data-edge-to="message_center" data-edge-label="Publish · Topic / EventQueue" data-edge-key="16" data-edge-id="app_messages" data-composition-points="1255,371;1350,371;1350,480;1135,480;1135,535" d="M 1255 371 L 1342 371 Q 1350 371 1350 379 L 1350 472 Q 1350 480 1342 480 L 1143 480 Q 1135 480 1135 488 L 1135 535" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="tasks" data-edge-to="bsp" data-edge-label="CAN Tx / 周期收发" data-edge-key="17" data-edge-id="tasks_bsp" data-composition-points="735,143;711,143;711,306;559.5,306;559.5,330" d="M 735 143 L 719 143 Q 711 143 711 151 L 711 298 Q 711 306 703 306 L 567.5 306 Q 559.5 306 559.5 314 L 559.5 330" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="remote" data-edge-to="input" data-edge-key="0" data-edge-id="remote_input" data-composition-points="240,100;265,100;265,203;290,203" d="M 240 100 L 257 100 Q 265 100 265 108 L 265 195 Q 265 203 273 203 L 290 203" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="optional" data-edge-to="input" data-edge-key="1" data-edge-id="optional_input" data-composition-points="260,310;275,310;275,217;290,217" d="M 260 310 L 267.5 310 Q 275 310 275 302.5 L 275 224.5 Q 275 217 282.5 217 L 290 217" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
+        <path data-edge-from="input" data-edge-to="robotcmd" data-edge-key="2" data-edge-id="input_robotcmd" data-composition-points="490,210;550,210" d="M 490 210 L 550 210" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="robotcmd" data-edge-to="gimbal" data-edge-key="3" data-edge-id="robotcmd_gimbal" data-composition-points="750,196;790,196;790,95;830,95" d="M 750 196 L 782 196 Q 790 196 790 188 L 790 103 Q 790 95 798 95 L 830 95" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="gimbal" data-edge-to="motor" data-edge-key="4" data-edge-id="gimbal_motor" data-composition-points="1005,95;1042.5,95;1042.5,196;1080,196" d="M 1005 95 L 1034.5 95 Q 1042.5 95 1042.5 103 L 1042.5 188 Q 1042.5 196 1050.5 196 L 1080 196" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="robotcmd" data-edge-to="chassis" data-edge-key="5" data-edge-id="robotcmd_chassis" data-composition-points="750,210;830,210" d="M 750 210 L 830 210" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="chassis" data-edge-to="motor" data-edge-key="6" data-edge-id="chassis_motor" data-composition-points="1005,210;1080,210" d="M 1005 210 L 1080 210" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="robotcmd" data-edge-to="shoot" data-edge-key="7" data-edge-id="robotcmd_shoot" data-composition-points="750,224;790,224;790,325;830,325" d="M 750 224 L 782 224 Q 790 224 790 232 L 790 317 Q 790 325 798 325 L 830 325" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="shoot" data-edge-to="motor" data-edge-key="8" data-edge-id="shoot_motor" data-composition-points="1005,325;1042.5,325;1042.5,224;1080,224" d="M 1005 325 L 1034.5 325 Q 1042.5 325 1042.5 317 L 1042.5 232 Q 1042.5 224 1050.5 224 L 1080 224" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="motor" data-edge-to="bsp" data-edge-key="9" data-edge-id="motor_bsp" data-composition-points="1195,255;1195,310" d="M 1195 255 L 1195 310" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="bsp" data-edge-to="bus" data-edge-key="10" data-edge-id="bsp_bus" data-composition-points="1195,390;1195,425" d="M 1195 390 L 1195 425" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="bmi088" data-edge-to="spi" data-edge-key="11" data-edge-id="bmi088_spi" data-composition-points="220,570;265,570" d="M 220 570 L 265 570" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="spi" data-edge-to="bmi_task" data-edge-key="12" data-edge-id="spi_bmi_task" data-composition-points="445,570;485,570" d="M 445 570 L 485 570" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="bmi_task" data-edge-to="ins" data-edge-key="13" data-edge-id="bmi_task_ins" data-composition-points="675,570;715,570" d="M 675 570 L 715 570" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="ins" data-edge-to="ins_topic" data-edge-key="14" data-edge-id="ins_ins_topic" data-composition-points="905,570;940,570" d="M 905 570 L 940 570" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="ins_topic" data-edge-to="ins_gimbal" data-edge-key="15" data-edge-id="ins_topic_gimbal" data-composition-points="1125,570;1160,570" d="M 1125 570 L 1160 570" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="monitored" data-edge-to="feed" data-edge-key="16" data-edge-id="monitored_feed" data-composition-points="300,725;365,725" d="M 300 725 L 365 725" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="feed" data-edge-to="manager" data-edge-key="17" data-edge-id="feed_manager" data-composition-points="575,725;640,725" d="M 575 725 L 640 725" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="manager" data-edge-to="status" data-edge-key="18" data-edge-id="manager_status" data-composition-points="850,725;915,725" d="M 850 725 L 915 725" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="status" data-edge-to="online" data-edge-key="19" data-edge-id="status_online" data-composition-points="1115,725;1180,725" d="M 1115 725 L 1180 725" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
 
         <!-- Components -->
-        <g id="node-hardware" data-node-id="hardware" data-node-label="板卡与外设" tabindex="0" role="button" aria-label="聚焦板卡与外设，MC02 外设总线, 架构组件" aria-pressed="false" data-node-kind="external" data-node-sublabel="MC02 外设总线" data-node-context="架构组件">
-          <title>板卡与外设 · MC02 外设总线 · 架构组件</title>
-          <rect x="45" y="330" width="155" height="82" rx="6" class="c-mask"/>
-          <rect x="45" y="330" width="155" height="82" rx="6" class="c-external" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(51 336) scale(0.6875)">
-            <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
-            <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
-          </g>
-          <text data-node-label="" x="122.5" y="369" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">板卡与外设</text>
-        <text x="122.5" y="385" class="t-muted" font-size="9" text-anchor="middle">MC02 外设总线</text>
-        </g>
-
-        <g id="node-hal" data-node-id="hal" data-node-label="STM32 HAL / CMSIS" tabindex="0" role="button" aria-label="聚焦STM32 HAL / CMSIS，CubeMX 生成层, H7_RM Firmware Project" aria-pressed="false" data-node-kind="backend" data-node-sublabel="CubeMX 生成层" data-node-context="H7_RM Firmware Project">
-          <title>STM32 HAL / CMSIS · CubeMX 生成层 · H7_RM Firmware Project</title>
-          <rect x="245" y="330" width="165" height="82" rx="6" class="c-mask"/>
-          <rect x="245" y="330" width="165" height="82" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(251 336) scale(0.6875)">
+        <g id="node-remote" data-node-id="remote" data-node-label="Remote / S.BUS" tabindex="0" role="button" aria-label="聚焦Remote / S.BUS，UART5 · 已接入（仅底盘）, ① 机器人控制" aria-pressed="false" data-node-kind="backend" data-node-sublabel="UART5 · 已接入（仅底盘）" data-node-tag="当前只映射底盘输入" data-node-context="① 机器人控制">
+          <title>Remote / S.BUS · UART5 · 已接入（仅底盘） · ① 机器人控制 · 当前只映射底盘输入</title>
+          <rect x="40" y="50" width="200" height="100" rx="6" class="c-mask"/>
+          <rect x="40" y="50" width="200" height="100" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(46 56) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
-          <text data-node-label="" x="327.5" y="369" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">STM32 HAL / CMSIS</text>
-        <text x="327.5" y="385" class="t-muted" font-size="9" text-anchor="middle">CubeMX 生成层</text>
+          <text data-node-label="" x="140" y="98" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Remote / S.BUS</text>
+        <text x="140" y="114" class="t-muted" font-size="9" text-anchor="middle">UART5 · 已接入（仅底盘）</text>
+        <text x="140" y="142" class="t-backend" font-size="7" text-anchor="middle">当前只映射底盘输入</text>
         </g>
 
-        <g id="node-bsp" data-node-id="bsp" data-node-label="Middleware / BSP" tabindex="0" role="button" aria-label="聚焦Middleware / BSP，总线、缓冲与回调, H7_RM Firmware Project" aria-pressed="false" data-node-kind="backend" data-node-sublabel="总线、缓冲与回调" data-node-tag="资源管理与 DMA" data-node-context="H7_RM Firmware Project">
-          <title>Middleware / BSP · 总线、缓冲与回调 · H7_RM Firmware Project · 资源管理与 DMA</title>
-          <rect x="455" y="330" width="195" height="82" rx="6" class="c-mask"/>
-          <rect x="455" y="330" width="195" height="82" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(461 336) scale(0.6875)">
-            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
-          </g>
-          <text data-node-label="" x="552.5" y="369" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Middleware / BSP</text>
-        <text x="552.5" y="385" class="t-muted" font-size="9" text-anchor="middle">总线、缓冲与回调</text>
-        <text x="552.5" y="404" class="t-backend" font-size="7" text-anchor="middle">资源管理与 DMA</text>
-        </g>
-
-        <g id="node-device" data-node-id="device" data-node-label="Device" tabindex="0" role="button" aria-label="聚焦Device，电机 · BMI088 · Flash, H7_RM Firmware Project" aria-pressed="false" data-node-kind="backend" data-node-sublabel="电机 · BMI088 · Flash" data-node-context="H7_RM Firmware Project">
-          <title>Device · 电机 · BMI088 · Flash · H7_RM Firmware Project</title>
-          <rect x="710" y="330" width="205" height="82" rx="6" class="c-mask"/>
-          <rect x="710" y="330" width="205" height="82" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(716 336) scale(0.6875)">
-            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
-          </g>
-          <text data-node-label="" x="812.5" y="369" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Device</text>
-        <text x="812.5" y="385" class="t-muted" font-size="9" text-anchor="middle">电机 · BMI088 · Flash</text>
-        </g>
-
-        <g id="node-application" data-node-id="application" data-node-label="Application" tabindex="0" role="button" aria-label="聚焦Application，RobotCmd 与控制应用, H7_RM Firmware Project" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="RobotCmd 与控制应用" data-node-tag="1 kHz 控制" data-node-context="H7_RM Firmware Project">
-          <title>Application · RobotCmd 与控制应用 · H7_RM Firmware Project · 1 kHz 控制</title>
-          <rect x="1040" y="330" width="215" height="82" rx="6" class="c-mask"/>
-          <rect x="1040" y="330" width="215" height="82" rx="6" class="c-frontend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(1046 336) scale(0.6875)">
+        <g id="node-optional" data-node-id="optional" data-node-label="Vision / VTM" tabindex="0" role="button" aria-label="聚焦Vision / VTM，未来适配器 · 尚未绑定 Input, ① 机器人控制" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="未来适配器 · 尚未绑定 Input" data-node-tag="optional / future adapter" data-node-context="① 机器人控制">
+          <title>Vision / VTM · 未来适配器 · 尚未绑定 Input · ① 机器人控制 · optional / future adapter</title>
+          <rect x="40" y="260" width="220" height="100" rx="6" class="c-mask"/>
+          <rect x="40" y="260" width="220" height="100" rx="6" class="c-frontend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(46 266) scale(0.6875)">
             <rect x="2" y="3" width="12" height="10" rx="2"/>
             <path d="M2 6.5h12"/>
             <circle cx="4.1" cy="4.8" r=".7" class="sigil-fill"/>
             <circle cx="6.3" cy="4.8" r=".7" class="sigil-fill"/>
           </g>
-          <text data-node-label="" x="1147.5" y="369" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Application</text>
-        <text x="1147.5" y="385" class="t-muted" font-size="9" text-anchor="middle">RobotCmd 与控制应用</text>
-        <text x="1147.5" y="404" class="t-frontend" font-size="7" text-anchor="middle">1 kHz 控制</text>
+          <text data-node-label="" x="150" y="308" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Vision / VTM</text>
+        <text x="150" y="324" class="t-muted" font-size="9" text-anchor="middle">未来适配器 · 尚未绑定 Input</text>
+        <text x="150" y="352" class="t-frontend" font-size="7" text-anchor="middle">optional / future adapter</text>
         </g>
 
-        <g id="node-callbacks" data-node-id="callbacks" data-node-label="Callback 分发" tabindex="0" role="button" aria-label="聚焦Callback 分发，HAL ISR → BSP / Device, H7_RM Firmware Project" aria-pressed="false" data-node-kind="backend" data-node-sublabel="HAL ISR → BSP / Device" data-node-context="H7_RM Firmware Project">
-          <title>Callback 分发 · HAL ISR → BSP / Device · H7_RM Firmware Project</title>
-          <rect x="455" y="105" width="195" height="72" rx="6" class="c-mask"/>
-          <rect x="455" y="105" width="195" height="72" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(461 111) scale(0.6875)">
+        <g id="node-input" data-node-id="input" data-node-label="Input" tabindex="0" role="button" aria-label="聚焦Input，RemoteInput / InputState, ① 机器人控制" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="RemoteInput / InputState" data-node-context="① 机器人控制">
+          <title>Input · RemoteInput / InputState · ① 机器人控制</title>
+          <rect x="290" y="165" width="200" height="90" rx="6" class="c-mask"/>
+          <rect x="290" y="165" width="200" height="90" rx="6" class="c-frontend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(296 171) scale(0.6875)">
+            <rect x="2" y="3" width="12" height="10" rx="2"/>
+            <path d="M2 6.5h12"/>
+            <circle cx="4.1" cy="4.8" r=".7" class="sigil-fill"/>
+            <circle cx="6.3" cy="4.8" r=".7" class="sigil-fill"/>
+          </g>
+          <text data-node-label="" x="390" y="208" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Input</text>
+        <text x="390" y="224" class="t-muted" font-size="9" text-anchor="middle">RemoteInput / InputState</text>
+        </g>
+
+        <g id="node-robotcmd" data-node-id="robotcmd" data-node-label="RobotCmd" tabindex="0" role="button" aria-label="聚焦RobotCmd，唯一命令发布者, ① 机器人控制" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="唯一命令发布者" data-node-tag="Topic / EventQueue" data-node-context="① 机器人控制">
+          <title>RobotCmd · 唯一命令发布者 · ① 机器人控制 · Topic / EventQueue</title>
+          <rect x="550" y="165" width="200" height="90" rx="6" class="c-mask"/>
+          <rect x="550" y="165" width="200" height="90" rx="6" class="c-frontend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(556 171) scale(0.6875)">
+            <rect x="2" y="3" width="12" height="10" rx="2"/>
+            <path d="M2 6.5h12"/>
+            <circle cx="4.1" cy="4.8" r=".7" class="sigil-fill"/>
+            <circle cx="6.3" cy="4.8" r=".7" class="sigil-fill"/>
+          </g>
+          <text data-node-label="" x="650" y="208" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">RobotCmd</text>
+        <text x="650" y="224" class="t-muted" font-size="9" text-anchor="middle">唯一命令发布者</text>
+        <text x="650" y="247" class="t-frontend" font-size="7" text-anchor="middle">Topic / EventQueue</text>
+        </g>
+
+        <g id="node-gimbal" data-node-id="gimbal" data-node-label="Gimbal" tabindex="0" role="button" aria-label="聚焦Gimbal，云台目标 + INS, ① 机器人控制" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="云台目标 + INS" data-node-context="① 机器人控制">
+          <title>Gimbal · 云台目标 + INS · ① 机器人控制</title>
+          <rect x="830" y="50" width="175" height="90" rx="6" class="c-mask"/>
+          <rect x="830" y="50" width="175" height="90" rx="6" class="c-frontend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(836 56) scale(0.6875)">
+            <rect x="2" y="3" width="12" height="10" rx="2"/>
+            <path d="M2 6.5h12"/>
+            <circle cx="4.1" cy="4.8" r=".7" class="sigil-fill"/>
+            <circle cx="6.3" cy="4.8" r=".7" class="sigil-fill"/>
+          </g>
+          <text data-node-label="" x="917.5" y="93" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Gimbal</text>
+        <text x="917.5" y="109" class="t-muted" font-size="9" text-anchor="middle">云台目标 + INS</text>
+        </g>
+
+        <g id="node-chassis" data-node-id="chassis" data-node-label="Chassis" tabindex="0" role="button" aria-label="聚焦Chassis，底盘目标, ① 机器人控制" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="底盘目标" data-node-context="① 机器人控制">
+          <title>Chassis · 底盘目标 · ① 机器人控制</title>
+          <rect x="830" y="165" width="175" height="90" rx="6" class="c-mask"/>
+          <rect x="830" y="165" width="175" height="90" rx="6" class="c-frontend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(836 171) scale(0.6875)">
+            <rect x="2" y="3" width="12" height="10" rx="2"/>
+            <path d="M2 6.5h12"/>
+            <circle cx="4.1" cy="4.8" r=".7" class="sigil-fill"/>
+            <circle cx="6.3" cy="4.8" r=".7" class="sigil-fill"/>
+          </g>
+          <text data-node-label="" x="917.5" y="208" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Chassis</text>
+        <text x="917.5" y="224" class="t-muted" font-size="9" text-anchor="middle">底盘目标</text>
+        </g>
+
+        <g id="node-shoot" data-node-id="shoot" data-node-label="Shoot" tabindex="0" role="button" aria-label="聚焦Shoot，连续模式 + 射击事件, ① 机器人控制" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="连续模式 + 射击事件" data-node-context="① 机器人控制">
+          <title>Shoot · 连续模式 + 射击事件 · ① 机器人控制</title>
+          <rect x="830" y="280" width="175" height="90" rx="6" class="c-mask"/>
+          <rect x="830" y="280" width="175" height="90" rx="6" class="c-frontend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(836 286) scale(0.6875)">
+            <rect x="2" y="3" width="12" height="10" rx="2"/>
+            <path d="M2 6.5h12"/>
+            <circle cx="4.1" cy="4.8" r=".7" class="sigil-fill"/>
+            <circle cx="6.3" cy="4.8" r=".7" class="sigil-fill"/>
+          </g>
+          <text data-node-label="" x="917.5" y="323" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Shoot</text>
+        <text x="917.5" y="339" class="t-muted" font-size="9" text-anchor="middle">连续模式 + 射击事件</text>
+        </g>
+
+        <g id="node-motor" data-node-id="motor" data-node-label="Motor" tabindex="0" role="button" aria-label="聚焦Motor，DM / DJI · 目标与输出许可, ① 机器人控制" aria-pressed="false" data-node-kind="backend" data-node-sublabel="DM / DJI · 目标与输出许可" data-node-context="① 机器人控制">
+          <title>Motor · DM / DJI · 目标与输出许可 · ① 机器人控制</title>
+          <rect x="1080" y="165" width="230" height="90" rx="6" class="c-mask"/>
+          <rect x="1080" y="165" width="230" height="90" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(1086 171) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
-          <text data-node-label="" x="552.5" y="139" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Callback 分发</text>
-        <text x="552.5" y="155" class="t-muted" font-size="9" text-anchor="middle">HAL ISR → BSP / Device</text>
+          <text data-node-label="" x="1195" y="208" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Motor</text>
+        <text x="1195" y="224" class="t-muted" font-size="9" text-anchor="middle">DM / DJI · 目标与输出许可</text>
         </g>
 
-        <g id="node-tasks" data-node-id="tasks" data-node-label="FreeRTOS Tasks" tabindex="0" role="button" aria-label="聚焦FreeRTOS Tasks，BMI088 Event · Control / CAN Tx 1 kHz · Status 100 Hz, H7_RM Firmware Project" aria-pressed="false" data-node-kind="cloud" data-node-sublabel="BMI088 Event · Control / CAN Tx 1 kHz · Status 100 Hz" data-node-context="H7_RM Firmware Project">
-          <title>FreeRTOS Tasks · BMI088 Event · Control / CAN Tx 1 kHz · Status 100 Hz · H7_RM Firmware Project</title>
-          <rect x="735" y="95" width="350" height="96" rx="6" class="c-mask"/>
-          <rect x="735" y="95" width="350" height="96" rx="6" class="c-cloud" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="cloud" class="semantic-sigil s-cloud" transform="translate(741 101) scale(0.6875)">
+        <g id="node-bsp" data-node-id="bsp" data-node-label="BSP / HAL" tabindex="0" role="button" aria-label="聚焦BSP / HAL，总线缓冲与发送, ① 机器人控制" aria-pressed="false" data-node-kind="security" data-node-sublabel="总线缓冲与发送" data-node-tag="CanTxTask 1 kHz" data-node-context="① 机器人控制">
+          <title>BSP / HAL · 总线缓冲与发送 · ① 机器人控制 · CanTxTask 1 kHz</title>
+          <rect x="1080" y="310" width="230" height="80" rx="6" class="c-mask"/>
+          <rect x="1080" y="310" width="230" height="80" rx="6" class="c-security" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(1086 316) scale(0.6875)">
+            <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
+            <path d="m5.8 8 1.5 1.5 3-3"/>
+          </g>
+          <text data-node-label="" x="1195" y="348" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">BSP / HAL</text>
+        <text x="1195" y="364" class="t-muted" font-size="9" text-anchor="middle">总线缓冲与发送</text>
+        <text x="1195" y="382" class="t-security" font-size="7" text-anchor="middle">CanTxTask 1 kHz</text>
+        </g>
+
+        <g id="node-bus" data-node-id="bus" data-node-label="CAN / UART" tabindex="0" role="button" aria-label="聚焦CAN / UART，硬件收发, ① 机器人控制" aria-pressed="false" data-node-kind="external" data-node-sublabel="硬件收发" data-node-context="① 机器人控制">
+          <title>CAN / UART · 硬件收发 · ① 机器人控制</title>
+          <rect x="1080" y="425" width="230" height="70" rx="6" class="c-mask"/>
+          <rect x="1080" y="425" width="230" height="70" rx="6" class="c-external" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(1086 431) scale(0.6875)">
+            <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
+            <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
+          </g>
+          <text data-node-label="" x="1195" y="458" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">CAN / UART</text>
+        <text x="1195" y="474" class="t-muted" font-size="9" text-anchor="middle">硬件收发</text>
+        </g>
+
+        <g id="node-bmi088" data-node-id="bmi088" data-node-label="BMI088" tabindex="0" role="button" aria-label="聚焦BMI088，Sensor · gyro 约 2 kHz, ② 姿态" aria-pressed="false" data-node-kind="external" data-node-sublabel="Sensor · gyro 约 2 kHz" data-node-context="② 姿态">
+          <title>BMI088 · Sensor · gyro 约 2 kHz · ② 姿态</title>
+          <rect x="40" y="530" width="180" height="80" rx="6" class="c-mask"/>
+          <rect x="40" y="530" width="180" height="80" rx="6" class="c-external" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(46 536) scale(0.6875)">
+            <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
+            <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
+          </g>
+          <text data-node-label="" x="130" y="568" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">BMI088</text>
+        <text x="130" y="584" class="t-muted" font-size="9" text-anchor="middle">Sensor · gyro 约 2 kHz</text>
+        </g>
+
+        <g id="node-spi" data-node-id="spi" data-node-label="SPI DMA / FIFO" tabindex="0" role="button" aria-label="聚焦SPI DMA / FIFO，采集 · 缓冲 · 回调唤醒, ② 姿态" aria-pressed="false" data-node-kind="security" data-node-sublabel="采集 · 缓冲 · 回调唤醒" data-node-context="② 姿态">
+          <title>SPI DMA / FIFO · 采集 · 缓冲 · 回调唤醒 · ② 姿态</title>
+          <rect x="265" y="530" width="180" height="80" rx="6" class="c-mask"/>
+          <rect x="265" y="530" width="180" height="80" rx="6" class="c-security" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(271 536) scale(0.6875)">
+            <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
+            <path d="m5.8 8 1.5 1.5 3-3"/>
+          </g>
+          <text data-node-label="" x="355" y="568" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">SPI DMA / FIFO</text>
+        <text x="355" y="584" class="t-muted" font-size="9" text-anchor="middle">采集 · 缓冲 · 回调唤醒</text>
+        </g>
+
+        <g id="node-bmi_task" data-node-id="bmi_task" data-node-label="BMI088_Task" tabindex="0" role="button" aria-label="聚焦BMI088_Task，High2 · 事件驱动, ② 姿态" aria-pressed="false" data-node-kind="cloud" data-node-sublabel="High2 · 事件驱动" data-node-context="② 姿态">
+          <title>BMI088_Task · High2 · 事件驱动 · ② 姿态</title>
+          <rect x="485" y="530" width="190" height="80" rx="6" class="c-mask"/>
+          <rect x="485" y="530" width="190" height="80" rx="6" class="c-cloud" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="cloud" class="semantic-sigil s-cloud" transform="translate(491 536) scale(0.6875)">
             <path d="M4.3 12.5h7.3a2.4 2.4 0 0 0 .2-4.8 4 4 0 0 0-7.5-1.3A3.1 3.1 0 0 0 4.3 12.5Z"/>
           </g>
-          <text data-node-label="" x="910" y="141" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">FreeRTOS Tasks</text>
-        <text x="910" y="157" class="t-muted" font-size="9" text-anchor="middle">BMI088 Event · Control / CAN Tx 1 kHz · Status 100 Hz</text>
+          <text data-node-label="" x="580" y="568" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">BMI088_Task</text>
+        <text x="580" y="584" class="t-muted" font-size="9" text-anchor="middle">High2 · 事件驱动</text>
         </g>
 
-        <g id="node-system" data-node-id="system" data-node-label="System Services" tabindex="0" role="button" aria-label="聚焦System Services，Init · IMU · Daemon · Transport · Debug, H7_RM Firmware Project" aria-pressed="false" data-node-kind="backend" data-node-sublabel="Init · IMU · Daemon · Transport · Debug" data-node-context="H7_RM Firmware Project">
-          <title>System Services · Init · IMU · Daemon · Transport · Debug · H7_RM Firmware Project</title>
-          <rect x="675" y="555" width="310" height="76" rx="6" class="c-mask"/>
-          <rect x="675" y="555" width="310" height="76" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(681 561) scale(0.6875)">
-            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+        <g id="node-ins" data-node-id="ins" data-node-label="VQF / INS" tabindex="0" role="button" aria-label="聚焦VQF / INS，解算 → System 发布, ② 姿态" aria-pressed="false" data-node-kind="database" data-node-sublabel="解算 → System 发布" data-node-context="② 姿态">
+          <title>VQF / INS · 解算 → System 发布 · ② 姿态</title>
+          <rect x="715" y="530" width="190" height="80" rx="6" class="c-mask"/>
+          <rect x="715" y="530" width="190" height="80" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(721 536) scale(0.6875)">
+            <ellipse cx="8" cy="4" rx="5" ry="2"/>
+            <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
           </g>
-          <text data-node-label="" x="830" y="591" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">System Services</text>
-        <text x="830" y="607" class="t-muted" font-size="9" text-anchor="middle">Init · IMU · Daemon · Transport · Debug</text>
+          <text data-node-label="" x="810" y="568" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">VQF / INS</text>
+        <text x="810" y="584" class="t-muted" font-size="9" text-anchor="middle">解算 → System 发布</text>
         </g>
 
-        <g id="node-message_center" data-node-id="message_center" data-node-label="Message Center" tabindex="0" role="button" aria-label="聚焦Message Center，Topic&lt;T&gt; + EventQueue&lt;T,N&gt;, H7_RM Firmware Project" aria-pressed="false" data-node-kind="messagebus" data-node-sublabel="Topic&lt;T&gt; + EventQueue&lt;T,N&gt;" data-node-tag="静态 · 类型安全" data-node-context="H7_RM Firmware Project">
-          <title>Message Center · Topic&lt;T&gt; + EventQueue&lt;T,N&gt; · H7_RM Firmware Project · 静态 · 类型安全</title>
-          <rect x="1015" y="535" width="240" height="96" rx="6" class="c-mask"/>
-          <rect x="1015" y="535" width="240" height="96" rx="6" class="c-messagebus" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="messagebus" class="semantic-sigil s-messagebus" transform="translate(1021 541) scale(0.6875)">
+        <g id="node-ins_topic" data-node-id="ins_topic" data-node-label="INS_State Topic" tabindex="0" role="button" aria-label="聚焦INS_State Topic，Latest-Value 姿态, ② 姿态" aria-pressed="false" data-node-kind="messagebus" data-node-sublabel="Latest-Value 姿态" data-node-context="② 姿态">
+          <title>INS_State Topic · Latest-Value 姿态 · ② 姿态</title>
+          <rect x="940" y="530" width="185" height="80" rx="6" class="c-mask"/>
+          <rect x="940" y="530" width="185" height="80" rx="6" class="c-messagebus" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="messagebus" class="semantic-sigil s-messagebus" transform="translate(946 536) scale(0.6875)">
             <path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/>
             <circle cx="5" cy="4.5" r="1" class="sigil-fill"/>
             <circle cx="10.5" cy="8" r="1" class="sigil-fill"/>
             <circle cx="7" cy="11.5" r="1" class="sigil-fill"/>
           </g>
-          <text data-node-label="" x="1135" y="581" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Message Center</text>
-        <text x="1135" y="597" class="t-muted" font-size="9" text-anchor="middle">Topic&lt;T&gt; + EventQueue&lt;T,N&gt;</text>
-        <text x="1135" y="623" class="t-messagebus" font-size="7" text-anchor="middle">静态 · 类型安全</text>
+          <text data-node-label="" x="1032.5" y="568" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">INS_State Topic</text>
+        <text x="1032.5" y="584" class="t-muted" font-size="9" text-anchor="middle">Latest-Value 姿态</text>
         </g>
 
-        <g id="node-algorithms" data-node-id="algorithms" data-node-label="Algorithm" tabindex="0" role="button" aria-label="聚焦Algorithm，PID · 滤波 · VQF · 轨迹 · 数学, H7_RM Firmware Project" aria-pressed="false" data-node-kind="database" data-node-sublabel="PID · 滤波 · VQF · 轨迹 · 数学" data-node-context="H7_RM Firmware Project">
-          <title>Algorithm · PID · 滤波 · VQF · 轨迹 · 数学 · H7_RM Firmware Project</title>
-          <rect x="455" y="555" width="195" height="76" rx="6" class="c-mask"/>
-          <rect x="455" y="555" width="195" height="76" rx="6" class="c-database" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(461 561) scale(0.6875)">
+        <g id="node-monitored" data-node-id="monitored" data-node-label="DM · DJI · SBUS · INS" tabindex="0" role="button" aria-label="聚焦DM · DJI · SBUS · INS，BoardTransport · Referee / VTM¹, ③ 在线监控 · 非整车安全策略" aria-pressed="false" data-node-kind="backend" data-node-sublabel="BoardTransport · Referee / VTM¹" data-node-tag="Transport · Referee / VTM¹" data-node-context="③ 在线监控 · 非整车安全策略">
+          <title>DM · DJI · SBUS · INS · BoardTransport · Referee / VTM¹ · ③ 在线监控 · 非整车安全策略 · Transport · Referee / VTM¹</title>
+          <rect x="40" y="680" width="260" height="90" rx="6" class="c-mask"/>
+          <rect x="40" y="680" width="260" height="90" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(46 686) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-node-label="" x="170" y="723" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">DM · DJI · SBUS · INS</text>
+        <text x="170" y="739" class="t-muted" font-size="9" text-anchor="middle">BoardTransport · Referee / VTM¹</text>
+        <text x="170" y="762" class="t-backend" font-size="7" text-anchor="middle">Transport · Referee / VTM¹</text>
+        </g>
+
+        <g id="node-feed" data-node-id="feed" data-node-label="Daemon::Feed()" tabindex="0" role="button" aria-label="聚焦Daemon::Feed()，合法周期数据到达后喂入, ③ 在线监控 · 非整车安全策略" aria-pressed="false" data-node-kind="database" data-node-sublabel="合法周期数据到达后喂入" data-node-tag="liveness · 非整车安全策略" data-node-context="③ 在线监控 · 非整车安全策略">
+          <title>Daemon::Feed() · 合法周期数据到达后喂入 · ③ 在线监控 · 非整车安全策略 · liveness · 非整车安全策略</title>
+          <rect x="365" y="680" width="210" height="90" rx="6" class="c-mask"/>
+          <rect x="365" y="680" width="210" height="90" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(371 686) scale(0.6875)">
             <ellipse cx="8" cy="4" rx="5" ry="2"/>
             <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
           </g>
-          <text data-node-label="" x="552.5" y="591" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Algorithm</text>
-        <text x="552.5" y="607" class="t-muted" font-size="9" text-anchor="middle">PID · 滤波 · VQF · 轨迹 · 数学</text>
+          <text data-node-label="" x="470" y="723" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Daemon::Feed()</text>
+        <text x="470" y="739" class="t-muted" font-size="9" text-anchor="middle">合法周期数据到达后喂入</text>
+        <text x="470" y="762" class="t-database" font-size="7" text-anchor="middle">liveness · 非整车安全策略</text>
         </g>
 
-        <g id="node-memory" data-node-id="memory" data-node-label="内存与构建约束" tabindex="0" role="button" aria-label="聚焦内存与构建约束，MPU · DMA · Linker, H7_RM Firmware Project" aria-pressed="false" data-node-kind="security" data-node-sublabel="MPU · DMA · Linker" data-node-context="H7_RM Firmware Project">
-          <title>内存与构建约束 · MPU · DMA · Linker · H7_RM Firmware Project</title>
-          <rect x="245" y="555" width="165" height="76" rx="6" class="c-mask"/>
-          <rect x="245" y="555" width="165" height="76" rx="6" class="c-security" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(251 561) scale(0.6875)">
-            <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
-            <path d="m5.8 8 1.5 1.5 3-3"/>
+        <g id="node-manager" data-node-id="manager" data-node-label="DaemonManager" tabindex="0" role="button" aria-label="聚焦DaemonManager，持有已注册 Daemon, ③ 在线监控 · 非整车安全策略" aria-pressed="false" data-node-kind="database" data-node-sublabel="持有已注册 Daemon" data-node-context="③ 在线监控 · 非整车安全策略">
+          <title>DaemonManager · 持有已注册 Daemon · ③ 在线监控 · 非整车安全策略</title>
+          <rect x="640" y="680" width="210" height="90" rx="6" class="c-mask"/>
+          <rect x="640" y="680" width="210" height="90" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(646 686) scale(0.6875)">
+            <ellipse cx="8" cy="4" rx="5" ry="2"/>
+            <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
           </g>
-          <text data-node-label="" x="327.5" y="591" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">内存与构建约束</text>
-        <text x="327.5" y="607" class="t-muted" font-size="9" text-anchor="middle">MPU · DMA · Linker</text>
+          <text data-node-label="" x="745" y="723" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">DaemonManager</text>
+        <text x="745" y="739" class="t-muted" font-size="9" text-anchor="middle">持有已注册 Daemon</text>
+        </g>
+
+        <g id="node-status" data-node-id="status" data-node-label="StatusTask 100 Hz" tabindex="0" role="button" aria-label="聚焦StatusTask 100 Hz，Low · CheckAll(), ③ 在线监控 · 非整车安全策略" aria-pressed="false" data-node-kind="cloud" data-node-sublabel="Low · CheckAll()" data-node-context="③ 在线监控 · 非整车安全策略">
+          <title>StatusTask 100 Hz · Low · CheckAll() · ③ 在线监控 · 非整车安全策略</title>
+          <rect x="915" y="680" width="200" height="90" rx="6" class="c-mask"/>
+          <rect x="915" y="680" width="200" height="90" rx="6" class="c-cloud" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="cloud" class="semantic-sigil s-cloud" transform="translate(921 686) scale(0.6875)">
+            <path d="M4.3 12.5h7.3a2.4 2.4 0 0 0 .2-4.8 4 4 0 0 0-7.5-1.3A3.1 3.1 0 0 0 4.3 12.5Z"/>
+          </g>
+          <text data-node-label="" x="1015" y="723" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">StatusTask 100 Hz</text>
+        <text x="1015" y="739" class="t-muted" font-size="9" text-anchor="middle">Low · CheckAll()</text>
+        </g>
+
+        <g id="node-online" data-node-id="online" data-node-label="Online / Offline" tabindex="0" role="button" aria-label="聚焦Online / Offline，Transition · 活性, ③ 在线监控 · 非整车安全策略" aria-pressed="false" data-node-kind="database" data-node-sublabel="Transition · 活性" data-node-context="③ 在线监控 · 非整车安全策略">
+          <title>Online / Offline · Transition · 活性 · ③ 在线监控 · 非整车安全策略</title>
+          <rect x="1180" y="680" width="180" height="90" rx="6" class="c-mask"/>
+          <rect x="1180" y="680" width="180" height="90" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(1186 686) scale(0.6875)">
+            <ellipse cx="8" cy="4" rx="5" ry="2"/>
+            <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
+          </g>
+          <text data-node-label="" x="1270" y="723" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Online / Offline</text>
+        <text x="1270" y="739" class="t-muted" font-size="9" text-anchor="middle">Transition · 活性</text>
+        </g>
+
+        <g id="node-ins_gimbal" data-node-id="ins_gimbal" data-node-label="Gimbal" tabindex="0" role="button" aria-label="聚焦Gimbal，同上 · ReadFresh 10 ms, ② 姿态" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="同上 · ReadFresh 10 ms" data-node-context="② 姿态">
+          <title>Gimbal · 同上 · ReadFresh 10 ms · ② 姿态</title>
+          <rect x="1160" y="530" width="185" height="80" rx="6" class="c-mask"/>
+          <rect x="1160" y="530" width="185" height="80" rx="6" class="c-frontend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(1166 536) scale(0.6875)">
+            <rect x="2" y="3" width="12" height="10" rx="2"/>
+            <path d="M2 6.5h12"/>
+            <circle cx="4.1" cy="4.8" r=".7" class="sigil-fill"/>
+            <circle cx="6.3" cy="4.8" r=".7" class="sigil-fill"/>
+          </g>
+          <text data-node-label="" x="1252.5" y="568" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Gimbal</text>
+        <text x="1252.5" y="584" class="t-muted" font-size="9" text-anchor="middle">同上 · ReadFresh 10 ms</text>
         </g>
 
         <!-- Connection labels -->
-        <g data-edge-from="hardware" data-edge-to="hal" data-edge-label="寄存器 / IRQ / DMA" data-edge-key="0" data-edge-id="hardware_hal">
-          <rect x="174.8" y="316" width="96.39999999999999" height="14" rx="3" class="c-mask"/>
-          <text x="223" y="326" class="t-backend" font-size="8" text-anchor="middle">寄存器 / IRQ / DMA</text>
-        </g>
-        <g data-edge-from="hal" data-edge-to="bsp" data-edge-label="HAL Handle 与回调" data-edge-key="1" data-edge-id="hal_bsp">
-          <rect x="387.2" y="316" width="91.6" height="14" rx="3" class="c-mask"/>
-          <text x="433" y="326" class="t-muted" font-size="8" text-anchor="middle">HAL Handle 与回调</text>
-        </g>
-        <g data-edge-from="bsp" data-edge-to="device" data-edge-label="收发、缓冲与资源绑定" data-edge-key="2" data-edge-id="bsp_device">
-          <rect x="627" y="316" width="106" height="14" rx="3" class="c-mask"/>
-          <text x="680" y="326" class="t-muted" font-size="8" text-anchor="middle">收发、缓冲与资源绑定</text>
-        </g>
-        <g data-edge-from="device" data-edge-to="application" data-edge-label="Snapshot / Ready / Feedback" data-edge-key="3" data-edge-id="device_app">
-          <rect x="908.2" y="316" width="139.6" height="14" rx="3" class="c-mask"/>
-          <text x="978" y="326" class="t-backend" font-size="8" text-anchor="middle">Snapshot / Ready / Feedback</text>
-        </g>
-        <g data-edge-from="hal" data-edge-to="callbacks" data-edge-label="完成 / 错误 / EXTI" data-edge-key="4" data-edge-id="hal_callback">
-          <rect x="331.05" y="286" width="96.39999999999999" height="14" rx="3" class="c-mask"/>
-          <text x="379.25" y="296" class="t-muted" font-size="8" text-anchor="middle">完成 / 错误 / EXTI</text>
-        </g>
 
-        <g data-edge-from="callbacks" data-edge-to="tasks" data-edge-label="线程标志" data-edge-key="6" data-edge-id="callback_tasks">
-          <rect x="645.8" y="81" width="48.4" height="14" rx="3" class="c-mask"/>
-          <text x="670" y="91" class="t-muted" font-size="8" text-anchor="middle">线程标志</text>
-        </g>
-        <g data-edge-from="tasks" data-edge-to="device" data-edge-label="采样 / 服务 / 状态检查" data-edge-key="7" data-edge-id="tasks_device">
-          <rect x="755.2" y="235" width="115.6" height="14" rx="3" class="c-mask"/>
-          <text x="813" y="245" class="t-muted" font-size="8" text-anchor="middle">采样 / 服务 / 状态检查</text>
-        </g>
-        <g data-edge-from="tasks" data-edge-to="application" data-edge-label="1 kHz 调度" data-edge-key="8" data-edge-id="tasks_app">
-          <rect x="1118.5" y="216.5" width="58" height="14" rx="3" class="c-mask"/>
-          <text x="1147.5" y="226.5" class="t-backend" font-size="8" text-anchor="middle">1 kHz 调度</text>
-        </g>
-        <g data-edge-from="algorithms" data-edge-to="device" data-edge-label="估计与信号处理" data-edge-key="9" data-edge-id="alg_device">
-          <rect x="640.4" y="463.5" width="77.2" height="14" rx="3" class="c-mask"/>
-          <text x="679" y="473.5" class="t-muted" font-size="8" text-anchor="middle">估计与信号处理</text>
-        </g>
-        <g data-edge-from="algorithms" data-edge-to="application" data-edge-label="控制与轨迹" data-edge-key="10" data-edge-id="alg_app">
-          <rect x="932.25" y="680" width="58" height="14" rx="3" class="c-mask"/>
-          <text x="961.25" y="690" class="t-muted" font-size="8" text-anchor="middle">控制与轨迹</text>
-        </g>
-        <g data-edge-from="system" data-edge-to="device" data-edge-label="初始化、时间与在线状态" data-edge-key="11" data-edge-id="system_device">
-          <rect x="761.7" y="535" width="115.6" height="14" rx="3" class="c-mask"/>
-          <text x="819.5" y="545" class="t-muted" font-size="8" text-anchor="middle">初始化、时间与在线状态</text>
-        </g>
-        <g data-edge-from="system" data-edge-to="message_center" data-edge-label="INS_State 发布" data-edge-key="12" data-edge-id="system_messages">
-          <rect x="961.4" y="645" width="77.2" height="14" rx="3" class="c-mask"/>
-          <text x="1000" y="655" class="t-muted" font-size="8" text-anchor="middle">INS_State 发布</text>
-        </g>
-        <g data-edge-from="message_center" data-edge-to="application" data-edge-label="Consume · Latest-Value / FIFO" data-edge-key="13" data-edge-id="messages_app">
-          <rect x="1025.4" y="445" width="149.2" height="14" rx="3" class="c-mask"/>
-          <text x="1100" y="455" class="t-backend" font-size="8" text-anchor="middle">Consume · Latest-Value / FIFO</text>
-        </g>
-        <g data-edge-from="memory" data-edge-to="bsp" data-edge-label="DMA 可达性与链接布局" data-edge-key="14" data-edge-id="memory_bsp">
-          <rect x="387" y="463.5" width="106" height="14" rx="3" class="c-mask"/>
-          <text x="440" y="473.5" class="t-muted" font-size="8" text-anchor="middle">DMA 可达性与链接布局</text>
-        </g>
-        <g data-edge-from="application" data-edge-to="device" data-edge-label="目标 / 输出许可 / Control" data-edge-key="15" data-edge-id="app_device">
-          <rect x="913" y="290" width="130" height="14" rx="3" class="c-mask"/>
-          <text x="978" y="300" class="t-muted" font-size="8" text-anchor="middle">目标 / 输出许可 / Control</text>
-        </g>
-        <g data-edge-from="application" data-edge-to="message_center" data-edge-label="Publish · Topic / EventQueue" data-edge-key="16" data-edge-id="app_messages">
-          <rect x="1157.8" y="460" width="144.4" height="14" rx="3" class="c-mask"/>
-          <text x="1230" y="470" class="t-muted" font-size="8" text-anchor="middle">Publish · Topic / EventQueue</text>
-        </g>
-        <g data-edge-from="tasks" data-edge-to="bsp" data-edge-label="CAN Tx / 周期收发" data-edge-key="17" data-edge-id="tasks_bsp">
-          <rect x="665.2" y="204.5" width="91.6" height="14" rx="3" class="c-mask"/>
-          <text x="711" y="214.5" class="t-muted" font-size="8" text-anchor="middle">CAN Tx / 周期收发</text>
-        </g>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
         <!-- Boundary labels (foreground masks keep routes out of titles) -->
-        <g data-graph-role="structural-frame-label" data-composition-frame-id="0" data-composition-frame-kind="region" data-composition-frame-label="H7_RM Firmware Project">
-          <rect data-graph-role="structural-frame-label-mask" x="209" y="75" width="128.8" height="16" rx="3" class="c-mask"/>
-          <text data-boundary-label="" x="213" y="88" class="t-cloud" font-size="9" font-weight="600">H7_RM Firmware Project</text>
+        <g data-graph-role="structural-frame-label" data-composition-frame-id="0" data-composition-frame-kind="region" data-composition-frame-label="① 机器人控制">
+          <rect data-graph-role="structural-frame-label-mask" x="32" y="30" width="74.8" height="16" rx="3" class="c-mask"/>
+          <text data-boundary-label="" x="36" y="43" class="t-cloud" font-size="9" font-weight="600">① 机器人控制</text>
+        </g>
+
+        <g data-graph-role="structural-frame-label" data-composition-frame-id="1" data-composition-frame-kind="region" data-composition-frame-label="② 姿态">
+          <rect data-graph-role="structural-frame-label-mask" x="32" y="510" width="42.4" height="16" rx="3" class="c-mask"/>
+          <text data-boundary-label="" x="36" y="523" class="t-cloud" font-size="9" font-weight="600">② 姿态</text>
+        </g>
+
+        <g data-graph-role="structural-frame-label" data-composition-frame-id="2" data-composition-frame-kind="region" data-composition-frame-label="③ 在线监控 · 非整车安全策略">
+          <rect data-graph-role="structural-frame-label-mask" x="32" y="660" width="155.79999999999998" height="16" rx="3" class="c-mask"/>
+          <text data-boundary-label="" x="36" y="673" class="t-cloud" font-size="9" font-weight="600">③ 在线监控 · 非整车安全策略</text>
         </g>
 
         <!-- Legend -->
         <g data-legend="">
-          <text x="40" y="724" class="t-primary" font-size="12" font-weight="650">图例</text>
-          <g data-legend-semantic-kind="frontend" data-legend-x="40" data-legend-baseline="744" data-legend-width="73">
-            <rect x="40" y="735" width="16" height="10" rx="2.5" class="c-frontend" stroke-width="1"/>
-            <text x="62" y="744" class="t-muted" font-size="10" font-weight="500">业务层</text>
+          <text x="40" y="814" class="t-primary" font-size="12" font-weight="650">图例</text>
+          <g data-legend-semantic-kind="frontend" data-legend-x="40" data-legend-baseline="834" data-legend-width="98">
+            <rect x="40" y="825" width="16" height="10" rx="2.5" class="c-frontend" stroke-width="1"/>
+            <text x="62" y="834" class="t-muted" font-size="10" font-weight="500">Application</text>
           </g>
-          <g data-legend-semantic-kind="backend" data-legend-x="135" data-legend-baseline="744" data-legend-width="118">
-            <rect x="135" y="735" width="16" height="10" rx="2.5" class="c-backend" stroke-width="1"/>
-            <text x="157" y="744" class="t-muted" font-size="10" font-weight="500">设备 / 基础设施</text>
+          <g data-legend-semantic-kind="backend" data-legend-x="160" data-legend-baseline="834" data-legend-width="73">
+            <rect x="160" y="825" width="16" height="10" rx="2.5" class="c-backend" stroke-width="1"/>
+            <text x="182" y="834" class="t-muted" font-size="10" font-weight="500">Device</text>
           </g>
-          <g data-legend-semantic-kind="database" data-legend-x="275" data-legend-baseline="744" data-legend-width="63">
-            <rect x="275" y="735" width="16" height="10" rx="2.5" class="c-database" stroke-width="1"/>
-            <text x="297" y="744" class="t-muted" font-size="10" font-weight="500">算法</text>
+          <g data-legend-semantic-kind="database" data-legend-x="255" data-legend-baseline="834" data-legend-width="73">
+            <rect x="255" y="825" width="16" height="10" rx="2.5" class="c-database" stroke-width="1"/>
+            <text x="277" y="834" class="t-muted" font-size="10" font-weight="500">System</text>
           </g>
-          <g data-legend-semantic-kind="cloud" data-legend-x="360" data-legend-baseline="744" data-legend-width="83">
-            <rect x="360" y="735" width="16" height="10" rx="2.5" class="c-cloud" stroke-width="1"/>
-            <text x="382" y="744" class="t-muted" font-size="10" font-weight="500">任务调度</text>
+          <g data-legend-semantic-kind="cloud" data-legend-x="350" data-legend-baseline="834" data-legend-width="63">
+            <rect x="350" y="825" width="16" height="10" rx="2.5" class="c-cloud" stroke-width="1"/>
+            <text x="372" y="834" class="t-muted" font-size="10" font-weight="500">Task</text>
           </g>
-          <g data-legend-semantic-kind="security" data-legend-x="465" data-legend-baseline="744" data-legend-width="83">
-            <rect x="465" y="735" width="16" height="10" rx="2.5" class="c-security" stroke-width="1"/>
-            <text x="487" y="744" class="t-muted" font-size="10" font-weight="500">工程约束</text>
+          <g data-legend-semantic-kind="security" data-legend-x="435" data-legend-baseline="834" data-legend-width="88">
+            <rect x="435" y="825" width="16" height="10" rx="2.5" class="c-security" stroke-width="1"/>
+            <text x="457" y="834" class="t-muted" font-size="10" font-weight="500">BSP / HAL</text>
           </g>
-          <g data-legend-semantic-kind="messagebus" data-legend-x="570" data-legend-baseline="744" data-legend-width="83">
-            <rect x="570" y="735" width="16" height="10" rx="2.5" class="c-messagebus" stroke-width="1"/>
-            <text x="592" y="744" class="t-muted" font-size="10" font-weight="500">消息通道</text>
+          <g data-legend-semantic-kind="messagebus" data-legend-x="545" data-legend-baseline="834" data-legend-width="113">
+            <rect x="545" y="825" width="16" height="10" rx="2.5" class="c-messagebus" stroke-width="1"/>
+            <text x="567" y="834" class="t-muted" font-size="10" font-weight="500">Message Center</text>
           </g>
-          <g data-legend-semantic-kind="external" data-legend-x="675" data-legend-baseline="744" data-legend-width="63">
-            <rect x="675" y="735" width="16" height="10" rx="2.5" class="c-external" stroke-width="1"/>
-            <text x="697" y="744" class="t-muted" font-size="10" font-weight="500">硬件</text>
+          <g data-legend-semantic-kind="external" data-legend-x="680" data-legend-baseline="834" data-legend-width="83">
+            <rect x="680" y="825" width="16" height="10" rx="2.5" class="c-external" stroke-width="1"/>
+            <text x="702" y="834" class="t-muted" font-size="10" font-weight="500">Hardware</text>
           </g>
         </g>
       </svg>

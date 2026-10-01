@@ -193,7 +193,8 @@ Gimbal_Update（Control_Task，1 kHz）
 ### 6.2 RobotCmd 与 Application
 
 ```text
-S.BUS / VTM / Keyboard / Vision
+S.BUS → RemoteInput（当前只映射底盘）
+VTM / Keyboard / Vision → InputState_Submit*（接口预留，未绑定设备）
   └─ InputState → 固定 SourceArbitration
           ↓ Remote 安全许可与来源时效检查
      RobotCmd_Update

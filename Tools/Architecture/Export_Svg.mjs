@@ -50,7 +50,7 @@ try {
   if (result.exceptionDetails) {
     throw new Error(result.exceptionDetails.exception?.description || 'SVG 导出失败');
   }
-  await fs.writeFile(path.resolve(output), result.result.value, 'utf8');
+  await fs.writeFile(path.resolve(output), result.result.value.replace(/[ \t]+$/gm, ''), 'utf8');
   console.log(`SVG 已导出: ${path.resolve(output)}`);
 } finally {
   await browser.close();
