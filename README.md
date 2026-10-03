@@ -2,7 +2,7 @@
 
 > **第一次使用 H7_RM？从这里开始**
 >
-> 1. 阅读 [30～60 分钟快速上手](GETTING_STARTED.md)，先构建并找到控制任务。
+> 1. 阅读 [30～60 分钟快速上手](docs/GETTING_STARTED.md)，先构建并找到控制任务。
 > 2. 看 [新人控制数据流图](Assets/Architecture/H7_RM_GettingStarted.svg)（[交互版](Assets/Architecture/H7_RM_GettingStarted.html)），理解控制、姿态和在线监控三条链。
 > 3. 需要完整工程分层时，看 [H7_RM / H7_BSP 总览图](Assets/Architecture/H7_BSP.svg)（[交互版](Assets/Architecture/H7_BSP.html)）。
 > 4. 具体开发再进入下方各模块 reference；快速上手不替代接口与硬件约定。
@@ -335,7 +335,7 @@ git switch RoboMaster_Test
 ## 文档与参考
 
 - [BSP 开发指南](User_File/Middleware/BSP/README.md) · [Message Center](User_File/System/MessageCenter/README.md) · [Application 开发指南](User_File/Application/README.md)。
-- [DJI 电机驱动](User_File/Device/Peripheral/Motor/DJImotor/dji_motor.md) · [达妙电机驱动](User_File/Device/Peripheral/Motor/DMmotor/dmmotor.md) · [更新记录](CHANGELOG.md)。
+- [DJI 电机驱动](User_File/Device/Peripheral/Motor/DJImotor/dji_motor.md) · [达妙电机驱动](User_File/Device/Peripheral/Motor/DMmotor/dmmotor.md) · [更新记录](docs/CHANGELOG.md)。
 - [文档与注释一致性审查](docs/documentation_sync_2026-09-28.md) · [2026-09-25 历史框架审查](docs/framework_review_2026-09-25.md)。
 - [FreeRTOS heap memory management](https://www.freertos.org/Documentation/02-Kernel/02-Kernel-features/09-Memory-management/01-Memory-management)。
 - [ST AN4891：STM32H7 系统架构与性能](https://www.st.com/resource/en/application_note/an4891-stm32h72x-stm32h73x-and-singlecore-stm32h74x75x-system-architecture-and-performance-stmicroelectronics.pdf)。
