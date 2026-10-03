@@ -34,7 +34,7 @@ enum Enum_BSP_Key_Status
 };
 
 /**
- * @brief Specialized, WS2812单个灯珠
+ * @brief Specialized, 板载按键状态与边沿检测
  *
  */
 class Class_Key

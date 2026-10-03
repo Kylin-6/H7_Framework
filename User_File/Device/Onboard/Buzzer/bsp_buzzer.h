@@ -10,9 +10,9 @@
  */
 
 /**
- * Cube中, 主频240M, psc240, arr250, 对应freq4000Hz
- * 原则上满足, arr * freq = 1MHz
- * 因此, freq = 1MHz / arr
+ * 定时器计数频率为 1 MHz（240 MHz 定时器时钟经 PSC=239 分频）。
+ * 硬件 PWM 频率为 1 MHz / (ARR + 1)，不是 CPU 主频 / ARR。
+ * 当前驱动按 ARR ≈ 1 MHz / Frequency 近似设置，实际音调还受整数取整影响。
  *
  * 此外, 该蜂鸣器有效音域为G3~ A7
  */

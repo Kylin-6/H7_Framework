@@ -34,6 +34,7 @@ enum Enum_Trajectory_Status
 class Class_Trajectory
 {
 public:
+    /** 限幅单位随位置量纲：U/s、U/s^2、U/s^3；D_T 为 s，必须为正有限值。 */
     bool Init(float __Velocity_Max, float __Acceleration_Max, float __Jerk_Max,
               float __D_T = 0.001f);
     bool Reset(float __Position, float __Velocity = 0.0f, float __Acceleration = 0.0f);

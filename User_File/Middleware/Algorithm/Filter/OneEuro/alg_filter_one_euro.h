@@ -25,6 +25,7 @@
 class Class_Filter_One_Euro
 {
 public:
+    /** 两个截止频率为 Hz，D_T 为 s；Beta 与输入量纲相关，不是无量纲通用增益。 */
     bool Init(float __Min_Cutoff_Frequency, float __Beta = 0.0f,
               float __Derivative_Cutoff_Frequency = 1.0f, float __D_T = 0.001f);
 

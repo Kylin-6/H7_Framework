@@ -43,7 +43,8 @@ struct Struct_Status
 
 /**
  * @brief Reusable, 有限自动机核心, 一般有时间需求的则采用有限自动机
- * 使用时请继承->声明友元后使用
+ * 当前实现只保存状态与调用次数，不包含业务转移条件。
+ * Count_Time 的单位是计算轮次；上层按固定周期换算时间，并保证状态编号小于 Status_Max。
  *
  */
 template<uint8_t Status_Max = 10>

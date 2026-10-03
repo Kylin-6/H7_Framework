@@ -12,6 +12,8 @@ osThreadId_t BMI088TaskHandle;
 osThreadId_t ControlTaskHandle;
 osThreadId_t StorageTaskHandle;
 
+// stack_size 的单位是字节；除 StatusTask 外，当前任务栈/控制块由 CMSIS 层分配。
+// ControlTask 和 BMI088Task 创建时为 Low，进入任务后分别提升为 High1 和 High2。
 const osThreadAttr_t TransportTask_attributes = {
     .name = "TransportTask", .stack_size = 2048 * 4,
     .priority = osPriorityNormal,

@@ -4,6 +4,6 @@ extern "C" void Ins_Task(void* argument)
 {
     (void)argument;
 
-    // 预留任务：当前姿态解算由BMI088_Task完成，不占用线程栈和调度时间。
+    // 单板仍会创建此兼容任务并分配栈；退出后不再周期调度，姿态解算由 BMI088_Task 完成。
     osThreadExit();
 }

@@ -10,7 +10,9 @@ cmake --preset ChassisBoard && cmake --build --preset ChassisBoard
 
 主机协议测试保存在 `RoboMaster_Test` 分支的 `Tests/Transport`，按仓库的测试分支约定运行。
 
-`Debug` / `Release` 预设仍是原有单板入口；`SingleBoard` 保留原有
+所有预设统一生成 `build/<preset>/H7_Framework.elf` 和 `H7_Framework.map`，板型由构建目录区分。
+
+`Debug` / `Release` 预设默认是单板入口（配置缓存中的 `H7_BOARD` 可覆盖）；`SingleBoard` 保留原有
 `H7_APP_GIMBAL`、`H7_APP_CHASSIS`、`H7_APP_SHOOT` 硬件控制开关，
 默认均为 `OFF`。它是安全构建模板；实车须显式开启所需应用，并先核对
 电机接线、方向、量程与控制器标定。
@@ -77,6 +79,6 @@ Poll 在 bus、ID、大小、接收时效与 Decode 全部通过后 Feed，再�
 注入单总线堵塞验证其他总线不受影响，并量测 1 kHz 控制任务执行时间。
 
 新增通信与队列不使用堆分配，也不创建新任务。`TransportTask.cpp` 实际承担
-USB 遥测任务；后续另行改名，本次不改变任务符号。
+USB 遥测任务，与板间 CAN 的 `BoardTransport_Poll()` 是两个独立入口。
 INS、Gimbal 和 Shoot 板内控制不经过此 Transport。扩展第三块板时新增对应
 构建预设、BoardConfig、固定 TransportConfig 绑定以及该消息的编解码和接收发布入口。

@@ -35,6 +35,7 @@ enum Enum_Slope_First
 
 /**
  * @brief Reusable, 斜坡函数本体
+ * @note Increase/Decrease 是每次计算的变化幅度，不是每秒变化率；调用频率由上层固定。
  *
  */
 class Class_Slope

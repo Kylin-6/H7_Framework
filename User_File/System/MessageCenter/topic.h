@@ -163,7 +163,8 @@ private:
     Topic<T> &topic_;
 };
 
-/** 每个订阅端独立跟踪序号，只在有新发布时返回数据。 */
+/** 每个订阅端独立跟踪序号，只在有新发布时返回数据。
+ * 同一 Subscriber 的已读状态没有临界区保护，应由单一调用上下文持有。 */
 template<typename T>
 class Subscriber
 {

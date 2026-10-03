@@ -37,7 +37,8 @@ extern "C" {
 
 /**
  * @brief 按依赖顺序初始化 BSP 与板载设备，并记录失败而不是无限等待。
- * @note 函数返回只表示初始化流程结束；实际结果由 System_Init_GetState() 判断。
+ * @note 在 osKernelInitialize/任务启动前调用；不支持与设备更新并发热重启。
+ *       函数返回只表示初始化流程结束；实际结果由 System_Init_GetState() 判断。
  */
 void System_Init(void);
 

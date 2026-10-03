@@ -362,7 +362,7 @@ void Class_BMI088::EXTI_Flag_Callback(uint16_t GPIO_Pin)
 }
 
 /**
- * @brief 定时器周期中断回调函数
+ * @brief 由 TIM1msTask 每 128 ms 请求温度采样并更新加热 PID，不执行姿态解算。
  *
  */
 void Class_BMI088::TIM_128ms_Calculate_PeriodElapsedCallback()

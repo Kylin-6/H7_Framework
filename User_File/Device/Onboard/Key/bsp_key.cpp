@@ -34,7 +34,7 @@ void Class_Key::Init()
 }
 
 /**
- * @brief TIM定时器中断处理按键状态
+ * @brief 由 TIM1msTask 每 1 ms 根据最近采样值更新按键边沿状态
  *
  */
 void Class_Key::TIM_1ms_Process_PeriodElapsedCallback()
@@ -66,7 +66,7 @@ void Class_Key::TIM_1ms_Process_PeriodElapsedCallback()
 }
 
 /**
- * @brief TIM定时器中断读取按键状态
+ * @brief 由 TIM1msTask 每 50 ms 读取 GPIO；当前采用周期采样，没有连续稳定窗口判定
  *
  */
 void Class_Key::TIM_50ms_Read_PeriodElapsedCallback()

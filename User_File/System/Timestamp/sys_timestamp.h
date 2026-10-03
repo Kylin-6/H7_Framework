@@ -10,8 +10,9 @@
  */
 
 /**
- * 要求: 使能并绑定一个定时器, 开外部中断, PSC分频到1MHz, ARR为3600000000
- * 保证arr计数器1us增一次, 1h触发一次外部中断
+ * 要求：绑定 32 位定时器，计数频率 1 MHz，ARR = 3600000000 - 1。
+ * 当前使用 TIM5，每计数 1 us，更新中断每 3600 s 扩展一次溢出计数。
+ * Init 只绑定句柄；启动定时器与转发更新中断由 System_Init/callback 负责。
  */
 
 #ifndef SYS_TIME_H
@@ -233,6 +234,7 @@ protected:
 
 extern Class_Timestamp SYS_Timestamp;
 
+/** 忙等待延时，要求时间戳定时器已运行；不会让出 CPU，不用于控制周期或 ISR 长延时。 */
 namespace Namespace_SYS_Timestamp
 {
     void Delay_Second(const uint32_t &Second);
@@ -247,7 +249,7 @@ namespace Namespace_SYS_Timestamp
 /**
  * @brief 获取当前时间
  *
- * @return uint64_t 当前时间
+ * @return uint64_t 当前时间，单位 us
  */
 inline uint64_t Class_Timestamp::Get_Current_Timestamp() const
 {

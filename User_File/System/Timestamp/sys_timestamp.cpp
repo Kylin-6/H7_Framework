@@ -10,8 +10,9 @@
  */
 
 /**
- * 要求: 使能并绑定一个定时器, 开外部中断, PSC分频到1MHz, ARR为3600000000
- * 保证arr计数器1us增一次, 1h触发一次外部中断
+ * 要求：绑定 32 位定时器，计数频率 1 MHz，ARR = 3600000000 - 1。
+ * 当前使用 TIM5，每计数 1 us，更新中断每 3600 s 扩展一次溢出计数。
+ * Init 只绑定句柄；启动定时器与转发更新中断由 System_Init/callback 负责。
  */
 
 /* Includes ------------------------------------------------------------------*/
@@ -33,7 +34,7 @@ Class_Timestamp SYS_Timestamp;
 /**
  * @brief 初始化时间戳
  *
- * @param __TIM_Manage_Object 绑定的定时器, psc后为1MHz, arr要求是3 600 000 000, arr至少32位的寄存器
+ * @param htim 绑定的 32 位定时器；计数频率 1 MHz，ARR = 3599999999。
  */
 void Class_Timestamp::Init(TIM_HandleTypeDef *htim)
 {
@@ -58,6 +59,7 @@ uint64_t Class_Timestamp::Calculate_Timestamp() const
 {
     for (;;)
     {
+        // 前后两次读取溢出次数，排除 CNT 读取期间更新中断已经执行的情况。
         const uint32_t overflow_before = TIM_Overflow_Count;
         const uint32_t counter = TIM_Handler->Instance->CNT;
         __DMB();
@@ -67,6 +69,7 @@ uint64_t Class_Timestamp::Calculate_Timestamp() const
             continue;
         }
 
+        // 硬件已回绕但 ISR 尚未更新软件计数时，临时补算一次周期而不修改共享状态。
         if (__HAL_TIM_GET_FLAG(TIM_Handler, TIM_FLAG_UPDATE) != RESET)
         {
             const uint32_t pending_counter = TIM_Handler->Instance->CNT;

@@ -31,6 +31,8 @@ typedef enum
     
 } QD4310_Command_t;
 
+// QD4310 协议边界保留 rpm/A/rad；应用使用前须将 speed 从 rpm 转为 rad/s。
+// CAN ISR 写入反馈字段，任务读取多字段时需自行保护完整快照；本结构没有内置快照锁。
 // QD4310电机结构体
 typedef struct {
     bool enabled;
@@ -78,19 +80,19 @@ bool QD4310_SetStepAngle(QD4310_t *motor, float step_angle);
 /**
  * @brief 设置电机转速
  * @param motor 电机结构体指针
- * @param speed 设置的转速,[-1000,1000]
+ * @param speed 设置的转速，单位 rpm，范围 [-1000,1000]
  */
 bool QD4310_SetSpeed(QD4310_t *motor, float speed);
 /**
  * @brief 设置电机转速
  * @param motor 电机结构体指针
- * @param speed 设置的转速,[-1000,1000]
+ * @param speed 设置的转速，单位 rpm，范围 [-1000,1000]
  */
 bool QD4310_SetLowSpeed(QD4310_t *motor, float speed);
 /**
  * @brief 设置电机电流
  * @param motor 电机结构体指针
- * @param current 设置的转速,[-10,10]
+ * @param current 设置的电流，单位 A，范围 [-10,10]
  */
 bool QD4310_SetCurrent(QD4310_t *motor, float current);
 

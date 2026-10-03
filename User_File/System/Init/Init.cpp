@@ -50,7 +50,7 @@ extern "C" uint32_t System_Init_GetFailureMask(void)
 extern "C" void System_Init(void)
 {
     const BoardHardware &hardware = BoardConfig_Get();
-    // 支持调试阶段重复进入时重新生成一份完整的初始化结果。
+    // 重置本次诊断结果；这不是运行期热重启接口，必须在任务启动前调用。
     init_finished = false;
     system_init_state = SYSTEM_INIT_READY;
     system_init_failure_mask = SYSTEM_INIT_FAILURE_NONE;

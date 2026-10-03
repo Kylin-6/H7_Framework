@@ -33,6 +33,7 @@ static uint8_t FreeRTOS_Heap_RAM_D1[FREERTOS_RAM_D1_HEAP_SIZE]
     __attribute__((section(".ram_d1_data.freertos_heap"),
                    aligned(portBYTE_ALIGNMENT)));
 
+// heap_5 要求区域按地址升序排列，并以 {NULL, 0} 终止；DTCM heap 不能作为 DMA1/2 缓冲。
 HeapRegion_t SYS_FreeRTOS_Heap_Regions[] = {
     {FreeRTOS_Heap_DTCM, sizeof(FreeRTOS_Heap_DTCM)},
     {FreeRTOS_Heap_RAM_D1, sizeof(FreeRTOS_Heap_RAM_D1)},

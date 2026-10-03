@@ -7,10 +7,10 @@
  *
  * @details
  * 通过编译期静态回调表分发不同周期的处理函数:
- *   - 1ms:  W25Q64JV 超时检测 / 按键扫描
+ *   - 1ms:  W25Q64JV 超时检测、按键扫描、BMI088 传输服务、UART 恢复服务
  *   - 10ms: WS2812 灯效刷新
- *   - 50ms: 按键消抖
- *   - 128ms: BMI088 姿态解算
+ *   - 50ms: 按键 GPIO 采样；1 ms 回调根据采样值更新边沿状态
+ *   - 128ms: BMI088 温度读取与加热 PID；姿态解算由 BMI088_Task 处理
  *
  * @copyright USTC-RoboWalker (c) 2026
  */
@@ -48,7 +48,8 @@ static const PulseEntry_t TIM_1ms_Callback_Table[] = {
  * @brief 1ms 定时器任务入口 (RTOS 线程)
  *
  * @note  每 1ms 执行一次，通过静态表分发各周期回调
- * @note  使用 osDelayUntil 绝对延时保证严格1 ms周期，不受回调表执行耗时影响
+ * @note  osDelayUntil 使用绝对 tick 避免累计漂移；抢占和超时执行仍可能延迟唤醒。
+ *        当前 RTOS tick 为 1 ms，回调表 tick 计数表示调度轮次，不是独立硬件时间戳。
  */
 extern "C" void TIM1msTask(void *argument) {
   (void)argument;

@@ -18,7 +18,7 @@ namespace Namespace_SYS_Flash_Layout
 constexpr uint32_t W25Q64_SIZE = 0x00800000U;
 constexpr uint32_t W25Q64_SECTOR_SIZE = 0x00001000U;
 
-// The last two sectors are exclusively owned by the IMU bias A/B journal.
+// 为 IMU 零偏 A/B 日志预留最后两个扇区；地址分配不代表已经接入持久化读写。
 constexpr uint32_t IMU_BIAS_SLOT_A_ADDRESS = 0x007fe000U;
 constexpr uint32_t IMU_BIAS_SLOT_B_ADDRESS = 0x007ff000U;
 

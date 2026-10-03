@@ -1,7 +1,7 @@
 # H7_RM 快速上手
 
 用 30～60 分钟走完这条路径：先看图 → 保持默认配置构建 → 找到 ControlTask → 跟一条命令。
-以 `RoboMaster_H7` 的 **SingleBoard** 为阅读起点；双板差异最后再看 Transport reference。
+以当前固件源码的 **SingleBoard** 为阅读起点；双板差异最后再看 Transport reference。
 
 ## 1. 先看这张图
 

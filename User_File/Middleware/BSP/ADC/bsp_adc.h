@@ -21,7 +21,7 @@
 
 /* Exported macros -----------------------------------------------------------*/
 
-// 缓冲区字节长度
+// uint16_t 采样元素个数（每个管理对象占用 256 字节的采样数组）
 #define ADC_BUFFER_SIZE 128
 
 /* Exported types ------------------------------------------------------------*/
@@ -45,7 +45,8 @@ extern struct Struct_ADC_Manage_Object ADC3_Manage_Object;
 /* Exported function declarations --------------------------------------------*/
 
 /**
- * @brief 校准 ADC 并启动指定通道数的 DMA 循环采样。
+ * @brief 校准 ADC 并启动指定采样元素数的 DMA 接收；循环模式由 CubeMX 配置决定。
+ * @param Sample_Number DMA 传输元素数，不是字节数；调用方须保证不超过 ADC_BUFFER_SIZE。
  * @return 参数、校准、DMA 启动任一失败时返回 false；调用方可据此降级启动。
  */
 bool ADC_Init(ADC_HandleTypeDef *hadc, uint16_t Sample_Number);

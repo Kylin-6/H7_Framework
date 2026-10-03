@@ -37,7 +37,7 @@
 typedef void (*SPI_Callback)(uint8_t *Tx_Buffer, uint8_t *Rx_Buffer, uint16_t Tx_Length, uint16_t Rx_Length);
 
 /**
- * @brief CAN通信处理结构体
+ * @brief SPI 事务管理对象，拥有当前片选、收发缓冲及事务诊断状态
  *
  */
 struct Struct_SPI_Manage_Object

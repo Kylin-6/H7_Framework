@@ -28,7 +28,8 @@
  * z_k = H * x_k + v_k
  * 其中, w_k ~ N(0, Q), v_k ~ N(0, R)
  *
- * 每轮调用预测和更新函数前, 需要先更新输入向量Vector_U和测量向量Vector_Z
+ * 每轮先更新 Vector_U 并预测；有有效新测量时才更新 Vector_Z 并执行测量更新。
+ * 缺测时保留预测结果；本类不检查时间戳或测量有效性，由调用方决定是否更新。
  *
  * @tparam State_Dimension 状态维度
  * @tparam Input_Dimension 输入维度

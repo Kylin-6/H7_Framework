@@ -21,7 +21,9 @@
 /* Exported types ------------------------------------------------------------*/
 
 /**
- * @brief Reusable, 循环队列本体
+ * @brief Reusable, 单上下文使用的固定容量循环队列
+ * @note 无并发保护；满队列 Push 静默拒绝，空队列 Pop/Get_Front/Get_Rear 不提供有效数据。
+ *       调用前先检查长度；业务离散事件应使用可报告溢出的 EventQueue。
  *
  */
 template<typename Type, uint32_t Max_Size = 200>
@@ -92,7 +94,7 @@ void Class_Queue<Type, Max_Size>::Init()
  *
 * @tparam Type 类型
 * @tparam Max_Size 队列长度最大值
-* @return 队首元素
+* @return 当前元素个数
 */
 template<typename Type, uint32_t Max_Size>
 inline uint32_t Class_Queue<Type, Max_Size>::Get_Length() const

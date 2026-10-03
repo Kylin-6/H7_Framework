@@ -8,7 +8,7 @@
 bool RobotCmd_Init(Output<GimbalCmd> gimbal_output,
                    Output<ChassisCmd> chassis_output,
                    Output<ShootCmd> shoot_output);
-/** 解析输入并发布命令；底盘命令每 10 ms 刷新。 */
+/** 仲裁任务中已解析的输入状态并发布命令；底盘命令每 10 个控制周期刷新。 */
 void RobotCmd_Update(void);
 /** 设置接口应由 ControlTask 上下文调用；缓存/dirty 标志无同步保护，不可从 ISR/UART 回调并发调用。 */
 void RobotCmd_SetGimbal(const GimbalCmd &command);

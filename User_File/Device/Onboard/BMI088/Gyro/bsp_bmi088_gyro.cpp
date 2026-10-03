@@ -182,7 +182,7 @@ void Class_BMI088_Gyro::Start_FIFO_Acquisition()
 }
 
 /**
- * @brief SPI接收回调函数, 处理加速度计数据
+ * @brief 解析陀螺仪寄存器与 FIFO 回包，将完整运动样本送入解算队列
  *
  */
 uint8_t Class_BMI088_Gyro::SPI_RxCallback(const uint64_t &__Ready_Timestamp_Us)
