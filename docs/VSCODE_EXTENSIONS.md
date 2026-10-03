@@ -73,6 +73,33 @@ CMake Tools 本身不替代 GNU Arm 编译器、CMake 或 Ninja，环境要求�
 Cortex-Debug 本机清单中依赖 Debug Tracker、MemoryView、RTOS Views 和 Peripheral Viewer。
 这些视图是否可用取决于当前调试适配器，不因同时安装就自动适配 EmberProbe。
 
+## C/C++ 格式化：Clang-Format
+
+推荐本机已安装的 [Clang-Format](https://marketplace.visualstudio.com/items?itemName=xaver.clang-format)
+（扩展 ID：`xaver.clang-format`，本机版本：`1.9.0`）。它调用 clang-format 可执行程序格式化代码，具体用法见 [插件官方说明](https://github.com/xaverh/vscode-clang-format)。
+
+本项目以根目录 [.clang-format](../.clang-format) 为唯一格式规则：LLVM 基础风格、4 空格缩进、禁用 Tab、大括号换行，且不限制行宽。配置还会排序和重组 include，格式化后需要检查差异。
+
+在 VS Code 中执行“使用…格式化文档”选择 Clang-Format；只调整局部代码时使用“格式化选定内容”。可在本机工作区 settings.json 中指定 C/C++ 格式化器：
+
+```json
+{
+    "[c]": {
+        "editor.defaultFormatter": "xaver.clang-format",
+        "editor.formatOnSave": false
+    },
+    "[cpp]": {
+        "editor.defaultFormatter": "xaver.clang-format",
+        "editor.formatOnSave": false
+    },
+    "clang-format.style": "file"
+}
+```
+
+插件会在 PATH 中寻找 clang-format；找不到时，通过 `clang-format.executable` 指定本机安装路径。机器路径不写进项目公共配置。clangd 负责导航和诊断，Clang-Format 负责排版；同时安装多个格式化提供者时明确选择实际使用的提供者。
+
+本项目默认建议手动格式化本次修改范围，避免保存文件时产生整文件排版或 include 重排。提交前检查差异并运行 `git diff --check`，不对生成代码、第三方依赖或无关文件执行全仓格式化。
+
 ## 日常编辑与文档
 
 | 插件 | 扩展 ID | 使用场景 |

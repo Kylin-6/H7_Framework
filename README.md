@@ -279,7 +279,7 @@ FreeRTOS 使用 `heap_5`，默认总量 64 KiB，分为 **48 KiB DTCMRAM + 16 Ki
 
 ### 推荐 VS Code 插件
 
-**优先推荐 [EmberProbe - MCU Flash & Debug](https://marketplace.visualstudio.com/items?itemName=BakeSheep.emberprobe)**（[GitHub 仓库](https://github.com/BakeSheep/EmberProbe-MCU-Flash-Debug)），作为本项目烧录、断点调试、实时变量观测与 ELF 分析入口。构建与源码阅读搭配 STM32CubeIDE、CMake Tools 和 STM32Cube clangd；完整清单及板型 ELF 选择步骤见 [VS Code 插件推荐](docs/VSCODE_EXTENSIONS.md)。
+**优先推荐 [EmberProbe - MCU Flash & Debug](https://marketplace.visualstudio.com/items?itemName=BakeSheep.emberprobe)**（[GitHub 仓库](https://github.com/BakeSheep/EmberProbe-MCU-Flash-Debug)），作为本项目烧录、断点调试、实时变量观测与 ELF 分析入口。构建与源码阅读搭配 STM32CubeIDE、CMake Tools 和 STM32Cube clangd，C/C++ 格式化推荐 Clang-Format 并使用仓库 `.clang-format`；完整清单及板型 ELF 选择步骤见 [VS Code 插件推荐](docs/VSCODE_EXTENSIONS.md)。
 
 ### 环境与构建
 
@@ -341,14 +341,14 @@ git branch --all
 - [BSP 开发指南](User_File/Middleware/BSP/README.md) · [Message Center](User_File/System/MessageCenter/README.md) · [Application 开发指南](User_File/Application/README.md)。
 - [DJI 电机驱动](User_File/Device/Peripheral/Motor/DJImotor/dji_motor.md) · [达妙电机驱动](User_File/Device/Peripheral/Motor/DMmotor/dmmotor.md) · [更新记录](docs/CHANGELOG.md)。
 - [FreeRTOS heap memory management](https://www.freertos.org/Documentation/02-Kernel/02-Kernel-features/09-Memory-management/01-Memory-management)。
-- [ST AN4891：STM32H7 系统架构与性能](https://www.st.com/resource/en/application_note/an4891-stm32h72x-stm32h73x-and-singlecore-stm32h74x75x-system-architecture-and-performance-stmicroelectronics.pdf)。
-- [ST AN4839：STM32F7/H7 一级缓存](https://www.st.com/resource/en/application_note/an4839-level-1-cache-on-stm32f7-series-and-stm32h7-series-stmicroelectronics.pdf)。
 
 ## 致谢
 
 感谢 MermaidFAR 开源并提供本项目所基于的 [H7_BSP](https://github.com/MermaidFAR/H7_BSP) 基础工程。
 
-本框架的分层设计、设备抽象与工程组织参考了[湖南大学 RoboMaster 跃鹿战队 `basic_framework`](https://github.com/HNUYueLuRM/basic_framework)、中国科学技术大学 RoboWalker 的开源框架，以及 [Meta-Team 的 `Meta-Embedded-NG`](https://github.com/Meta-Team/Meta-Embedded-NG)。感谢这些团队对 RoboMaster 电控社区的开放分享与长期贡献。
+本框架的分层设计、设备抽象与工程组织参考了[湖南大学 RoboMaster 跃鹿战队 `basic_framework`](https://github.com/HNUYueLuRM/basic_framework)、中国科学技术大学 RoboWalker 的开源框架 [`damiao_mc02_bsp`](https://github.com/yssickjgd/damiao_mc02_bsp)，以及 [Meta-Team 的 `Meta-Embedded-NG`](https://github.com/Meta-Team/Meta-Embedded-NG)。
+
+感谢 xrobot-org 开源并分享 [`libxr`](https://github.com/xrobot-org/libxr)。
 
 <a id="维护架构图"></a>
 

@@ -25,6 +25,7 @@ mx.scratch
 !.settings
 
 # IDE 与编辑器配置
+/.clangd
 .idea/
 .vscode/
 *.swp
