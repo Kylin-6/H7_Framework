@@ -52,7 +52,7 @@ Core/                       CubeMX 生成的启动、外设与 RTOS 配置
 Drivers/                    HAL / CMSIS 驱动
 Middlewares/                FreeRTOS、USB Device、CMSIS-DSP 等依赖
 USB_DEVICE/                 USB CDC 设备配置
-User_Config/                链接脚本、FreeRTOS 补丁与烧录配置
+User_Config/                链接脚本、FreeRTOS 补丁与 Ozone 配置
 SystemView/                 SEGGER SystemView 与 RTT
 sysid/                      系统辨识数据、脚本与报告
 ```
@@ -323,7 +323,9 @@ git switch RoboMaster_Test
 
 ### 烧录与观察
 
-本地如已配置 VS Code 烧录/调试任务，可按探针和目标芯片检查工具路径；仓库提供 [Ozone 工程](H7_BSP.jdebug) 作为源码调试入口。
+烧录使用 VS Code 的 EmberProbe: Flash & Debug 插件。先构建所需 preset，再选择对应 `build/<preset>/H7_Framework.elf`，并核对探针与 STM32H723 目标配置；不要选择旧名称的构建产物。仓库不再维护独立烧录脚本。
+
+保留 [Ozone 工程](H7_BSP.jdebug) 作为 J-Link 源码调试入口（默认加载 Debug 固件），以及 [Ozone DAPLink 配置](User_Config/ozone_daplink.cfg)。
 
 - Ozone / GDB：观察设备反馈、算法状态、系统调试数据与任务栈水位。
 - SystemView / RTT：观察任务调度、中断和运行时信息。

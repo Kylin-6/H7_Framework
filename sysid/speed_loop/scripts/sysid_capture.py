@@ -21,7 +21,6 @@ GIMBAL_CPP = PROJECT_DIR / "User_File/Application/Gimbal/Gimbal.cpp"
 BUILD_DIR = PROJECT_DIR / "build/Debug"
 ELF = BUILD_DIR / "H7_Framework.elf"
 CHIP = "STM32H723ZG"
-PROBE = "faed:4873-2:580600064343"
 
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -103,7 +102,7 @@ print(f"CSV 已保存: {DATA_DIR / 'speed_loop_current_excitation.csv'}")
 EXCITATION_CSV = DATA_DIR / "speed_loop_current_excitation.csv"
 print("\n激励文件已生成, 可直接用 probe-rs 采集实测数据.")
 
-# === 3. 编译 → 烧录 → 采集 ===
+# === 3. 编译 → EmberProbe 手动烧录 → 采集 ===
 # 固件里跑的是现有扫频代码, 不需要改 C 代码,
 # 直接采 35s 数据即可
 
@@ -114,11 +113,7 @@ if r.returncode != 0:
     exit(1)
 print("编译成功")
 
-print("烧录...")
-subprocess.run(["probe-rs", "erase", "--chip", CHIP], capture_output=True, timeout=20)
-subprocess.run(["probe-rs", "download", "--chip", CHIP, "--probe", PROBE, str(ELF)], capture_output=True, timeout=30)
-subprocess.run(["probe-rs", "reset", "--chip", CHIP], capture_output=True, timeout=5)
-print("烧录+reset 成功")
+input(f"请使用 EmberProbe 烧录 {ELF}，完成后按 Enter 开始采集...")
 
 print("采集 RTT (40s, 多激励模式)...")
 proc = subprocess.Popen(
