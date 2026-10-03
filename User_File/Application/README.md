@@ -70,6 +70,8 @@ Gimbal/Chassis 板间轮询复用该任务，不创建额外控制任务。
 
 ## 4. RobotCmd：命令唯一入口
 
+接口契约、发布时序与逐函数代码见 [RobotCmd 开发指南](RobotCmd/README.md)。
+
 RobotCmd 不直接访问电机、CAN 或 IMU。输入链现在是：
 
 ```text
@@ -151,6 +153,8 @@ Yaw 使用 INS 角度/速度串级闭环，通过达妙 MIT 纯转矩指令输�
 
 ## 6. Chassis
 
+底盘移植、框架接口及按函数代码例程见 [四舵轮底盘指南](Chassis/README.md)。
+
 当前底盘模型为四舵轮 AGV：
 
 1. 将底盘 `vx/vy/wz` 分解为四个轮模块的平移速度向量。
@@ -179,6 +183,10 @@ Yaw 使用 INS 角度/速度串级闭环，通过达妙 MIT 纯转矩指令输�
 在线状态来源仍是 Device，而不是 Message Center。
 
 ## 7. Shoot
+
+接口、移植位置和按函数代码例程见 [Shoot 开发指南](Shoot/README.md)。
+
+接口、移植位置和按函数代码例程见 [Shoot 开发指南](Shoot/README.md)。
 
 发射控制分为连续状态和离散事件。
 

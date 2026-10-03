@@ -49,6 +49,11 @@ struct Struct_Gimbal_Config
     float pitch_motor_per_imu = 1.0f;
 };
 
+/**
+ * @brief 生成默认机构参数，并从当前 BoardConfig 绑定两轴总线。
+ * @return 可供 Gimbal_Init 复制的配置；Pitch ID 单独覆盖为对应参考值。
+ * @note 仅构造参数，不注册设备、不访问电机；上板前需核对参数与实际机构。
+ */
 inline Struct_Gimbal_Config Gimbal_Default_Config()
 {
     Struct_Gimbal_Config config;

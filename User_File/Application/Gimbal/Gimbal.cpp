@@ -44,11 +44,19 @@ GimbalContext ctx;
 namespace
 {
 constexpr float GIMBAL_PI = 3.14159265358979323846f;
+/**
+ * @brief 将数值限制在闭区间 [minimum, maximum] 内。
+ * @note 调用方保证上下界有序、输入有限；不承担参数校验。
+ */
 float Clamp(float value, float minimum, float maximum)
 {
     return value < minimum ? minimum : (value > maximum ? maximum : value);
 }
 
+/**
+ * @brief 检查应用控制参数、IMU 轴/符号及同总线两轴 ID 冲突。
+ * @return 应用层约束全部满足时返回 true；总线、协议量程等由设备 Init 继续校验。
+ */
 bool ConfigValid(const Struct_Gimbal_Config& c)
 {
     const float nonnegative[] = {c.yaw_angle_kp, c.yaw_speed_kp, c.yaw_speed_ki,
@@ -79,6 +87,12 @@ bool ConfigValid(const Struct_Gimbal_Config& c)
            c.pitch_min < c.pitch_max;
 }
 
+/**
+ * @brief 从本周期 INS 快照提取指定机体系角速度，并乘方向符号，单位 rad/s。
+ * @param axis 已由配置校验的 X/Y/Z 轴。
+ * @param sign 安装方向符号，只允许 +1 或 -1。
+ * @note 不执行完整姿态坐标变换；控制调用方须先确认 INS 新鲜度。
+ */
 float Gyro(GimbalGyroAxis axis, float sign)
 {
     const float rates[] = {ctx.ins.gyro_x_rad_s, ctx.ins.gyro_y_rad_s,
@@ -86,6 +100,10 @@ float Gyro(GimbalGyroAxis axis, float sign)
     return sign * rates[static_cast<unsigned>(axis)];
 }
 
+/**
+ * @brief 清空 Yaw 两级 PID 的历史状态，再按当前配置设置增益和输出限幅。
+ * @note 初始化、捕获姿态和恢复时调用；Pitch 的 MIT 增益直接随指令提交。
+ */
 void ResetControllers()
 {
     // PID::Init 保留历史，因此先重建值对象，清除积分、微分及目标历史。
@@ -96,19 +114,26 @@ void ResetControllers()
                            ctx.config.yaw_speed_kd, 0, ctx.config.yaw_integral_limit, ctx.config.yaw_torque_limit);
 }
 
+/**
+ * @brief 以当前有效 INS 姿态建立保持目标，清空控制器历史及速度前馈。
+ * @param sequence 当前命令发布序号，用于拒绝恢复前的旧 IMU 目标。
+ * @note 调用前须确认两轴 ready 和 INS 有效；不设置电机机械零位。
+ */
 void CapturePose(uint32_t sequence)
 {
     ResetControllers();
     ctx.target_yaw_angle_rad = ctx.ins.yaw_rad;
     ctx.target_pitch_angle_rad = ctx.ins.pitch_rad;
     ctx.target_yaw_speed_rad_s = ctx.target_pitch_speed_rad_s = 0;
-    // 恢复前已发布的目标全部丢弃；IMU 只接受之后的新序号。
     ctx.target_sequence = sequence;
 }
 
+/**
+ * @brief 对已经注册成功的电机表达失能请求，允许部分初始化失败时调用。
+ * @note 不等待停止确认；安全目标提交和后续协议补交由 DMMotor 处理。
+ */
 void Stop()
 {
-    // 首次失能请求或失能边沿立即尝试发布安全目标；补交与协议纠正交给 ServiceAll。
     if (ctx.yaw_registered)
     {
         (void) ctx.yaw_motor.RequestEnabled(false);
@@ -119,6 +144,52 @@ void Stop()
     }
 }
 
+/**
+ * @brief 集中处理运行许可、两轴使能等待和首次就绪/恢复捕获。
+ * @param message 与 ctx.command 对应的本周期命令快照，INS 和电机快照已由入口读取。
+ * @return 两轴允许执行正常控制时返回 true；停机或等待就绪时返回 false。
+ * @note 不阻塞等待，不发布反馈；设备时效由驱动判断，协议补交由 ServiceAll 维护。
+ */
+bool PrepareControl(const TopicSnapshot<GimbalCmd>& message)
+{
+    if (!ctx.initialized || !message.valid ||
+        ctx.command.mode == GimbalMode::DISABLED || !ctx.ins_valid ||
+        ctx.yaw_snapshot.fault || ctx.pitch_snapshot.fault)
+    {
+        Stop();
+        ctx.was_ready = false;
+        ctx.last_mode = GimbalMode::DISABLED;
+        ctx.yaw_snapshot = ctx.yaw_motor.GetFeedbackSnapshot();
+        ctx.pitch_snapshot = ctx.pitch_motor.GetFeedbackSnapshot();
+        return false;
+    }
+
+    // 每周期表达输出许可；驱动只处理请求边沿，重复使能不会覆盖正常周期目标。
+    (void) ctx.yaw_motor.RequestEnabled(true);
+    (void) ctx.pitch_motor.RequestEnabled(true);
+    ctx.yaw_snapshot = ctx.yaw_motor.GetFeedbackSnapshot();
+    ctx.pitch_snapshot = ctx.pitch_motor.GetFeedbackSnapshot();
+    if (!ctx.yaw_snapshot.ready || !ctx.pitch_snapshot.ready)
+    {
+        // 等待两轴反馈就绪；安全输出和低频协议纠正由 DMMotor 维护。
+        ctx.was_ready = false;
+        return false;
+    }
+
+    if (!ctx.was_ready)
+    {
+        CapturePose(message.sequence);
+        ctx.last_mode = ctx.command.mode;
+        ctx.was_ready = true;
+    }
+    return true;
+}
+
+/**
+ * @brief 计算双轴控制并提交限幅后的电机目标。
+ * @param pitch 本周期 Pitch 快照，位置 rad、速度 rad/s，方向已由驱动统一。
+ * @note 仅在 PrepareControl 通过并更新目标后调用，不等待 CAN 发送或电机执行。
+ */
 void Control(const Struct_DMMotor_Snapshot& pitch)
 {
     // Yaw 复用现有 PID：最短角误差生成角速度，再由速度环生成转矩。
@@ -141,9 +212,13 @@ void Control(const Struct_DMMotor_Snapshot& pitch)
                                   Clamp(velocity, -ctx.config.pitch_speed_limit, ctx.config.pitch_speed_limit), ctx.config.pitch_kp, ctx.config.pitch_kd, 0);
 }
 
+/**
+ * @brief 根据模式切换和发布序号更新私有控制目标。
+ * @param message 与 ctx.command 对应的有效命令快照；这里只使用其 sequence。
+ * @note 进入 LOCK 时捕获姿态，IMU 只接收新序号；首次就绪捕获由 PrepareControl 处理。
+ */
 void UpdateTarget(const TopicSnapshot<GimbalCmd>& message)
 {
-    // LOCK 只在进入时捕获姿态；IMU 只接受新序号，避免恢复后重放旧目标。
     if (ctx.command.mode == GimbalMode::LOCK && ctx.last_mode != GimbalMode::LOCK)
     {
         CapturePose(message.sequence);
@@ -160,6 +235,13 @@ void UpdateTarget(const TopicSnapshot<GimbalCmd>& message)
 }
 } // namespace
 
+/**
+ * @brief 启动阶段校验并复制配置、注册两轴 MIT 电机、初始化控制器。
+ * @param requested 参数配置，复制后调用方无需保留其对象。
+ * @return 配置有效且两轴注册成功时返回 true；失败后更新入口禁止正常控制。
+ * @note 同一 ControlTask 启动时仅调用一次；不等待反馈、不使能、不置零，
+ *       也不修改电机端模式或持久化参数。
+ */
 bool Gimbal_Init(const Struct_Gimbal_Config& requested)
 {
     if (!ConfigValid(requested))
@@ -181,9 +263,12 @@ bool Gimbal_Init(const Struct_Gimbal_Config& requested)
     return ctx.initialized;
 }
 
+/**
+ * @brief 根据最近一次更新留下的命令、INS 和电机快照推导应用状态。
+ * @note 由同一任务上下文读取；不刷新设备快照、不执行控制或安排恢复。
+ */
 Enum_Gimbal_Status Gimbal_GetStatus(void)
 {
-    // 状态由当前输入与电机快照推导，仅用于观察，不安排重试或驱动状态迁移。
     if (!ctx.initialized)
     {
         return Gimbal_Status_CONFIG_ERROR;
@@ -202,6 +287,11 @@ Enum_Gimbal_Status Gimbal_GetStatus(void)
 }
 #endif
 
+/**
+ * @brief 每调用十次发布一次云台反馈；1 kHz 更新入口下对应 100 Hz。
+ * @note 姿态来自 INS，INS 无效时姿态/速度为零；enabled 仅表示两轴 ready。
+ *       关闭硬件路径时仍发布 INS 反馈，enabled 保持 false。
+ */
 static void PublishFeedback(void)
 {
     if (++ctx.feedback_divider >= 10U)
@@ -228,6 +318,12 @@ static void PublishFeedback(void)
     }
 }
 
+/**
+ * @brief ControlTask 的 1 kHz 周期入口：读取快照、处理许可/恢复、更新目标和输出。
+ * @note 在 RobotCmd_Update 之后调用；禁用、输入无效或故障时请求停机，
+ *       等待就绪期间不计算正常输出，各路径均维护反馈分频。
+ *       GIMBAL=0 时仅更新 INS 反馈；本入口不阻塞、不解析 CAN、不仲裁命令来源。
+ */
 void Gimbal_Update(void)
 {
     ctx.ins_valid = MessageCenter::INS_State_Topic.ReadFresh(ctx.ins, GIMBAL_INS_MAX_AGE_US);
@@ -237,40 +333,12 @@ void Gimbal_Update(void)
     ctx.yaw_snapshot = ctx.yaw_motor.GetFeedbackSnapshot();
     ctx.pitch_snapshot = ctx.pitch_motor.GetFeedbackSnapshot();
 
-    if (!ctx.initialized || !message.valid ||
-        ctx.command.mode == GimbalMode::DISABLED || !ctx.ins_valid ||
-        ctx.yaw_snapshot.fault || ctx.pitch_snapshot.fault)
+    if (PrepareControl(message))
     {
-        Stop();
-        ctx.was_ready = false;
-        ctx.last_mode = GimbalMode::DISABLED;
-        ctx.yaw_snapshot = ctx.yaw_motor.GetFeedbackSnapshot();
-        ctx.pitch_snapshot = ctx.pitch_motor.GetFeedbackSnapshot();
-        PublishFeedback();
-        return;
-    }
+        UpdateTarget(message);
 
-    // 每周期表达输出许可；驱动只处理请求边沿，重复使能不会覆盖正常周期目标。
-    (void) ctx.yaw_motor.RequestEnabled(true);
-    (void) ctx.pitch_motor.RequestEnabled(true);
-    ctx.yaw_snapshot = ctx.yaw_motor.GetFeedbackSnapshot();
-    ctx.pitch_snapshot = ctx.pitch_motor.GetFeedbackSnapshot();
-    if (!ctx.yaw_snapshot.ready || !ctx.pitch_snapshot.ready)
-    {
-        // 等待两轴反馈就绪；安全输出和低频协议纠正由 DMMotor 维护。
-        ctx.was_ready = false;
-        PublishFeedback();
-        return;
+        Control(ctx.pitch_snapshot);
     }
-
-    if (!ctx.was_ready)
-    {
-        CapturePose(message.sequence);
-        ctx.last_mode = ctx.command.mode;
-        ctx.was_ready = true;
-    }
-    UpdateTarget(message);
-    Control(ctx.pitch_snapshot);
 #endif
     PublishFeedback();
 }
