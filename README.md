@@ -33,7 +33,7 @@ degree 仅用于机械标定输入、调试显示和外部协议边界；进入�
 | 层次 | 职责 | 入口 |
 | --- | --- | --- |
 | Application / Task | 组织控制逻辑、任务周期与模块协作 | [Application 指南](User_File/Application/README.md)、[Task](User_File/Task) |
-| Device | 封装电机、板载器件与外接工具 | [Device](User_File/Device) |
+| Device | 封装电机、板载器件与外接工具 | [Device 函数使用指南](User_File/Device/README.md) |
 | Algorithm | 提供控制、观测、滤波、数学与调度辅助组件 | [Algorithm](User_File/Middleware/Algorithm) |
 | System | 统一初始化、回调、时间戳与调试服务 | [System](User_File/System) |
 | BSP | 管理外设实例、缓冲区、收发与回调注册 | [BSP 指南](User_File/Middleware/BSP/README.md) |

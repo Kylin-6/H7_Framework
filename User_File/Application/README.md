@@ -46,6 +46,7 @@ Chassis 与 Shoot 的机械参数和 PID 初值分别放在 `Chassis_Config.h`�
 运行状态和设备实例由各自 `.cpp` 内的私有 Context 持有。BoardConfig 只提供总线等硬件
 资源，不存机构参数。Gimbal 的配置保存在 `Gimbal_Config.h`，状态根据当前命令、INS 和电机快照计算。
 `Input` 保存 Remote 输入适配、输入状态和来源仲裁；设备协议仍由 Device/BSP 处理。
+接口、通道映射与来源接入例程见 [Input 开发指南](Input/README.md)。
 
 单板固件的硬件路径由 `H7_APP_GIMBAL`、`H7_APP_CHASSIS`、`H7_APP_SHOOT` 控制，默认均关闭；
 双板固件由 CMake 在构建期分别选择应用和任务源码。板内命令通过 `LocalPublisher` 进入

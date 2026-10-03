@@ -1,6 +1,6 @@
 # Message Center
 
-Message Center 是 H7_BSP 内部的静态、类型安全消息基础设施。它只解决“数据如何在
+Message Center 是 H7_Framework 内部的静态、类型安全消息基础设施。它只解决“数据如何在
 模块之间传递”，不负责设备驱动、在线检测、安全策略、多板路由或日志。
 
 当前架构只有两种消息语义：
@@ -56,8 +56,12 @@ Message Center 是 H7_BSP 内部的静态、类型安全消息基础设施。它
 | --- | --- |
 | `data` | 最新完整消息 |
 | `sequence` | 32 位发布序号，每次发布递增，允许自然回绕 |
-| `timestamp_us` | 调用 `SYS_Timestamp_Get_Microsecond()` 获取的发布时间 |
+| `timestamp_us` | Publish 使用本地微秒时钟；PublishAt 使用调用方给定的时间戳 |
 | `valid` | 是否至少完成过一次发布 |
+
+`PublishAt(data, timestamp_us)` 与 Publish 一样覆盖快照并递增序号，但保留指定的时间戳。
+当前 Transport 接收端用它保留 CAN 实际接收时刻，避免延迟处理后将旧帧重新标成新鲜。
+时间戳须来自与本地 `SYS_Timestamp_Get_Microsecond()` 同一时基；不能直接填远端未同步的时钟值。
 
 需要把数据、序号和时间戳关联到同一帧时，调用 `ReadWithMeta()`；不要分别调用
 `Read()`、`Sequence()` 和 `Timestamp()` 后假设它们来自同一次发布。
@@ -75,6 +79,19 @@ TopicSnapshot<GimbalCmd> snapshot = topic.ReadWithMeta();
 
 `Topic::Read()` 是非消费式读取：只要 Topic 有效，就会返回当前值。尚未发布时返回
 `false`，并保持调用者输出对象不变。
+
+读取接口应按需要选择：
+
+| 接口 | 判定条件 | 失败时输出 |
+| --- | --- | --- |
+| Topic::Read | 至少发布过一次 | 保持调用者对象不变 |
+| Topic::ReadWithMeta | 总是返回一致快照，由调用方检查 valid | 首次发布前 valid=false，data 为默认值 |
+| Topic::ReadFresh | 已发布、时间戳不晚于当前时刻、年龄不超过门限 | 保持调用者对象不变 |
+| Subscriber::Read | 已发布，且该订阅者尚未读过当前序号 | 保持调用者对象不变 |
+
+ReadFresh 的门限单位是 us，恰好等于门限仍有效；重复读取同一帧可以成功，
+它不判断是否出现新序号。Subscriber 检查新序号，但不检查消息年龄。
+TopicSnapshot.valid 也只表示发布过，不表示内容合法、设备在线或消息新鲜。
 
 `Subscriber<T>` 则为每个订阅者保存独立的已读 sequence：
 
@@ -94,12 +111,30 @@ logger.Read(command_for_log);          // true，订阅者状态互不影响
 首次有效快照即使 sequence 恰好为零也能被读取，因为 Subscriber 还保存了
 `has_read_`，不会用初始 sequence 值误判。
 `Subscriber::Read()` 的“已读”只属于该订阅者，不会从 Topic 中移除数据。
+序号仅用相等比较判断变化：若两次读取之间恰好发生 2³² 次发布，会无法区分同序号快照；
+不要把它当作长期绝对计数。多个 Publish 之间未读取时仍只得到最后一帧。
+
+<details>
+<summary>例程：读取有时效要求的状态</summary>
+
+```cpp
+ChassisCmd command;
+bool fresh = MessageCenter::Chassis_Command_Topic.ReadFresh(command, 100000U); // 100 ms，单位 us。
+if (!fresh) // 尚未发布、时间戳异常或消息超过门限，使用默认零力命令。
+{
+    ChassisCmd stopped;
+    command = stopped;
+}
+// 此处得到本周期目标；设备在线与控制许可仍由应用/驱动判断。
+```
+
+</details>
 
 `Output<T>` 是不拥有目标对象的句柄，用固定函数指针和上下文统一本地/远端发布，
 不使用虚函数或动态分配。`LocalPublisher<T>` 将其绑定到现有 Topic；远端绑定由
 Transport 的 `RemotePublisher` 提供。调用前必须检查 `IsBound()`：未绑定时
 `Publish()` 当前会直接返回，因此绝不能把它当作有效输出配置；`RobotCmd_Init()`
-会拒绝任一未绑定的三个输出。
+会拒绝任一未绑定的三个输出。绑定对象必须比 Output 活得更久，当前任务使用静态发布器。
 
 ### 3.4 Publisher / Subscriber
 
@@ -153,8 +188,13 @@ bool available = queue.Pop(event);
 - RobotCmd 通过 `RobotCmd_PushShootEvent()` 推入事件并返回是否成功。
 - Shoot 在 STOP 且总开关 ON 时每个 1 kHz 周期最多消费一个事件。
 - 连续事件在已有角度目标上累加一个或三个弹位。
-- BURST/REVERSE 优先并取消事件角度保持。
+- BURST/REVERSE 优先并取消事件角度保持，不消费队列，旧事件留到再次进入 STOP。
 - 总开关 OFF 时有界排空当时已经排队的事件，避免重新使能后延迟射击。
+- RobotCmd 失去输入许可或在许可成立时切换来源，会清除旧射击事件。
+
+RobotCmd 的事件接口在输入未获许可或队列满时返回 false，且不检查摩擦轮达速、
+Shoot 总开关或设备 ready。Push 成功和 Pop 成功只表示软件请求的入队与取出，
+角度目标累加也不证明弹丸已发射；事件本身不携带超时时戳。
 
 ## 5. 当前静态通道
 
@@ -184,7 +224,7 @@ BMI088_Task（High2）
 System_IMU_Publish_State
         ↓ Publisher<INS_State>
 INS_State_Topic
-        ↓ Subscriber<INS_State>
+        ↓ Topic::ReadFresh（10 ms 门限）
 Gimbal_Update（Control_Task，1 kHz）
 ```
 
@@ -199,17 +239,29 @@ VTM / Keyboard / Vision → InputState_Submit*（接口预留，未绑定设备�
           ↓ Remote 安全许可与来源时效检查
      RobotCmd_Update
           ↓ Output::Publish 最新命令
- SingleBoard: 本地 Topic → Gimbal / Chassis / Shoot Subscriber
- GimbalBoard: 本地 Topic → Gimbal / Shoot Subscriber
-              固定 Transport → 底盘板本地 Topic → Chassis Subscriber
+ SingleBoard: 本地 Topic → Gimbal / Chassis / Shoot
+ GimbalBoard: 本地 Topic → Gimbal / Shoot
+              固定 Transport → 底盘板本地 Topic → Chassis
           ↓ 直接控制所属 Device
      100 Hz 发布 Feedback
           ↓
- RobotCmd Subscriber 汇总状态
+ RobotCmd_Get*Feedback → Topic::ReadFresh（100 ms 门限）
 ```
 
-命令只在对应 dirty 标志置位时发布。Application 没有读到新命令时继续执行保存的上一帧
-目标；反馈控制逻辑保持 1 kHz，通常每 10 ms 发布一次反馈 Topic。
+实际发布与读取策略如下，不能统一理解为 Subscriber 读取：
+
+| 链路 | 发布策略 | 当前读取与失效处理 |
+| --- | --- | --- |
+| INS → Gimbal | IMU 发布最新状态 | ReadFresh，10 ms 门限；无效 INS 禁止正常控制 |
+| RobotCmd → Gimbal | 字段变化/dirty 时发布 | ReadWithMeta；发布过的命令不按年龄失效，恢复后用序号拒绝旧 IMU 目标 |
+| RobotCmd → Chassis | 每 10 周期刷新，安全边沿/切源可提前 | ReadFresh，100 ms 门限；失败时装载默认零力目标 |
+| RobotCmd → Shoot | 字段变化/dirty 时发布 | Subscriber::Read；没有新序号时保留缓存，未检查命令年龄 |
+| Application → RobotCmd | 每 10 个 1 ms 周期发布反馈 | getter 通过 ReadFresh 检查 100 ms；失败不覆盖输出对象 |
+
+Shoot 和云台的持续命令安全许可依赖 RobotCmd 仲裁及失联时发布安全目标；
+不能直接给按变化发布的命令套用固定年龄门限而保持发布策略不变。
+反馈消息新鲜与设备在线是两个判据：读取成功后仍须检查 online、enabled，云台还需检查 ins_valid。
+Shoot.enabled 不表示摩擦轮达速或射击完成。
 
 ## 7. 并发模型
 
@@ -221,6 +273,11 @@ Topic 和 EventQueue 使用 Cortex-M PRIMASK：
 
 恢复原 PRIMASK 而不是直接开中断，因此在本来已经屏蔽中断的上下文中不会错误地提前
 使能中断。临界区不包含时间戳获取、业务计算、电机控制或 RTOS 调用。
+
+Topic 和 EventQueue 的单次操作受到保护，但同一个 Subscriber 的 has_read_/last_sequence_
+不在临界区内，须由单一上下文调用。Output 也不为 RobotCmd 缓存或 dirty 标志提供同步保护。
+Size/Empty 与之后的 Push/Pop 不是一个原子事务，调用方必须检查实际操作返回值；
+循环消费应规定每周期预算，避免另一个生产者持续入队导致控制周期无界。
 
 当前可能访问消息中心的上下文包括：
 
@@ -252,11 +309,19 @@ struct ExampleState
     bool valid = false;
 };
 
-// 2. message_center.h/.cpp：声明并唯一地定义通道
+// 2. message_center.h：在 MessageCenter 命名空间声明通道。
+namespace MessageCenter
+{
 extern Topic<ExampleState> Example_State_Topic;
-Topic<ExampleState> Example_State_Topic;
+}
 
-// 3. 发布端和订阅端绑定同一实例
+// 3. message_center.cpp：在同一命名空间唯一地定义通道。
+namespace MessageCenter
+{
+Topic<ExampleState> Example_State_Topic;
+}
+
+// 4. 发布端和订阅端绑定同一实例
 static Publisher<ExampleState> publisher(MessageCenter::Example_State_Topic);
 static Subscriber<ExampleState> subscriber(MessageCenter::Example_State_Topic);
 ```
@@ -272,7 +337,10 @@ sequence 回绕假设和消息体积。
 enum class ExampleEventType : uint8_t { Start, Stop };
 struct ExampleEvent { ExampleEventType type; };
 
-extern EventQueue<ExampleEvent, 4U> Example_Event_Queue;
+namespace MessageCenter
+{
+extern EventQueue<ExampleEvent, 4U> Example_Event_Queue; // 在 .cpp 同命名空间提供唯一实体定义。
+}
 ```
 
 生产者必须处理 `Push()==false`；消费者必须规定每周期最多处理几个事件、禁用状态如何
@@ -299,6 +367,8 @@ Message Center 不负责：
 - Topic 首次发布前 `Read()` 返回 false 且不改输出。
 - `ReadWithMeta()` 的数据、sequence、timestamp、valid 来自同一快照。
 - 两个 Subscriber 能分别读取同一次发布，单个 Subscriber 不重复报告。
+- ReadFresh 检查首次未发布、门限内、恰好门限、超过门限和未来时间戳；失败保持输出不变。
+- PublishAt 保留指定时间戳且递增序号，Transport 延迟处理不会刷新旧帧的年龄。
 - EventQueue 保持 FIFO；空队列 Pop 失败；第 N+1 次 Push 失败且 overflow 加一。
 - 全仓只有 `message_center.cpp` 定义业务通道实体。
 - 不存在 DynamicMessageCenter、字符串 Topic 或 FreeRTOS Queue 依赖。
@@ -309,4 +379,9 @@ Message Center 不负责：
 - [框架总览](../../../README.md)
 - [BSP](../../Middleware/BSP/README.md)
 - [Application](../../Application/README.md)
+- [RobotCmd：发布策略与输入许可](../../Application/RobotCmd/README.md)
+- [Gimbal：序号与恢复处理](../../Application/Gimbal/README.md)
+- [Chassis：命令时效](../../Application/Chassis/README.md)
+- [Shoot：持续状态与事件消费](../../Application/Shoot/README.md)
+- [Transport：板间时间戳与消息编码](../Transport/README.md)
 - [交互式架构图](../../../Assets/Architecture/H7_BSP.html)
