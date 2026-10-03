@@ -95,7 +95,7 @@ StatusTask 同时提供 DM 协议状态服务，这不属于 Daemon 的控制职
    cmake --build --preset SingleBoard
    ```
 
-3. 在 `build/SingleBoard/CMakeCache.txt` 确认 `H7_APP_GIMBAL`、`H7_APP_CHASSIS`、`H7_APP_SHOOT` 均为 OFF，找到同目录的 `H7_BSP.elf` / `H7_BSP.map`。
+3. 在 `build/SingleBoard/CMakeCache.txt` 确认 `H7_APP_GIMBAL`、`H7_APP_CHASSIS`、`H7_APP_SHOOT` 均为 OFF，找到同目录的 `H7_Framework.elf` / `H7_Framework.map`。
 4. 打开 Control_Task.cpp，找到 RemoteInput、RobotCmd 和三个 Application 的 Update；沿着第 4 节定位 `Chassis_Command_Topic` 的发布者与消费者。
 5. 在 DJI 文档和 [dji_motor.h](User_File/Device/Peripheral/Motor/DJImotor/dji_motor.h) 中找到运动快照，说明角度 `rad`、速度 `rad/s`、时间戳和 `online` 分别表示什么。
 

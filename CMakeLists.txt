@@ -19,16 +19,15 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 # CMake 在配置期固定板型，并选择 Application/Device/Task 源码；硬件接线由
-# BoardConfig 管理，跨板 CAN 映射由 TransportConfig 管理。单板保留原 ELF 名称。
+# BoardConfig 管理，跨板 CAN 映射由 TransportConfig 管理。所有板型统一使用 H7_Framework 产物名称。
 set(H7_BOARD "SingleBoard" CACHE STRING "Firmware board role")
 set_property(CACHE H7_BOARD PROPERTY STRINGS SingleBoard GimbalBoard ChassisBoard)
-if(H7_BOARD STREQUAL "SingleBoard")
-    set(CMAKE_PROJECT_NAME H7_BSP)
-elseif(H7_BOARD STREQUAL "GimbalBoard" OR H7_BOARD STREQUAL "ChassisBoard")
-    set(CMAKE_PROJECT_NAME ${H7_BOARD})
-else()
+if(NOT H7_BOARD STREQUAL "SingleBoard" AND
+   NOT H7_BOARD STREQUAL "GimbalBoard" AND
+   NOT H7_BOARD STREQUAL "ChassisBoard")
     message(FATAL_ERROR "Unknown H7_BOARD: ${H7_BOARD}")
 endif()
+set(CMAKE_PROJECT_NAME H7_Framework)
 
 # Enable compile command to ease indexing with e.g. clangd
 set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)

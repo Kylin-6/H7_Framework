@@ -78,7 +78,7 @@ function Invoke-OpenOcdFlash {
     )
 
     $openOcdPath = 'C:\DevEnv\DevEnv\OpenOCD\bin\openocd.exe'
-    $elfPath = Join-Path $workspaceRoot 'build\Debug\H7_BSP.elf'
+    $elfPath = Join-Path $workspaceRoot 'build\Debug\H7_Framework.elf'
     $configurationPath = Join-Path $workspaceRoot $ConfigurationFile
 
     Assert-RequiredFile -Path $openOcdPath -Description 'OpenOCD'
@@ -88,7 +88,7 @@ function Invoke-OpenOcdFlash {
     Write-Host "[H7_BSP] Flashing with ${ProbeName}: $elfPath"
     Push-Location $workspaceRoot
     try {
-        & $openOcdPath '-f' $ConfigurationFile '-c' 'program build/Debug/H7_BSP.elf verify reset exit'
+        & $openOcdPath '-f' $ConfigurationFile '-c' 'program build/Debug/H7_Framework.elf verify reset exit'
         if ($LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE
         }
@@ -100,7 +100,7 @@ function Invoke-OpenOcdFlash {
 
 function Invoke-JLinkFlash {
     $jLinkPath = 'C:\Program Files\SEGGER\JLink_V798a\JLink.exe'
-    $elfPath = Join-Path $workspaceRoot 'build\Debug\H7_BSP.elf'
+    $elfPath = Join-Path $workspaceRoot 'build\Debug\H7_Framework.elf'
     $jLinkScriptPath = Join-Path $workspaceRoot '.vscode\jlink_flash.jlink'
 
     Assert-RequiredFile -Path $jLinkPath -Description 'J-Link CLI'

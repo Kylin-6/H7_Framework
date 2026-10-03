@@ -34,7 +34,7 @@ void OnProjectLoad (void) {
   // User settings
   //
   Edit.SysVar (VAR_HSS_SPEED, FREQ_5_KHZ);
-  File.Open ("$(ProjectDir)/build/Debug/H7_BSP.elf");
+  File.Open ("$(ProjectDir)/build/Debug/H7_Framework.elf");
   Project.SetOSPlugin ("FreeRTOSPlugin_Cortex-M");
 }
 

@@ -19,7 +19,7 @@ LOG_DIR = SPEED_ROOT / "logs"
 PROJECT_DIR = SPEED_ROOT.parents[1]
 GIMBAL_CPP = PROJECT_DIR / "User_File/Application/Gimbal/Gimbal.cpp"
 BUILD_DIR = PROJECT_DIR / "build/Debug"
-ELF = BUILD_DIR / "H7_BSP.elf"
+ELF = BUILD_DIR / "H7_Framework.elf"
 CHIP = "STM32H723ZG"
 PROBE = "faed:4873-2:580600064343"
 

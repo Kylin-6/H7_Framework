@@ -284,14 +284,24 @@ cmake --preset Debug
 cmake --build --preset Debug
 ```
 
-产物为 `build/Debug/H7_BSP.elf`，链接映射为同目录下的 `H7_BSP.map`。Release 使用对应 preset：
+产物为 `build/Debug/H7_Framework.elf`，链接映射为同目录下的 `H7_Framework.map`。Release 使用对应 preset：
 
 ```powershell
 cmake --preset Release
 cmake --build --preset Release
 ```
 
-[CMakePresets.json](CMakePresets.json) 保留 Debug/Release 配置；[CMakeUserPresets.json](CMakeUserPresets.json) 提供 SingleBoard/GimbalBoard/ChassisBoard。Debug 使用 `-Og -g3`，Release 使用 `-Os -g0`。
+[CMakePresets.json](CMakePresets.json) 保留 Debug/Release 配置；[CMakeUserPresets.json](CMakeUserPresets.json) 提供 SingleBoard/GimbalBoard/ChassisBoard。Debug 使用 `-Og -g3`，Release 使用 `-Os -g0`。所有配置均生成同名的 ELF 和 map，供构建分析器读取：
+
+| Preset | 构建目录 | ELF / map 文件名（不含扩展名） |
+| --- | --- | --- |
+| Debug | `build/Debug` | `H7_Framework` |
+| Release | `build/Release` | `H7_Framework` |
+| SingleBoard | `build/SingleBoard` | `H7_Framework` |
+| GimbalBoard | `build/GimbalBoard` | `H7_Framework` |
+| ChassisBoard | `build/ChassisBoard` | `H7_Framework` |
+
+修改目标名称后，重新配置并构建，再在 IDE 中选择对应的新 ELF 目标。
 
 ### 主机回归
 
