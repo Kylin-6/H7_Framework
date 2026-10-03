@@ -1,4 +1,4 @@
-# H7_BSP
+# H7_Framework
 
 > **第一次使用 H7_RM？从这里开始**
 >
@@ -17,6 +17,8 @@ degree 仅用于机械标定输入、调试显示和外部协议边界；进入�
 > **打开 `H7_BSP.ioc` 遇到版本迁移提示时，选择 Continue，不要选择 Migrate。** 迁移并重新生成可能使 `Middlewares/` 中的 FreeRTOS 与现有 SystemView 适配不兼容。请保持项目原有固件包，详见 [CubeMX 与构建边界](#cubemx-与构建边界)。
 
 [整体架构](#整体架构) · [通信与外设](#通信与外设-bsp) · [设备层](#设备层) · [算法层](#算法层) · [系统服务](#系统服务) · [可靠性与降级边界](#可靠性与降级边界) · [接入方式](#接入方式) · [构建与调试](#构建与调试) · [主机回归](#主机回归)
+
+源码阅读：[全项目源码导航与调用约束](docs/CODE_GUIDE.md)。
 
 核心专篇：[BSP 开发指南](User_File/Middleware/BSP/README.md) · [Message Center](User_File/System/MessageCenter/README.md) · [Application 开发指南](User_File/Application/README.md)
 
@@ -275,6 +277,10 @@ FreeRTOS 使用 `heap_5`，默认总量 64 KiB，分为 **48 KiB DTCMRAM + 16 Ki
 
 ## 构建与调试
 
+### 推荐 VS Code 插件
+
+**优先推荐 [EmberProbe - MCU Flash & Debug](https://marketplace.visualstudio.com/items?itemName=BakeSheep.emberprobe)**（[GitHub 仓库](https://github.com/BakeSheep/EmberProbe-MCU-Flash-Debug)），作为本项目烧录、断点调试、实时变量观测与 ELF 分析入口。构建与源码阅读搭配 STM32CubeIDE、CMake Tools 和 STM32Cube clangd；完整清单及板型 ELF 选择步骤见 [VS Code 插件推荐](docs/VSCODE_EXTENSIONS.md)。
+
 ### 环境与构建
 
 准备 CMake 3.22 或更高版本、Ninja 和 GNU Arm 工具链，确保 `arm-none-eabi-gcc` / `arm-none-eabi-g++` 等命令可用。在仓库根目录执行：
@@ -301,25 +307,23 @@ cmake --build --preset Release
 | GimbalBoard | `build/GimbalBoard` | `H7_Framework` |
 | ChassisBoard | `build/ChassisBoard` | `H7_Framework` |
 
-修改目标名称后，重新配置并构建，再在 IDE 中选择对应的新 ELF 目标。
+所有板型统一使用 `H7_Framework` 目标名，板型由构建目录区分。旧 `H7_BSP` 目标已停用。迁移旧工作区时，先删除构建目录内旧的 `H7_BSP.elf/.map` 和 `CMakeFiles/H7_BSP.dir`，再重新配置并构建，在 IDE 和 EmberProbe 中选择对应的新 ELF。CMake 重新配置不会自动删除旧名称产物，不能仅按文件是否存在判断当前固件。
 
 ### 主机回归
 
-项目自有测试统一保存在 `RoboMaster_Test` 分支；`RoboMaster_H7` 不包含 `Tests/`。
-当前本地 `RoboMaster_Test/Tests` 包含 Boundary、CAN、Chassis、Communication、
-FilterPolynomial、Fuzzy、Gimbal、Initialization、Output、SBUS、Shoot、Topic、
-Trajectory、Transport。完整列表与测试数量以该分支 `Tests/` 和 `ctest` 输出为准；
-第三方 CMSIS 等依赖自带的测试文件仍随依赖保留。
+项目约定将自有主机测试维护在 `RoboMaster_Test` 分支；当前固件工作区不包含 `Tests/`。分支是否已在本机获取、有哪些测试，以实际 Git 分支和该分支 README 为准。
 
-需要运行回归时，在工作区干净的情况下切换到测试分支，按该分支 README 的主机回归
-步骤操作：
+先检查已有测试工作区，避免切换或改写正在使用的工作区：
 
 ```sh
-git switch RoboMaster_Test
+git worktree list
+git branch --all
 ```
 
-后续固件改动需要同步到测试分支再验证；不要把本次删除 `Tests/` 的提交同步过去，
-也不要通过合并测试分支将测试目录重新引入固件分支。主机测试不代替实机通信和实时性验证。
+在合适的测试工作区中同步本次相关生产源码，再按测试分支 README 运行相关单项或
+`bash Tests/run_all.sh`。确认测试编译的确实是本次源码；旧测试工作区通过不能作为当前
+固件的验证结果。不把删除 `Tests/` 的提交同步过去，也不通过合并测试分支将其引回固件。
+主机测试不替代 DMA/CAN、电机闭环和实时性的实机验证。
 
 ### 烧录与观察
 
@@ -336,7 +340,6 @@ git switch RoboMaster_Test
 
 - [BSP 开发指南](User_File/Middleware/BSP/README.md) · [Message Center](User_File/System/MessageCenter/README.md) · [Application 开发指南](User_File/Application/README.md)。
 - [DJI 电机驱动](User_File/Device/Peripheral/Motor/DJImotor/dji_motor.md) · [达妙电机驱动](User_File/Device/Peripheral/Motor/DMmotor/dmmotor.md) · [更新记录](docs/CHANGELOG.md)。
-- [文档与注释一致性审查](docs/documentation_sync_2026-09-28.md) · [2026-09-25 历史框架审查](docs/framework_review_2026-09-25.md)。
 - [FreeRTOS heap memory management](https://www.freertos.org/Documentation/02-Kernel/02-Kernel-features/09-Memory-management/01-Memory-management)。
 - [ST AN4891：STM32H7 系统架构与性能](https://www.st.com/resource/en/application_note/an4891-stm32h72x-stm32h73x-and-singlecore-stm32h74x75x-system-architecture-and-performance-stmicroelectronics.pdf)。
 - [ST AN4839：STM32F7/H7 一级缓存](https://www.st.com/resource/en/application_note/an4839-level-1-cache-on-stm32f7-series-and-stm32h7-series-stmicroelectronics.pdf)。

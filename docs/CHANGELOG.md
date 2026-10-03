@@ -6,6 +6,13 @@
 旧日期条目记录当时的构建和测试快照，其中的数量及“尚未完成”不表示当前状态；
 当前能力以根 README 和对应模块文档为准。
 
+## 2026-10-03
+
+### 构建名称与开发入口
+
+- Debug、Release、SingleBoard、GimbalBoard、ChassisBoard 均生成 `H7_Framework.elf` 和同名 `.map`，以 `build/<preset>/` 区分配置。旧 `H7_BSP` 构建目标停用；下方历史条目中的旧产物名保留当时语境。
+- 烧录入口改为 EmberProbe；迁移工作区时清理旧名称产物并重新选择 ELF。保留 Ozone 调试工程。
+
 ## 2026-09-28
 
 ### 当前代码已实现
