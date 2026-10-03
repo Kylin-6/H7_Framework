@@ -276,8 +276,7 @@ void Example_Update(void);
 ## 12. 开源适配
 
 Application 边界、四舵轮运动学和基础发射控制参考 Meta-Embedded-NG，并适配为本工程
-的 C++ Device、CMSIS-RTOS v2、静态 Message Center 和 CAN 提交语义。许可信息见
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+的 C++ Device、CMSIS-RTOS v2、静态 Message Center 和 CAN 提交语义。
 
 ## 13. 相关文档
 

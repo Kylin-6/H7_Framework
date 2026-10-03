@@ -6,7 +6,7 @@
 
 namespace
 {
-/* 步兵测试分支的零基通道索引；CH5 跟随须有底盘朝向反馈后再接入。 */
+/* S.BUS 通道使用零基索引；CH5 跟随须有底盘朝向反馈后再接入。 */
 constexpr unsigned TRANSLATE_X = 1U; // CH2
 constexpr unsigned TRANSLATE_Y = 0U; // CH1
 constexpr unsigned SPEED_GEAR = 6U;  // CH7

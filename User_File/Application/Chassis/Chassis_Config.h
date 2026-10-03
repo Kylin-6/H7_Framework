@@ -2,6 +2,7 @@
 #define CHASSIS_CONFIG_H
 
 #include "../physical_units.h"
+
 #include <cstdint>
 
 // 底盘机构与控制参数；总线归属由 BoardConfig 提供。
@@ -27,7 +28,7 @@ struct ChassisConfig
     uint8_t motor_id[4] = {1U, 2U, 3U, 4U};
     ChassisPidConfig wheel_speed_pid{4.5f, 0.05f, 0.0f, 3000.0f, 16000.0f};
     ChassisPidConfig steer_angle_pid{30.0f, 0.2f, 0.0f,
-                                        DegToRad(200.0f), DegToRad(1000.0f)};
+                                     DegToRad(200.0f), DegToRad(1000.0f)};
     ChassisPidConfig steer_speed_pid{4.0f, 4.0f, 0.0f, 3000.0f, 15000.0f};
 };
 

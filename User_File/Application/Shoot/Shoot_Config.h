@@ -2,6 +2,7 @@
 #define SHOOT_CONFIG_H
 
 #include "../physical_units.h"
+
 #include <cstdint>
 
 // 发射机构与控制参数；总线归属由 BoardConfig 提供。
@@ -28,7 +29,7 @@ struct ShootConfig
     ShootPidConfig loader_current_pid{1.0f, 50.0f, 0.0f, 12000.0f, 12000.0f};
     ShootPidConfig loader_speed_pid{7.5f, 20.0f, 0.0f, 12000.0f, 12000.0f};
     ShootPidConfig loader_angle_pid{10.0f, 0.0f, 0.0f,
-                                       0.0f, DegToRad(360.0f)};
+                                    0.0f, DegToRad(360.0f)};
 };
 
 constexpr ShootConfig kShootConfig{};

@@ -11,12 +11,12 @@
 #include "Shoot.h"
 #include "Shoot_Config.h"
 #include "board_config.h"
-
 #include "message_center.h"
 
 #if SHOOT
 #include "dji_motor.h"
 #include "fdcan.h"
+
 #include <cmath>
 #endif
 
@@ -45,11 +45,11 @@ struct ShootContext
 };
 
 ShootContext ctx;
-}
+} // namespace
 
 #if SHOOT
 
-static PID_InitTypeDef Shoot_MakePID(const ShootPidConfig &config)
+static PID_InitTypeDef Shoot_MakePID(const ShootPidConfig& config)
 {
     PID_InitTypeDef pid{};
     pid.K_P = config.kp;
@@ -65,8 +65,8 @@ static void Shoot_ApplyCommand(void)
 {
     /* ShootMode 是总使能；关闭后摩擦轮和拨弹盘都停止主动输出。 */
     const bool enabled = ctx.command.shoot_mode == ShootMode::ON;
-    (void)ctx.friction_group.RequestEnabled(enabled);
-    (void)ctx.loader_group.RequestEnabled(enabled);
+    (void) ctx.friction_group.RequestEnabled(enabled);
+    (void) ctx.loader_group.RequestEnabled(enabled);
     if (!enabled)
     {
         ctx.event_angle_active = false;
@@ -77,8 +77,8 @@ static void Shoot_ApplyCommand(void)
     if (ctx.command.friction_mode == FrictionMode::ON)
     {
         friction_reference_rad_s = ctx.command.friction_speed_rad_s > 0.0f
-            ? ctx.command.friction_speed_rad_s
-            : kShootConfig.default_friction_speed_rad_s;
+                                       ? ctx.command.friction_speed_rad_s
+                                       : kShootConfig.default_friction_speed_rad_s;
     }
     ctx.friction_group.Control(friction_reference_rad_s, friction_reference_rad_s);
 
@@ -91,10 +91,11 @@ static void Shoot_ApplyCommand(void)
         ctx.event_angle_active = false;
         ctx.loader.Set_Outer_Loop(DJI_MOTOR_SPEED_LOOP);
         const float rate = ctx.command.shoot_rate_hz > 0.0f
-            ? ctx.command.shoot_rate_hz : kShootConfig.default_rate_hz;
+                               ? ctx.command.shoot_rate_hz
+                               : kShootConfig.default_rate_hz;
         loader_speed_target_rad_s = ctx.command.loader_speed_rad_s != 0.0f
-            ? ctx.command.loader_speed_rad_s
-            : rate * kShootConfig.one_bullet_angle_rad;
+                                        ? ctx.command.loader_speed_rad_s
+                                        : rate * kShootConfig.one_bullet_angle_rad;
         break;
     }
 
@@ -102,8 +103,8 @@ static void Shoot_ApplyCommand(void)
         ctx.event_angle_active = false;
         ctx.loader.Set_Outer_Loop(DJI_MOTOR_SPEED_LOOP);
         loader_speed_target_rad_s = ctx.command.loader_speed_rad_s != 0.0f
-            ? -std::fabs(ctx.command.loader_speed_rad_s)
-            : kShootConfig.reverse_speed_rad_s;
+                                        ? -std::fabs(ctx.command.loader_speed_rad_s)
+                                        : kShootConfig.reverse_speed_rad_s;
         break;
 
     case LoaderMode::STOP:
@@ -160,8 +161,8 @@ static void Shoot_UpdateFeedback(void)
                            ctx.friction_left_snapshot.ready &&
                            ctx.friction_right_snapshot.ready && ctx.loader_snapshot.ready;
     ctx.feedback.online = ctx.friction_left_snapshot.online &&
-                            ctx.friction_right_snapshot.online &&
-                            ctx.loader_snapshot.online;
+                          ctx.friction_right_snapshot.online &&
+                          ctx.loader_snapshot.online;
 }
 #endif
 
@@ -202,12 +203,12 @@ bool Shoot_Init(void)
     const bool loader_initialized = ctx.loader.Init(loader_config);
 
     ctx.initialized = left_initialized && right_initialized && loader_initialized &&
-        ctx.friction_group.Init(&ctx.friction_left, &ctx.friction_right) &&
-        ctx.loader_group.Init(&ctx.loader);
+                      ctx.friction_group.Init(&ctx.friction_left, &ctx.friction_right) &&
+                      ctx.loader_group.Init(&ctx.loader);
     if (ctx.initialized)
     {
-        (void)ctx.friction_group.RequestEnabled(false);
-        (void)ctx.loader_group.RequestEnabled(false);
+        (void) ctx.friction_group.RequestEnabled(false);
+        (void) ctx.loader_group.RequestEnabled(false);
     }
     ctx.event_angle_active = false;
     ctx.loader_angle_target_rad = 0.0f;

@@ -12,15 +12,15 @@
 
 #include "Chassis.h"
 #include "Chassis_Config.h"
-
-#include "message_center.h"
 #include "board_config.h"
+#include "message_center.h"
 
 static constexpr uint64_t CHASSIS_COMMAND_MAX_AGE_US = 100000U;
 
 #if CHASSIS
 #include "dji_motor.h"
 #include "fdcan.h"
+
 #include <cmath>
 #endif
 
@@ -45,11 +45,11 @@ struct ChassisContext
 };
 
 ChassisContext ctx;
-}
+} // namespace
 
 #if CHASSIS
 
-static PID_InitTypeDef Chassis_MakePID(const ChassisPidConfig &config)
+static PID_InitTypeDef Chassis_MakePID(const ChassisPidConfig& config)
 {
     PID_InitTypeDef pid{};
     pid.K_P = config.kp;
@@ -85,7 +85,7 @@ static void Chassis_CalculateTargets(float wheel_target_rad_s[4],
     for (uint8_t index = 0; index < 4; ++index)
     {
         const float velocity_m_s = std::sqrt(wheel_vx[index] * wheel_vx[index] +
-                                            wheel_vy[index] * wheel_vy[index]);
+                                             wheel_vy[index] * wheel_vy[index]);
         const float current_angle_rad =
             ctx.steer_snapshot[index].output_total_angle;
         if (velocity_m_s < kChassisConfig.stop_speed_m_s)
@@ -157,11 +157,11 @@ static void Chassis_UpdateFeedback(void)
     // 一阶平滑 y += alpha * (x - y)，在 1 kHz 控制周期更新；100 Hz 仅是发布频率。
     // 初始输出沿用初始化时的零值，feedback_alpha 是每个控制周期的权重。
     ctx.feedback.velocity_x_m_s += kChassisConfig.feedback_alpha *
-        (vx - ctx.feedback.velocity_x_m_s);
+                                   (vx - ctx.feedback.velocity_x_m_s);
     ctx.feedback.velocity_y_m_s += kChassisConfig.feedback_alpha *
-        (vy - ctx.feedback.velocity_y_m_s);
+                                   (vy - ctx.feedback.velocity_y_m_s);
     ctx.feedback.angular_velocity_rad_s += kChassisConfig.feedback_alpha *
-        (0.5f * (wz_x + wz_y) - ctx.feedback.angular_velocity_rad_s);
+                                           (0.5f * (wz_x + wz_y) - ctx.feedback.angular_velocity_rad_s);
     ctx.feedback.enabled = ctx.command.mode != ChassisMode::ZERO_FORCE && ready;
     ctx.feedback.online = online;
 }
@@ -201,16 +201,16 @@ bool Chassis_Init(void)
         initialized = ctx.steer_motor[index].Init(steer_config) && initialized;
     }
     initialized = initialized && ctx.wheel_group.Init(
-        &ctx.wheel_motor[0], &ctx.wheel_motor[1],
-        &ctx.wheel_motor[2], &ctx.wheel_motor[3]);
+                                     &ctx.wheel_motor[0], &ctx.wheel_motor[1],
+                                     &ctx.wheel_motor[2], &ctx.wheel_motor[3]);
     initialized = initialized && ctx.steer_group.Init(
-        &ctx.steer_motor[0], &ctx.steer_motor[1],
-        &ctx.steer_motor[2], &ctx.steer_motor[3]);
+                                     &ctx.steer_motor[0], &ctx.steer_motor[1],
+                                     &ctx.steer_motor[2], &ctx.steer_motor[3]);
     ctx.initialized = initialized;
     if (initialized)
     {
-        (void)ctx.wheel_group.RequestEnabled(false);
-        (void)ctx.steer_group.RequestEnabled(false);
+        (void) ctx.wheel_group.RequestEnabled(false);
+        (void) ctx.steer_group.RequestEnabled(false);
     }
     return initialized;
 #else
@@ -241,17 +241,17 @@ void Chassis_Update(void)
             ctx.steer_snapshot[index] = ctx.steer_motor[index].GetMotionSnapshot();
         }
         const bool enabled = ctx.command.mode != ChassisMode::ZERO_FORCE;
-        (void)ctx.wheel_group.RequestEnabled(enabled);
-        (void)ctx.steer_group.RequestEnabled(enabled);
+        (void) ctx.wheel_group.RequestEnabled(enabled);
+        (void) ctx.steer_group.RequestEnabled(enabled);
         if (enabled)
         {
             float wheel_target_rad_s[4];
             float steer_target_rad[4];
             Chassis_CalculateTargets(wheel_target_rad_s, steer_target_rad);
             ctx.wheel_group.Control(wheel_target_rad_s[0], wheel_target_rad_s[1],
-                                        wheel_target_rad_s[2], wheel_target_rad_s[3]);
+                                    wheel_target_rad_s[2], wheel_target_rad_s[3]);
             ctx.steer_group.Control(steer_target_rad[0], steer_target_rad[1],
-                                        steer_target_rad[2], steer_target_rad[3]);
+                                    steer_target_rad[2], steer_target_rad[3]);
         }
         Chassis_UpdateFeedback();
     }

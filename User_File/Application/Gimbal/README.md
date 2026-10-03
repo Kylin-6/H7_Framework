@@ -4,7 +4,7 @@
 QD4310 驱动仍作为独立设备保留，云台不再依赖它。SingleBoard 默认
 `H7_APP_GIMBAL=OFF`；GimbalBoard 构建固定启用云台硬件路径。
 
-## 配置与参考来源
+## 参数配置
 
 在 [Gimbal_Config.h](Gimbal_Config.h) 集中配置；`Gimbal_Init()` 复制默认配置，
 也可在启动阶段传入一份 `Struct_Gimbal_Config`。初始化只调用一次，不等待电机、
@@ -13,24 +13,24 @@ QD4310 驱动仍作为独立设备保留，云台不再依赖它。SingleBoard �
 电机、PID、目标和 Snapshot 由 `Gimbal.cpp` 的私有 `GimbalContext` 持有；
 外部只能通过初始化、周期入口和只读状态接口访问 Application。
 
-| 项目 | 示例 | 来源与限制 |
-| --- | --- | --- |
-| Yaw / Pitch 总线 | GimbalBoard 均为 FDCAN1；SingleBoard 为 FDCAN2 / FDCAN1 | 由所选 BoardConfig 固定接线，板间链路占用 GimbalBoard 的 FDCAN2 |
-| 电机 ID | 1 / 2 | 示例，需与电机端对应 |
-| 反馈 Master ID | 0x101 / 0x102 | 示例，不能与同总线现有接收 ID 冲突 |
-| 协议量程 | ±12.5 rad、±45 rad/s、±18 N·m | Meta 达妙驱动示例，必须与电机端 PMAX/VMAX/TMAX 相同 |
-| Yaw 角度 Kp / 速度上限 | 8 / 8.72664626 rad/s | 参考 basic 云台，速度上限按示例 500 deg/s 转换 |
-| Yaw 转矩环 Kp/Ki/Kd | 全部为 0 | 没有可直接移植的达妙整定值，默认无 Yaw 主动转矩 |
-| Yaw 转矩 / 积分上限 | 18 / 0 N·m | 转矩上限仅为协议范围示例，须按机构调整；启用 Ki 时同时设置积分限幅 |
-| Pitch MIT Kp/Kd | 20 / 1 | 来自 Meta 小米 Pitch 示例，不是已验证的达妙参数 |
-| Pitch 位置 / 速度限位 | [-1.5, 0.5] rad / ±1 rad/s | Meta 机构示例，必须按实际机械零位重新标定 |
-| Pitch 电机/姿态比例 | 1 | 直接驱动示例；使用正传动比，反向由电机 reverse 配置 |
-| IMU 角速度轴 | Yaw Z、Pitch Y，符号均 +1 | 对应本工程 Z-Y-X 姿态定义；安装方向改变时须复核 |
+参数参考本地 H7_BSP 老步兵工程：Yaw 使用底盘中的云台电机参数，Pitch 使用云台参数。
+只采用可直接对应的 ID、协议量程、Yaw 速度上限和 Pitch 限位；控制框架保持现有实现。
 
-参考文件：basic_framework 的 `application/gimbal/gimbal.c`；Meta-Embedded-NG 的
-`application/gimbal/2yaw_gimbal.c`、`application/sentry/sentry_def.h` 和
-`module/motor/DMmotor/dmmotor.h`。这是控制结构与数值示例的适配，不代表参考工程已经
-实现或验证了本工程的双达妙硬件。许可见 [THIRD_PARTY_NOTICES](../THIRD_PARTY_NOTICES.md)。
+| 项目 | 默认值 | 配置要求 |
+| --- | --- | --- |
+| Yaw / Pitch 总线 | BoardConfig 的 gimbal_yaw_bus / gimbal_pitch_bus | 按所选板型接线 |
+| 电机 ID / 反馈 Master ID | Yaw 0x03 / 0x005；Pitch 0x09 / 0x019 | 与电机端一致，反馈 ID 不得与同总线设备冲突 |
+| 两轴协议量程 | ±3.14 rad、±30 rad/s、±10 N·m | 必须与电机端 PMAX/VMAX/TMAX 相同 |
+| Yaw 角度 Kp / 速度上限 | 8 / 15 rad/s | 角度增益保留，速度上限参考老步兵底盘 |
+| Yaw 速度 PID / 积分上限 | 全部为 0 | 保留安全默认值，尚不产生主动转矩 |
+| Yaw 转矩上限 | 10 N·m | 与协议量程一致，实际输出仍受零增益约束 |
+| Pitch MIT Kp / Kd / 速度上限 | 20 / 1 / 1 rad/s | 保留现有值，须实机整定 |
+| Pitch 位置限位 | [-0.6981317, 0.2617994] rad（-40° 至 +15°） | 参考老步兵云台，须按实际电机零位核对 |
+| Pitch 电机/姿态比例 | 1 | 保留现有正传动比，反向使用 reverse |
+| IMU 角速度轴 / 符号 | Yaw Z / +1；Pitch Y / +1 | 保留现有安装约定 |
+
+老工程的 Pitch IMU 转矩增益和 Yaw MIT 速度阻尼不等价于当前控制环增益，未套用。
+这些默认值仅供配置参考，不代表当前双达妙机构已完成标定。
 
 ## 控制契约
 
@@ -71,7 +71,5 @@ QD4310 驱动仍作为独立设备保留，云台不再依赖它。SingleBoard �
 
 ## 验证
 
-`RoboMaster_Test` 分支的 `Tests/Gimbal` 编译真实云台、达妙驱动、PID、Daemon
-和消息中心，验证协议、控制、失效及恢复。固件构建覆盖默认、仅云台及三应用开启配置。
 尚未完成板测：需要验证型号/量程、方向/零位、MIT 增益、Yaw 转矩环、机械限位、
 CAN 满载、断线恢复、使能顺序及实际控制周期。

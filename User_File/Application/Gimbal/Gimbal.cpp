@@ -38,7 +38,7 @@ struct GimbalContext
 
 GimbalContext ctx;
 
-}
+} // namespace
 
 #if GIMBAL
 namespace
@@ -49,19 +49,25 @@ float Clamp(float value, float minimum, float maximum)
     return value < minimum ? minimum : (value > maximum ? maximum : value);
 }
 
-bool ConfigValid(const Struct_Gimbal_Config &c)
+bool ConfigValid(const Struct_Gimbal_Config& c)
 {
     const float nonnegative[] = {c.yaw_angle_kp, c.yaw_speed_kp, c.yaw_speed_ki,
-        c.yaw_speed_kd, c.yaw_integral_limit, c.pitch_kp, c.pitch_kd};
+                                 c.yaw_speed_kd, c.yaw_integral_limit, c.pitch_kp, c.pitch_kd};
     for (float value : nonnegative)
     {
-        if (!std::isfinite(value) || value < 0) { return false; }
+        if (!std::isfinite(value) || value < 0)
+        {
+            return false;
+        }
     }
     const float positive[] = {c.yaw_speed_limit, c.yaw_torque_limit,
                               c.pitch_speed_limit, c.pitch_motor_per_imu};
     for (float value : positive)
     {
-        if (!std::isfinite(value) || value <= 0) { return false; }
+        if (!std::isfinite(value) || value <= 0)
+        {
+            return false;
+        }
     }
     return !(c.yaw.bus == c.pitch.bus &&
              (c.yaw.id == c.pitch.id || c.yaw.feedback_id == c.pitch.feedback_id)) &&
@@ -87,7 +93,7 @@ void ResetControllers()
     ctx.yaw_speed_pid = Class_PID{};
     ctx.yaw_angle_pid.Init(ctx.config.yaw_angle_kp, 0, 0, 0, 0, ctx.config.yaw_speed_limit);
     ctx.yaw_speed_pid.Init(ctx.config.yaw_speed_kp, ctx.config.yaw_speed_ki,
-        ctx.config.yaw_speed_kd, 0, ctx.config.yaw_integral_limit, ctx.config.yaw_torque_limit);
+                           ctx.config.yaw_speed_kd, 0, ctx.config.yaw_integral_limit, ctx.config.yaw_torque_limit);
 }
 
 void CapturePose(uint32_t sequence)
@@ -103,11 +109,17 @@ void CapturePose(uint32_t sequence)
 void Stop()
 {
     // 首次失能请求或失能边沿立即尝试发布安全目标；补交与协议纠正交给 ServiceAll。
-    if (ctx.yaw_registered) { (void)ctx.yaw_motor.RequestEnabled(false); }
-    if (ctx.pitch_registered) { (void)ctx.pitch_motor.RequestEnabled(false); }
+    if (ctx.yaw_registered)
+    {
+        (void) ctx.yaw_motor.RequestEnabled(false);
+    }
+    if (ctx.pitch_registered)
+    {
+        (void) ctx.pitch_motor.RequestEnabled(false);
+    }
 }
 
-void Control(const Struct_DMMotor_Snapshot &pitch)
+void Control(const Struct_DMMotor_Snapshot& pitch)
 {
     // Yaw 复用现有 PID：最短角误差生成角速度，再由速度环生成转矩。
     const float error = std::remainder(ctx.target_yaw_angle_rad - ctx.ins.yaw_rad, 2 * GIMBAL_PI);
@@ -121,15 +133,15 @@ void Control(const Struct_DMMotor_Snapshot &pitch)
     const float torque = ctx.yaw_speed_pid.Get_Out();
     // Pitch 将 INS 姿态/角速度误差换算为电机目标；位置、速度均基于同一次反馈快照。
     const float position = pitch.feedback.position + ctx.config.pitch_motor_per_imu *
-                          (ctx.target_pitch_angle_rad - ctx.ins.pitch_rad);
+                                                         (ctx.target_pitch_angle_rad - ctx.ins.pitch_rad);
     const float velocity = pitch.feedback.velocity + ctx.config.pitch_motor_per_imu *
-                          (ctx.target_pitch_speed_rad_s - Gyro(ctx.config.pitch_gyro_axis, ctx.config.pitch_gyro_sign));
-    (void)ctx.yaw_motor.SetTorque(Clamp(torque, -ctx.config.yaw_torque_limit, ctx.config.yaw_torque_limit));
-    (void)ctx.pitch_motor.SetMIT(Clamp(position, ctx.config.pitch_min, ctx.config.pitch_max),
-        Clamp(velocity, -ctx.config.pitch_speed_limit, ctx.config.pitch_speed_limit), ctx.config.pitch_kp, ctx.config.pitch_kd, 0);
+                                                         (ctx.target_pitch_speed_rad_s - Gyro(ctx.config.pitch_gyro_axis, ctx.config.pitch_gyro_sign));
+    (void) ctx.yaw_motor.SetTorque(Clamp(torque, -ctx.config.yaw_torque_limit, ctx.config.yaw_torque_limit));
+    (void) ctx.pitch_motor.SetMIT(Clamp(position, ctx.config.pitch_min, ctx.config.pitch_max),
+                                  Clamp(velocity, -ctx.config.pitch_speed_limit, ctx.config.pitch_speed_limit), ctx.config.pitch_kp, ctx.config.pitch_kd, 0);
 }
 
-void UpdateTarget(const TopicSnapshot<GimbalCmd> &message)
+void UpdateTarget(const TopicSnapshot<GimbalCmd>& message)
 {
     // LOCK 只在进入时捕获姿态；IMU 只接受新序号，避免恢复后重放旧目标。
     if (ctx.command.mode == GimbalMode::LOCK && ctx.last_mode != GimbalMode::LOCK)
@@ -148,7 +160,7 @@ void UpdateTarget(const TopicSnapshot<GimbalCmd> &message)
 }
 } // namespace
 
-bool Gimbal_Init(const Struct_Gimbal_Config &requested)
+bool Gimbal_Init(const Struct_Gimbal_Config& requested)
 {
     if (!ConfigValid(requested))
     {
@@ -157,11 +169,11 @@ bool Gimbal_Init(const Struct_Gimbal_Config &requested)
     }
     ctx.config = requested;
     ctx.yaw_registered = ctx.yaw_motor.Init(ctx.config.yaw.bus, ctx.config.yaw.id, ctx.config.yaw.feedback_id,
-        Enum_DMMotor_Mode::MIT, ctx.config.yaw.reverse, ctx.config.yaw.position_max,
-        ctx.config.yaw.velocity_max, ctx.config.yaw.torque_max);
+                                            Enum_DMMotor_Mode::MIT, ctx.config.yaw.reverse, ctx.config.yaw.position_max,
+                                            ctx.config.yaw.velocity_max, ctx.config.yaw.torque_max);
     ctx.pitch_registered = ctx.pitch_motor.Init(ctx.config.pitch.bus, ctx.config.pitch.id, ctx.config.pitch.feedback_id,
-        Enum_DMMotor_Mode::MIT, ctx.config.pitch.reverse, ctx.config.pitch.position_max,
-        ctx.config.pitch.velocity_max, ctx.config.pitch.torque_max);
+                                                Enum_DMMotor_Mode::MIT, ctx.config.pitch.reverse, ctx.config.pitch.position_max,
+                                                ctx.config.pitch.velocity_max, ctx.config.pitch.torque_max);
     ctx.initialized = ctx.yaw_registered && ctx.pitch_registered;
     ctx.command = {};
     ctx.was_ready = false;
@@ -172,14 +184,21 @@ bool Gimbal_Init(const Struct_Gimbal_Config &requested)
 Enum_Gimbal_Status Gimbal_GetStatus(void)
 {
     // 状态由当前输入与电机快照推导，仅用于观察，不安排重试或驱动状态迁移。
-    if (!ctx.initialized) { return Gimbal_Status_CONFIG_ERROR; }
-    if (ctx.command.mode == GimbalMode::DISABLED) { return Gimbal_Status_DISABLE; }
+    if (!ctx.initialized)
+    {
+        return Gimbal_Status_CONFIG_ERROR;
+    }
+    if (ctx.command.mode == GimbalMode::DISABLED)
+    {
+        return Gimbal_Status_DISABLE;
+    }
     if (!ctx.ins_valid || ctx.yaw_snapshot.fault || ctx.pitch_snapshot.fault)
     {
         return Gimbal_Status_FAULT;
     }
     return ctx.yaw_snapshot.ready && ctx.pitch_snapshot.ready
-        ? Gimbal_Status_READY : Gimbal_Status_ENABLING;
+               ? Gimbal_Status_READY
+               : Gimbal_Status_ENABLING;
 }
 #endif
 
@@ -232,8 +251,8 @@ void Gimbal_Update(void)
     }
 
     // 每周期表达输出许可；驱动只处理请求边沿，重复使能不会覆盖正常周期目标。
-    (void)ctx.yaw_motor.RequestEnabled(true);
-    (void)ctx.pitch_motor.RequestEnabled(true);
+    (void) ctx.yaw_motor.RequestEnabled(true);
+    (void) ctx.pitch_motor.RequestEnabled(true);
     ctx.yaw_snapshot = ctx.yaw_motor.GetFeedbackSnapshot();
     ctx.pitch_snapshot = ctx.pitch_motor.GetFeedbackSnapshot();
     if (!ctx.yaw_snapshot.ready || !ctx.pitch_snapshot.ready)

@@ -7,7 +7,6 @@
  */
 
 #include "RobotCmd.h"
-
 #include "message_center.h"
 #include "source_arbitration.h"
 
@@ -32,7 +31,7 @@ static uint8_t RobotCmd_Chassis_Publish_Divider;
 static InputSource Last_Input_Source;
 static void RobotCmd_SetInputArmed(bool armed);
 
-static bool GimbalChanged(const GimbalCmd &next)
+static bool GimbalChanged(const GimbalCmd& next)
 {
     return Gimbal_Command.mode != next.mode ||
            Gimbal_Command.yaw_angle_rad != next.yaw_angle_rad ||
@@ -41,7 +40,7 @@ static bool GimbalChanged(const GimbalCmd &next)
            Gimbal_Command.pitch_speed_rad_s != next.pitch_speed_rad_s;
 }
 
-static bool ShootChanged(const ShootCmd &next)
+static bool ShootChanged(const ShootCmd& next)
 {
     return Shoot_Command.shoot_mode != next.shoot_mode ||
            Shoot_Command.friction_mode != next.friction_mode ||
@@ -91,7 +90,9 @@ void RobotCmd_Update(void)
         {
             Chassis_Command_Dirty = true;
             ShootEvent discarded{};
-            while (MessageCenter::Shoot_Event_Queue.Pop(discarded)) {}
+            while (MessageCenter::Shoot_Event_Queue.Pop(discarded))
+            {
+            }
         }
         if (GimbalChanged(decision.gimbal))
         {
@@ -143,46 +144,51 @@ static void RobotCmd_SetInputArmed(bool armed)
         Chassis_Command_Dirty = true;
         Shoot_Command_Dirty = true;
         ShootEvent discarded{};
-        while (MessageCenter::Shoot_Event_Queue.Pop(discarded)) {}
+        while (MessageCenter::Shoot_Event_Queue.Pop(discarded))
+        {
+        }
     }
 }
 
-void RobotCmd_SetGimbal(const GimbalCmd &command)
+void RobotCmd_SetGimbal(const GimbalCmd& command)
 {
-    if (!Input_Armed) return;
+    if (!Input_Armed)
+        return;
     Gimbal_Command = command;
     Gimbal_Command_Dirty = true;
 }
 
-void RobotCmd_SetChassis(const ChassisCmd &command)
+void RobotCmd_SetChassis(const ChassisCmd& command)
 {
-    if (!Input_Armed) return;
+    if (!Input_Armed)
+        return;
     Chassis_Command = command;
 }
 
-void RobotCmd_SetShoot(const ShootCmd &command)
+void RobotCmd_SetShoot(const ShootCmd& command)
 {
-    if (!Input_Armed) return;
+    if (!Input_Armed)
+        return;
     Shoot_Command = command;
     Shoot_Command_Dirty = true;
 }
 
-bool RobotCmd_PushShootEvent(const ShootEvent &event)
+bool RobotCmd_PushShootEvent(const ShootEvent& event)
 {
     return Input_Armed && MessageCenter::Shoot_Event_Queue.Push(event);
 }
 
-bool RobotCmd_GetGimbalFeedback(GimbalFeedback &feedback)
+bool RobotCmd_GetGimbalFeedback(GimbalFeedback& feedback)
 {
     return MessageCenter::Gimbal_Feedback_Topic.ReadFresh(feedback, FEEDBACK_MAX_AGE_US);
 }
 
-bool RobotCmd_GetChassisFeedback(ChassisFeedback &feedback)
+bool RobotCmd_GetChassisFeedback(ChassisFeedback& feedback)
 {
     return MessageCenter::Chassis_Feedback_Topic.ReadFresh(feedback, FEEDBACK_MAX_AGE_US);
 }
 
-bool RobotCmd_GetShootFeedback(ShootFeedback &feedback)
+bool RobotCmd_GetShootFeedback(ShootFeedback& feedback)
 {
     return MessageCenter::Shoot_Feedback_Topic.ReadFresh(feedback, FEEDBACK_MAX_AGE_US);
 }

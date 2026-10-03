@@ -8,8 +8,6 @@ cmake --preset GimbalBoard && cmake --build --preset GimbalBoard
 cmake --preset ChassisBoard && cmake --build --preset ChassisBoard
 ```
 
-主机协议测试保存在 `RoboMaster_Test` 分支的 `Tests/Transport`，按仓库的测试分支约定运行。
-
 所有预设统一生成 `build/<preset>/H7_Framework.elf` 和 `H7_Framework.map`，板型由构建目录区分。
 
 `Debug` / `Release` 预设默认是单板入口（配置缓存中的 `H7_BOARD` 可覆盖）；`SingleBoard` 保留原有
