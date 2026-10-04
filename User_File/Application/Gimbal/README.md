@@ -1,7 +1,7 @@
 # 双达妙云台
 
 云台由统一 ControlTask 以 1 kHz 调度，两轴均使用现有 `Class_DMMotor` 和 MIT 模式。
-QD4310 驱动仍作为独立设备保留，云台不再依赖它。SingleBoard 默认
+SingleBoard 默认
 `H7_APP_GIMBAL=OFF`；GimbalBoard 构建固定启用云台硬件路径。
 
 ## 移植时先看哪些文件
@@ -150,13 +150,13 @@ const bool ins_valid = MessageCenter::INS_State_Topic.ReadFresh(ins, 10000U);
 - 云台每周期读取命令、INS 与两轴快照；活动模式请求两轴使能，两轴 ready 后立即捕获当前姿态并执行控制。没有就绪超时、退避或稳定窗口。
 - `Gimbal_GetStatus()` 根据初始化结果、当前命令、INS 新鲜度和两轴 `ready/fault` 给出 DISABLE、ENABLING、READY、FAULT 或 CONFIG_ERROR；状态只用于观察，不驱动恢复流程。CAN 软件周期槽是否接受目标不改变云台状态。
 - DMMotor 的 `RequestEnabled()` 处理首次请求和状态边沿：`false→true` 立即尝试一次 Enable，不主动发布安全目标；首次 `false` 或 `true→false` 立即尝试发布安全目标并提交一次 Disable。相同状态重复请求不执行收发；存在待提交项时返回 `false`。云台只有在两轴 ready 后才写正常目标，DMMotor 的 `SetXXX()` 在未 ready 时仍自动安全化。
-- 100 Hz StatusTask 调用 `ServiceAll()`：补交失败的安全目标；在线且无故障时补交失败的当前协议命令，并在反馈与请求不一致时再次提交。离线或故障时不新增 Enable/Disable。详细提交语义见 [DM 电机驱动](../../Device/Peripheral/Motor/DMmotor/dmmotor.md)。已进入硬件 FIFO 的帧由 FDCAN Auto Retransmission 处理总线级重发。
+- 100 Hz StatusTask 调用 `ServiceAll()`：补交失败的安全目标；在线且无故障时补交失败的当前协议命令，并在反馈与请求不一致时再次提交。普通协议纠正在离线或故障时暂停；设备自身离线保护独立提交安全目标和 Disable，并补交失败项。详细提交语义见 [DM 电机驱动](../../Device/Peripheral/Motor/DMmotor/dmmotor.md)。已进入硬件 FIFO 的帧由 FDCAN Auto Retransmission 处理总线级重发。
 - DISABLED、故障或初始化部分失败时，对已注册电机调用 `RequestEnabled(false)`；
   DMMotor 在首次请求或 `true→false` 边沿立即尝试覆盖周期槽为零刚度/阻尼/转矩并提交一次失能，相同请求不重复发布；失败项交给低频服务补交，在线反馈仍显示使能时继续纠正失能。离线时不反复刷失能命令；停止帧不能
   保证在物理断线时送达，也不会清除已经进入硬件 FIFO 的帧。
 - 活动模式下按当前设备状态恢复。恢复先清空 PID 历史并捕获当前姿态；IMU 等待 READY 后重新
   发布目标，LOCK 直接保持新捕获的姿态，故障前目标不会重放。
-- Daemon 只判断反馈活性；DMMotor 根据云台请求维护协议状态，不自动 ClearError。
+- Daemon 只判断反馈活性；DMMotor 自行执行掉线 fail-safe，并根据云台请求维护协议状态，不自动 ClearError。
 
 `GimbalFeedback` 仍为 100 Hz，字段布局不变。`enabled` 表示两轴电机均 ready；
 `ins_valid=false` 时发布零姿态/速度。使能命令提交成功不代表已使能。

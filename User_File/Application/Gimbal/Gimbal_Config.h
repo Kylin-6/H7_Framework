@@ -34,7 +34,7 @@ struct Struct_Gimbal_Config
     // Yaw 角度环输出 rad/s，速度环输出 N·m。
     float yaw_angle_kp = 8.0f;
     float yaw_speed_limit = 15.0f;
-    // 待实机整定：转矩环不是 QD4310 电流环，默认不产生 Yaw 主动转矩。
+    // 待实机整定：默认不产生 Yaw 主动转矩。
     float yaw_speed_kp = 0.0f;
     float yaw_speed_ki = 0.0f;
     float yaw_speed_kd = 0.0f;

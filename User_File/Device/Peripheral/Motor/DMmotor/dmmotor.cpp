@@ -124,8 +124,19 @@ void Class_DMMotor::FeedbackCallback(FDCAN_HandleTypeDef *callback_hfdcan,
     motor->feedback.mos_temperature = data[6];
     motor->feedback.rotor_temperature = data[7];
     /* 只有完整通过 ID、长度和节点校验的反馈帧才能刷新在线状态。 */
-    motor->last_feedback_us = SYS_Timestamp.Get_Now_Microsecond();
     motor->feedback_daemon.Feed();
+}
+
+/** @brief 仅登记本设备的安全动作，发送和失败补交由 ServiceAll 执行。 */
+void Class_DMMotor::OfflineCallback(void *context)
+{
+    Class_DMMotor *motor = (Class_DMMotor *)context;
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    motor->safe_output_pending = true;
+    motor->offline_disable_pending = true;
+    __DMB();
+    __set_PRIMASK(primask);
 }
 
 /** @brief 由 100 Hz StatusTask 根据新鲜反馈纠正协议状态，故障时不自动清错。 */
@@ -137,6 +148,16 @@ void Class_DMMotor::ServiceAll()
         // 与 ControlTask 的请求更新互斥，避免补交过时命令或覆盖新的待提交标志。
         const uint32_t primask = __get_PRIMASK();
         __disable_irq();
+        if (motor->offline_disable_pending)
+        {
+            // 位置模式的零速度/旧位置不等于零力矩，超时必须同时请求协议失能。
+            motor->safe_output_pending = !motor->PublishSafeOutput();
+            motor->offline_disable_pending = !motor->SendModeCommand(DM_CMD_DISABLE);
+        }
+        if (!motor->lifecycle_requested && motor->safe_output_pending)
+        {
+            motor->safe_output_pending = !motor->PublishSafeOutput();
+        }
         if (motor->lifecycle_requested)
         {
             const Struct_DMMotor_Snapshot snapshot = motor->GetFeedbackSnapshot();
@@ -150,8 +171,9 @@ void Class_DMMotor::ServiceAll()
                 // 失能安全发布失败也必须补交，包括离线和故障期间。
                 motor->safe_output_pending = !motor->PublishSafeOutput();
             }
-            // 离线或故障时不追加离散命令；硬件 FIFO 内的帧由 FDCAN 自动重发。
+            // 离线安全失能独立补交；普通期望状态只依据在线、无故障反馈纠正。
             if (snapshot.online && !snapshot.fault &&
+                !motor->offline_disable_pending &&
                 (motor->lifecycle_command_pending ||
                  snapshot.requested_enabled != snapshot.actual_enabled))
             {
@@ -240,14 +262,13 @@ Struct_DMMotor_Snapshot Class_DMMotor::GetFeedbackSnapshot() const
     __DMB();
     Struct_DMMotor_Snapshot snapshot;
     snapshot.feedback = feedback;
-    const uint64_t now = SYS_Timestamp.Get_Now_Microsecond();
-    snapshot.online = feedback_initialized && now >= last_feedback_us &&
-                      now - last_feedback_us < 100000U;
+    snapshot.online = feedback_daemon.IsOnline();
     snapshot.requested_enabled = requested_enabled;
     snapshot.actual_enabled = snapshot.feedback.state == 1U;
     snapshot.fault = snapshot.online && snapshot.feedback.state > 1U;
     snapshot.ready = snapshot.requested_enabled && snapshot.online &&
-                     snapshot.actual_enabled && !snapshot.fault;
+                     snapshot.actual_enabled && !snapshot.fault && feedback_initialized &&
+                     !offline_disable_pending;
     __DMB();
     if (primask == 0U) { __enable_irq(); }
     return snapshot;

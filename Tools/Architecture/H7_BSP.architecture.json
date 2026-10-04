@@ -32,7 +32,7 @@
     { "id": "bsp-platform", "from": "bsp", "to": "platform", "label": "HAL 驱动", "variant": "emphasis", "fromSide": "bottom", "toSide": "top", "labelAt": [480, 440] }
   ],
   "cards": [
-    { "dot": "cyan", "title": "设备适配", "items": ["DJI / DM 电机 · QD4310 / EricTool", "BMI088 · W25Q · 电源 · 按键与灯声"] },
+    { "dot": "cyan", "title": "设备适配", "items": ["DJI / DM 电机 · EricTool", "BMI088 · W25Q · 电源 · 按键与灯声"] },
     { "dot": "emerald", "title": "算法积木", "items": ["PID / DOB / SMC · KF / EKF / VQF", "FIR / IIR · 斜坡 · 矩阵与四元数"] },
     { "dot": "amber", "title": "工程基础", "items": ["CMake / Ninja · MPU / DMA · heap_5", "SystemView · RTT · Ozone"] }
   ]

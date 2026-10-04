@@ -94,13 +94,12 @@ CAN 接收回调在中断上下文执行。UART 的 DMA 接收须同时具备 Cu
 | --- | --- | --- |
 | DJI | M2006/C610、M3508/C620、GM6020；反馈、控制环与分组发送 | [DJI 电机驱动](User_File/Device/Peripheral/Motor/DJImotor/dji_motor.md) |
 | 达妙 | MIT、位置-速度、速度、力位混控接口；实际模式取决于型号与固件 | [达妙电机驱动](User_File/Device/Peripheral/Motor/DMmotor/dmmotor.md) |
-| QDrive | QD4310 协议与控制接口 | [QDrive](User_File/Device/Peripheral/Motor/QDrive) |
 
 电机型号、CAN ID、反馈源、方向、映射范围和控制参数由使用方配置；应用层负责控制周期、目标生成与输出边界。
 
-达妙动作/模式请求及 QDrive 命令接口返回 `bool`，表示是否成功提交到软件发送通道。提交失败时保留相应状态，调用方可据此重试；达妙置零仅在提交成功后重置位置展开状态。返回成功不代表电机已经执行或确认命令。
+达妙动作/模式请求接口返回 `bool`，表示是否成功提交到软件发送通道。提交失败时保留相应状态，调用方可据此重试；达妙置零仅在提交成功后重置位置展开状态。返回成功不代表电机已经执行或确认命令。
 
-达妙反馈以 `(FDCAN, master_id)` 注册接收入口，并用反馈首字节低四位匹配 `can_id`；电机 ID 使用非零 8 位值，高四位仍用于发送 ID。只有总线、ID、DLC 和节点号全部合法的运动反馈才刷新在线状态。Application 用 `RequestEnabled(bool)` 指定输出许可；DMMotor 在首次请求或状态边沿执行协议动作，失能请求立即尝试覆盖安全周期目标，相同状态重复请求不执行收发；具体语义见 [达妙电机驱动](User_File/Device/Peripheral/Motor/DMmotor/dmmotor.md)，由 `StatusTask` 的 `ServiceAll()` 以 100 Hz 补交失败项并依据新鲜反馈维护 Enable/Disable 协议状态。Daemon 只判断活性，Gimbal 根据当前 INS 与电机快照决定是否控制。
+达妙反馈以 `(FDCAN, master_id)` 注册接收入口，并用反馈首字节低四位匹配 `can_id`；电机 ID 使用非零 8 位值，高四位仍用于发送 ID。只有总线、ID、DLC 和节点号全部合法的运动反馈才刷新在线状态。Application 用 `RequestEnabled(bool)` 指定输出许可；DMMotor 在首次请求或状态边沿执行协议动作，失能请求立即尝试覆盖安全周期目标，相同状态重复请求不执行收发；具体语义见 [达妙电机驱动](User_File/Device/Peripheral/Motor/DMmotor/dmmotor.md)，由 `StatusTask` 的 `ServiceAll()` 以 100 Hz 补交失败项并依据新鲜反馈维护 Enable/Disable 协议状态。Daemon 只判断活性，DMMotor 自己在超时后覆盖安全目标并提交失能；Gimbal 根据当前 INS 与电机快照决定是否控制。
 
 ### 板载设备与外接工具
 
@@ -175,7 +174,7 @@ EricTool 的 USB/UART 解析均只读取回调传入的缓冲区及有效长度�
 
 业务类型和唯一静态通道统一定义在 [MessageCenter](User_File/System/MessageCenter)。`INS_State_Topic` 由 BMI088 链路发布，云台读取最新姿态；RobotCmd 通过 Output 发布 Gimbal、Chassis、Shoot 连续命令并汇总反馈，底盘命令在云台板由固定 Transport 送往底盘板 Topic。单发和三连发通过固定容量 `ShootEvent` FIFO 传递。完整 API、并发语义、通道所有权、示例和验证清单见 [Message Center 专篇](User_File/System/MessageCenter/README.md)。
 
-所有正常工作时应持续收到反馈、心跳或数据流的模块优先注册静态 Daemon，只在收到合法数据时 `Feed()`。当前已接入 DM、DJI、S.BUS、有效 INS 输出、双板 Transport 及可选 Referee/VTM；`StatusTask` 每 10 ms（100 Hz）统一 `CheckAll()`，有 DM 电机时再调用原有 `Class_DMMotor::ServiceAll()`。Daemon 只负责 liveness，不负责整车停机、清错、重启、安全策略或消息路由。管理器保持 32 个固定槽位，无动态分配；当前三板最坏注册数为 17/8/11。在线查询不替代 Topic ReadFresh 或电机反馈的微秒 freshness，详见 [Daemon 说明](User_File/System/Daemon/README.md)。
+所有正常工作时应持续收到反馈、心跳或数据流的模块优先注册静态 Daemon，只在收到合法数据时 `Feed()`。当前已接入 DM、DJI、S.BUS、有效 INS 输出、双板 Transport 及可选 Referee/VTM；`StatusTask` 每 10 ms（100 Hz）统一 `CheckAll()`，随后调用已编入的 DJI、DM 设备 `ServiceAll()`。Daemon 只负责 liveness，不负责整车停机、清错、重启、安全策略或消息路由。管理器保持 32 个固定槽位，无动态分配；当前静态应用与可选 Referee/VTM 的三板注册数为 17/8/11。电机在线查询与控制门控统一使用 Daemon 即时状态；Topic ReadFresh 仍独立判断业务数据时效，详见 [Daemon 说明](User_File/System/Daemon/README.md)。
 
 ### Application
 
@@ -214,7 +213,7 @@ Control_Task 调度顺序、RobotCmd 所有权、Gimbal/Chassis/Shoot 行为和�
 | `DataValid` | 当前反馈可供上层使用；现有驱动通常要求 Online |
 | `Ready` | 电机初始化、请求使能且反馈新鲜；DM 还要求协议报告已使能且无故障 |
 
-`Daemon` 只负责时间窗及在线/离线跃迁。设备收到完整合法反馈后自行 `Feed()`，`StatusTask` 每 10 ms 统一 `CheckAll()`，有 DM 电机时随后执行电机协议期望状态服务。它不决定全车停机、云台 READY、消息路由或故障上报；业务安全策略仍由拥有设备的 Application 决定，并需实机拔线验证时限。
+`Daemon` 只负责时间窗及在线/离线跃迁。设备收到完整合法反馈后自行 `Feed()`，`StatusTask` 每 10 ms 统一 `CheckAll()`，随后执行已编入的电机设备安全/协议服务。基础掉线保护由 Device 独立覆盖安全目标及执行失能，不依赖 App 持续调用控制接口。它不决定全车停机、云台 READY、消息路由或故障上报；业务安全策略仍由拥有设备的 Application 决定，并需实机拔线验证时限。
 
 ### 数据新鲜度、发送与可观测性
 
@@ -223,7 +222,7 @@ Control_Task 调度顺序、RobotCmd 所有权、Gimbal/Chassis/Shoot 行为和�
 - `BSP_CAN_GetTxStats()` 提供命令队列满、周期槽满、硬件 FIFO 满和 HAL 发送失败的饱和计数快照。计数只提供证据，不自动改变调度或执行安全策略。
 - 主机测试可以确认协议编解码、ID/DLC 隔离、超时边界、队列溢出和数据新鲜度；真实波特率/采样点、终端电阻、总线仲裁、供电时序、电机参数和 EMC 必须在目标板上确认。
 
-当前框架尚未启用独立 IWDG，也没有通用的 Daemon→安全策略联动和复位原因遥测。接入整机前至少应完成遥控器失联互锁、关键设备拔线、上电仲裁、跌压重启和长跑水位检查，不能把主机回归通过等同于整机安全验收。
+当前框架尚未启用独立 IWDG，也没有通用的整车安全策略联动和复位原因遥测。接入整机前至少应完成遥控器失联互锁、关键设备拔线、上电仲裁、跌压重启和长跑水位检查，不能把主机回归通过等同于整机安全验收。
 
 ## 接入方式
 

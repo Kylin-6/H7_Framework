@@ -21,8 +21,7 @@ Application 使用 Device 接口，不直接解析 CAN/UART 或管理 DMA。
 | 设备 | 头文件 | 当前接入方式 |
 | --- | --- | --- |
 | 达妙电机 | [dmmotor.h](Peripheral/Motor/DMmotor/dmmotor.h) | Gimbal 拥有设备；StatusTask 维护 ServiceAll |
-| DJI 电机 | [dji_motor.h](Peripheral/Motor/DJImotor/dji_motor.h) | Chassis/Shoot 初始化电机与发送组 |
-| QD4310 | [QD4310.h](Peripheral/Motor/QDrive/QD4310.h) | 提供驱动接口，需业务自行接入 |
+| DJI 电机 | [dji_motor.h](Peripheral/Motor/DJImotor/dji_motor.h) | Chassis/Shoot 初始化电机与发送组；StatusTask 维护设备 ServiceAll |
 | S.BUS / DJI 遥控 | [sbus.h](Peripheral/Remote/sbus.h)、[remote_control.h](Peripheral/Remote/remote_control.h) | 当前 Input 绑定 UART5 S.BUS |
 | 裁判 / VTM / UI | [Referee 指南](Peripheral/Referee/README.md) | 当前 System_Init 不自动绑定，业务数据尚未接入 Shoot/Chassis |
 | EricTool | [dvc_erictool.h](Peripheral/EricTool/dvc_erictool.h) | UART/USB 调试与遥测 |
@@ -109,6 +108,7 @@ bool MotorExample_Update(bool allowed, float speed_rad_s)
 | Get_Last_Feedback_Timestamp_Us | 安全读取最近反馈微秒时间戳，避免 32 位 MCU 直接读取撕裂 |
 | IsOnline / IsEnabled / IsDataValid / IsHealthy | 分别检查反馈时效、本地许可、可用数据与综合健康 |
 | GetDaemon | 只读链路诊断 |
+| ServiceAll | StatusTask 每 10 ms 独立清零未就绪成员并补交安全帧 |
 
 | 发送组函数 | 怎么使用 |
 | --- | --- |
@@ -122,23 +122,6 @@ bool MotorExample_Update(bool allowed, float speed_rad_s)
 
 不能只调用单电机 Control 而漏掉组 Send；不能让不同逻辑组占用同一物理组报文。
 公开 feedback 和 PID 对象不是整体原子快照；应用读取运动状态使用 GetMotionSnapshot。
-
-## QD4310
-
-此驱动的速度边界仍是 rpm，电流 A、角度 rad；应用中的 rad/s 目标需先乘 60/(2π) 转为 rpm。
-
-| 函数 | 用途 |
-| --- | --- |
-| QD4310_Init | 绑定静态 QD4310_t、编号和总线；无返回值，检查 initialized |
-| QD4310_Enable / Disable | 提交离散使能/失能，检查 bool，不代表执行确认 |
-| SetAngle / SetStepAngle / SetZeroAngle | 绝对角、步进角、机械置零；前两者输入 rad |
-| SetSpeed / SetLowSpeed | rpm 速度目标，头文件范围 ±1000 rpm |
-| SetCurrent | A 电流目标，头文件范围 ±10 A |
-| SendCommand | 底层命令枚举和 int16 编码值接口，优先使用物理量封装 |
-| Update | 解析 8 字节反馈，由接收路径调用，业务不重复调用 |
-| IsOnline / IsEnabled / IsDataValid / IsHealthy | 最近 100 ms 反馈、反馈使能、数据可用及综合状态 |
-
-QD4310_t 由 CAN ISR 更新，没有内置多字段快照锁，任务读取 speed/angle/current 必须自行做一致性保护。
 
 ## 遥控 S.BUS 与 DJI 遥控
 

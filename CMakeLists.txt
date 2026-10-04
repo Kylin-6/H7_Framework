@@ -187,7 +187,6 @@ if(H7_BOARD STREQUAL "SingleBoard")
         User_Config/Board/single_board_config.cpp
         User_Config/Board/board_tasks_single.c
         User_File/Task/InsTask.cpp
-        User_File/Device/Peripheral/Motor/QDrive/QD4310.cpp
         ${H7_GIMBAL_TASK_DEVICE_SOURCES}
         ${H7_CHASSIS_DEVICE_SOURCES}
         User_File/Task/Control_Task.cpp
@@ -269,7 +268,6 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
         User_File/Device/Onboard/Key
         User_File/Device/Onboard/WS2812
         User_File/Device/Peripheral/EricTool
-        User_File/Device/Peripheral/Motor/QDrive
         User_File/Device/Peripheral/Motor/DMmotor
         User_File/Device/Peripheral/Motor/DJImotor
         User_File/Middleware/Algorithm/Pulse/

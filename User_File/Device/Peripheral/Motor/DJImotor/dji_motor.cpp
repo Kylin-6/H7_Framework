@@ -245,7 +245,6 @@ bool Class_DJIMotor::Init(const Struct_DJIMotor_Init_Config &config)
     command_limit = resolved_limit;
     gear_ratio = config.gear_ratio > 0.0f && !Basic_Math_Is_Invalid_Float(config.gear_ratio)
                      ? config.gear_ratio : DJI_Motor_Get_Default_Gear_Ratio(config.motor_type);
-    feedback_timeout_us = (uint64_t)config.feedback_timeout_ms * 1000;
     has_temperature = config.motor_type != Enum_DJIMotor_Type::M2006;
     PID_Init(&current_pid, &config.current_pid);
     PID_Init(&speed_pid, &config.speed_pid);
@@ -429,9 +428,7 @@ Struct_DJIMotor_Motion_Snapshot Class_DJIMotor::GetMotionSnapshot() const
     snapshot.output_total_angle = feedback.output_total_angle;
     snapshot.output_speed = feedback.output_speed;
     snapshot.timestamp_us = last_feedback_timestamp_us;
-    const uint64_t now_us = SYS_Timestamp.Get_Now_Microsecond();
-    snapshot.online = initialized && feedback_initialized && now_us >= snapshot.timestamp_us &&
-                      now_us - snapshot.timestamp_us <= feedback_timeout_us;
+    snapshot.online = initialized && feedback_daemon.IsOnline();
     snapshot.requested_enabled = requested_enabled;
     snapshot.ready = initialized && snapshot.requested_enabled && snapshot.online;
     __DMB();
@@ -548,6 +545,32 @@ bool Class_DJIMotor::Check_Feedback_Timeout()
     angle_pid.Set_Integral_Error(0.0f);
     Update_PID_Debug();
     return false;
+}
+
+/** @brief 独立清零未就绪电机并覆盖共享周期帧；失败在下次服务重试。 */
+void Class_DJIMotor::ServiceAll()
+{
+    for (uint8_t index = 0; index < DJI_MOTOR_MAX_GROUPS; ++index)
+    {
+        // 与 ControlTask 的组帧、积分更新及发布互斥，避免恢复后覆盖新输出。
+        const uint32_t interrupt_state = DJI_Motor_Enter_Critical();
+        Struct_DJIMotor_Tx_Group *sender = &DJI_Motor_Tx_Groups[index];
+        bool safe_output = false;
+        for (uint8_t slot = 0; slot < 4; ++slot)
+        {
+            if (sender->slot_owner[slot] != nullptr &&
+                !sender->slot_owner[slot]->Check_Feedback_Timeout())
+            {
+                safe_output = true;
+            }
+        }
+        if (safe_output)
+        {
+            // 只清除不安全成员，在线成员的槽位保持原值；不改变 App 请求许可。
+            (void)CAN_Tx_Perform(&sender->message);
+        }
+        DJI_Motor_Exit_Critical(interrupt_state);
+    }
 }
 
 /**

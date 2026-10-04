@@ -321,7 +321,7 @@ inline int64_t Class_Time::Get_Microsecond() const
 /**
  * @brief  C 语言可用的时间戳获取函数 (微秒)
  * @return uint64_t 当前时间戳, 单位微秒
- * @note   供纯 C 模块 (bsp_can, QD4310 等) 调用
+ * @note   供纯 C 模块 (bsp_can 等) 调用
  */
 #ifdef __cplusplus
 extern "C" {

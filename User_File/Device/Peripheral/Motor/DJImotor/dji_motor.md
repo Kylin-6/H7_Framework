@@ -22,6 +22,7 @@ FDCAN 回调注册和周期发送接口，不使用动态内存。
 | CAN 接收入口 | `CAN_RxCpltCallback` |
 | 反馈超时检查 | `Check_Feedback_Timeout` |
 | 清除本电机命令 | `Clear_Command` |
+| 独立设备安全服务 | `ServiceAll` |
 
 `Init()` 接收配置结构体的只读引用，例如 `motor.Init(config)`；接口声明采用
 `Init(const Struct_DJIMotor_Init_Config &config)` 和 `SetRef(float ref)`，参数名简洁，
@@ -90,19 +91,17 @@ if (motor.Init(config))
 
 `RequestEnabled(false)` 清除本电机所占槽和 PID 积分，并立即发布整帧，保留其他电机槽的命令。Group 的
 `RequestEnabled(false)` 一次清除全部成员并只发布一次。返回值表示 BSP 周期槽是否接受本次零指令；
-失败时应重试请求，不能将调用返回等同于电机已经停转。`Enable()`/`Disable()` 仅作旧调用方薄包装。
+失败时由设备 `ServiceAll()` 继续覆盖安全帧，不能将调用返回等同于电机已经停转。`Enable()`/`Disable()` 仅作旧调用方薄包装。
 
 DJI 无硬件 Enable/Disable 应答。`GetMotionSnapshot()` 中的 `requested_enabled` 是本地输出许可，
 `online` 是未超时的合法反馈，`ready` 是初始化、许可与在线同时成立；不提供虚构的
 `actual_enabled`。
 
-对象首次收到合法反馈前，以及超过 `feedback_timeout_ms` 没有反馈后，`Control()`
-都会保持该槽为零并清除 PID 积分。超时判断复用
-`SYS_Timestamp.Get_Now_Microsecond()`，以 64 位整数微秒计算；使用前应初始化系统时间服务。
+对象首次收到合法反馈前，以及达到 `feedback_timeout_ms` 没有反馈后，`Control()` 和 Group `Send()` 都会清零对应槽并清除 PID 积分。每个静态电机实例持有 `feedback_daemon`；Init 配置非零门限并注册，失败时不允许输出。只有总线、CAN ID、DLC=8 和 encoder<8192 全部合法且解码完成后才 Feed。
 
-每个静态电机实例同时拥有 `feedback_daemon`，Init 按 `feedback_timeout_ms` 配置非零门限并注册；注册失败返回 false，不允许该实例输出。只有总线、CAN ID、DLC=8 和 encoder<8192 全部合法且反馈解码完成后才 Feed，错误帧不延长在线时间。StatusTask 以 100 Hz 统一检查跃迁，默认无离线 callback。
+`IsOnline()`、`GetMotionSnapshot().online` 和控制门控统一使用 Daemon 的即时 `age < timeout_ms` 判断，不等待 StatusTask；不再另设微秒超时边界。微秒时间戳保留供诊断。`IsEnabled()` 为本地输出许可，`IsDataValid()` 等价于初始化且在线，`IsHealthy()` 要求 Enabled 与 DataValid。详见 [Daemon](../../../../System/Daemon/README.md)。
 
-`IsOnline()` 与 `GetMotionSnapshot().online` 使用最近合法反馈的微秒时间戳即时判断，保留原来的 `age <= feedback_timeout_us` 边界；Control/Send 不等待 StatusTask。删除原来的可写 `online` 缓存，查询改用接口。只读 `GetDaemon()` 用于离线时长/跃迁诊断，其毫秒门限为 `age < timeout_ms`；它不替代控制快照，不执行停机策略。`IsEnabled()` 为本地输出许可，`IsDataValid()` 等价于初始化且反馈新鲜，`IsHealthy()` 要求 Enabled 与 DataValid。详见 [Daemon](../../../../System/Daemon/README.md)。
+StatusTask 每 10 ms 独立调用设备 `ServiceAll()`：即使 App 不再调用 Control/Send，也清零未就绪电机的共享帧槽并清积分，再覆盖 CAN 周期槽；提交失败在下一周期重试。同帧其他在线且获许可成员保持原值，本地请求许可不因超时改变。收到恢复反馈只恢复在线，不重放旧输出；后续 Control 才生成新输出。软件提交不保证物理断线时送达，也不撤回硬件 FIFO 中的帧。
 
 ## 反馈量和单位
 

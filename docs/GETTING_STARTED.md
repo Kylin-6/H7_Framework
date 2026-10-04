@@ -75,7 +75,7 @@ Gimbal 使用 10 ms 新鲜度检查；具体坐标系、单位和控制条件见
 **Daemon = liveness（活性）**：判断在线、离线、离线时长与 Transition。
 急停、电机控制和整车安全策略由拥有设备的 Application 决定。
 在线只证明数据源活跃；例如合法的 S.BUS failsafe 帧仍可 Feed，控制许可还要检查失控标志与新鲜度。
-StatusTask 同时提供 DM 协议状态服务，这不属于 Daemon 的控制职责。
+StatusTask 随后调用已编入的 DJI、DM 设备安全/协议服务：设备自己覆盖旧输出并执行必要失能，App 负责机器人功能策略。这不属于 Daemon 的控制职责。
 
 ## 7. Topic 和 EventQueue
 

@@ -84,8 +84,8 @@ SingleBoard 默认 `H7_APP_CHASSIS=OFF`；ChassisBoard 固定开启，GimbalBoar
 
 ## 安全、掉线与反馈的实际边界
 
-设备在线由 DJI 快照按反馈时效判断，不等待低频 Daemon 才保护输出。
-DJI 驱动在 Control/Send 检查超时并清零对应电机指令。
+设备在线由 DJI 快照读取 Daemon 即时状态，Control/Send 不等待低频检查即可清零离线电机。
+StatusTask 的 DJI ServiceAll 还会独立覆盖安全帧并清积分，即使 App 不再调用 Control/Send。
 当前应用没有“一个模块掉线则八台电机全部停机”的聚合策略；其他在线电机可能继续控制。
 若要增加全车许可、恢复状态机或集中 PrepareControl，应单独设计行为并验证，不把文档示例当作现有行为。
 

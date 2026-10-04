@@ -40,7 +40,7 @@ motor.SetZeroPosition();
 
 安全目标发布和离散命令入队分别记录失败，成功项不会仅因另一项失败而重交。重复相同请求不重试、不掩盖未提交结果；后续由 100 Hz `ServiceAll()` 补交失败项。新的期望状态替换旧请求的待提交项；恢复 ready 后，不再补写未就绪期间失败的安全目标。返回成功不代表电机执行或确认。
 
-100 Hz StatusTask 调用 `ServiceAll()`：在线且无故障时，补交失败的当前 Enable/Disable 命令；即使反馈已符合期望，尚未成功入队的命令也会补交。没有待提交命令时，在线且请求使能、实际失能则再次尝试 Enable；在线且请求失能、实际使能则再次尝试 Disable。失能安全目标发布失败时，即使离线或故障也继续补交；成功后不再重复刷新。离线或故障期间不新增 Enable/Disable，也不会自动 ClearError。已进入 FDCAN 硬件 FIFO 的帧由硬件 Auto Retransmission 负责总线级重发；软件服务仍须依据新鲜反馈判断设备实际状态。`ClearError()` 和 `SetZeroPosition()` 返回命令入队结果；入队成功不代表电机已经执行。`SetZeroPosition()` 仅在入队成功后重置本地位置展开状态。
+100 Hz StatusTask 调用 `ServiceAll()`：在线且无故障时，补交失败的当前 Enable/Disable 命令；即使反馈已符合期望，尚未成功入队的命令也会补交。没有待提交命令时，在线且请求使能、实际失能则再次尝试 Enable；在线且请求失能、实际使能则再次尝试 Disable。失能安全目标发布失败时，即使离线或故障也继续补交；成功后不再重复刷新。普通期望状态维护在离线或故障时暂停，也不会自动 ClearError。已进入 FDCAN 硬件 FIFO 的帧由硬件 Auto Retransmission 负责总线级重发；软件服务仍须依据新鲜反馈判断设备实际状态。`ClearError()` 和 `SetZeroPosition()` 返回命令入队结果；入队成功不代表电机已经执行。`SetZeroPosition()` 仅在入队成功后重置本地位置展开状态。
 
 后续可选参数依次为反转、PMAX、VMAX 和 TMAX：
 
@@ -164,14 +164,14 @@ motor.feedback.rotor_temperature;
 MIT 的 `kp`、`kd` 是发给电机内部控制器的控制参数，不属于反馈；当前驱动没有本地 PID 对象。
 直接读取公开 feedback 结构体不保证跨中断一致性；控制计算应使用
 `GetFeedbackSnapshot()`。其中 `requested_enabled` 为 Application 请求，`online` 为
-100 ms 内的新鲜合法运动反馈，`actual_enabled` 为反馈 `state == 1`，`fault` 为在线且状态既非失能也非使能，`ready` 为
-请求使能、在线、实际使能且无故障；协议状态仍保存在 `feedback.state` 供诊断。`IsHealthy()` 等价于
+Daemon 即时判断的合法运动反馈（`age < 100 ms`），`actual_enabled` 为反馈 `state == 1`，`fault` 为在线且状态既非失能也非使能，`ready` 为
+请求使能、在线、实际使能、无故障、位置反馈已建立且没有待提交的离线失能；协议状态仍保存在 `feedback.state` 供诊断。`IsHealthy()` 等价于
 `ready`。失能或反馈失效时，正常控制入口只发布安全目标；MIT 安全目标的
 P/V/Kp/Kd/Torque 全为零。
 
 所有 `SetXXX()` 控制入口都返回软件周期槽更新结果，不表示设备已执行。
 `RequestEnabled(false)` 在首次请求或 `true→false` 边沿立即尝试覆盖旧周期目标；失败时由 `ServiceAll()` 补交。`ServiceAll()` 在未就绪且请求使能时也覆盖旧周期目标，并根据在线反馈维护设备协议期望状态，
-不会自行决定 Gimbal 的 READY/FAULT。Daemon 只判断反馈活性，不再通过离线回调自动使能。
+不会自行决定 Gimbal 的 READY/FAULT。Daemon 只判断反馈活性；离线回调只登记本设备的安全目标和失能请求，由 ServiceAll 独立提交及补交，App 停止控制调用也会生效。位置-速度模式的旧位置/零速度不等于零力矩，因此超时还必须提交 Disable；MIT 零增益/零转矩、速度零目标和力位零上限分别按原协议编码。离线失能成功入队后不重复刷命令，安全目标仍在未就绪且请求使能时覆盖。超时保留 App 期望许可，恢复后按在线、无故障反馈维护协议状态；不自动 ClearError。
 清错由上层在合适时机显式请求，驱动不把 fault 自动解释为整车恢复许可。
 
 ## 接入示例

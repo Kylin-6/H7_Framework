@@ -39,7 +39,7 @@ CAN 的 RTOS 资源在内核初始化后由 `MX_FREERTOS_Init()` 建立。
 | [Control_Task_Chassis.cpp](../User_File/Task/Control_Task_Chassis.cpp) | ChassisBoard | 进入后 High1；板间 Poll → Chassis |
 | [BMI088_Task.cpp](../User_File/Task/BMI088_Task.cpp) | SingleBoard、GimbalBoard | 进入后 High2；SPI 线程标志唤醒，续传并清空 FIFO 样本队列，批次完成后发布 INS |
 | [CanTxTask.cpp](../User_File/Task/CanTxTask.cpp) | 全部 | High；每轮先提交离散帧，再提交周期槽，不等待对端执行 |
-| [StatusTask.cpp](../User_File/Task/StatusTask.cpp) | 全部 | Low；每 10 tick CheckAll，有 DM 驱动时 ServiceAll |
+| [StatusTask.cpp](../User_File/Task/StatusTask.cpp) | 全部 | Low；每 10 tick CheckAll，随后调用已编入电机的设备安全 ServiceAll |
 | [TIM_1ms_Task.cpp](../User_File/Task/TIM_1ms_Task.cpp) | SingleBoard、GimbalBoard | Low；静态回调表调度传输恢复、按键、灯效、温控 |
 | [TransportTask.cpp](../User_File/Task/TransportTask.cpp) | SingleBoard、GimbalBoard | Normal；USB CDC/EricTool 调试输出，文件名不表示板间 CAN |
 | [InsTask.cpp](../User_File/Task/InsTask.cpp)、[StorageTask.cpp](../User_File/Task/StorageTask.cpp) | Ins：单板；Storage：单板和云台板 | 兼容入口，创建后立即退出；没有独立姿态解算或持久化服务 |
@@ -64,7 +64,7 @@ Pulse 在调用者上下文同步执行回调，tick=0 会触发所有有效项�
 - Subscriber 自己的已读序号没有额外同步，同一订阅实例由单一上下文持有。
 - EventQueue 满时拒绝新事件，Push 成功只表示逻辑动作已接受，不代表机构执行完成。
 - BoardTransport 的 RX ISR 保存帧与接收时刻，控制任务解码后 PublishAt；处理延迟不会延长命令时效。
-- [Daemon](../User_File/System/Daemon/README.md) 判断合法数据流是否持续；Online 不替代控制快照的新鲜度与设备 Ready。
+- [Daemon](../User_File/System/Daemon/README.md) 判断合法数据流是否持续；电机在线判断统一读取 Daemon；Online 不替代设备 Ready 或业务 Topic 时效。
 
 [时间戳](../User_File/System/Timestamp/sys_timestamp.h) 使用 TIM5 的 1 MHz 计数与软件溢出扩展。
 ARR 为 `3600000000-1`，每 3600 s 更新一次；Init 只绑定句柄。延时 helper 为忙等待，不让出 CPU。
@@ -82,7 +82,6 @@ CAN/UART/SPI 回调运行环境应按实际入口核对，不能因为函数名�
 | --- | --- | --- |
 | DJI | [dji_motor.md](../User_File/Device/Peripheral/Motor/DJImotor/dji_motor.md) | Application 使用输出轴 rad/rad/s；CAN 原始电流和反馈 RPM 在驱动边界转换 |
 | 达妙 | [dmmotor.md](../User_File/Device/Peripheral/Motor/DMmotor/dmmotor.md) | RequestEnabled 管输出许可；ServiceAll 维护协议状态；提交成功不等于反馈确认 |
-| QDrive | [QD4310.h](../User_File/Device/Peripheral/Motor/QDrive/QD4310.h) | 旧接口 speed 为 rpm、angle 为 rad、current 为 A；多字段 ISR 反馈没有内置任务快照锁 |
 | S.BUS / DBUS | [Remote README](../User_File/Device/Peripheral/Remote/README.md) | S.BUS 已接 UART5；DBUS 的 chunk 解析不是有界流式拼帧器 |
 | Referee / VTM | [Referee README](../User_File/Device/Peripheral/Referee/README.md) | 默认未绑定业务；在线不证明某个业务字段有效，115 ms 发送延时不能进入控制周期 |
 | BMI088 | [bsp_bmi088.h](../User_File/Device/Onboard/BMI088/bsp_bmi088.h)、[IMU](../User_File/System/IMU/README.md) | FIFO/SPI 接收与任务解算分离；有限的有效姿态才发布 INS/Feed |
