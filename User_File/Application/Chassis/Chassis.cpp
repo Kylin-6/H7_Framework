@@ -247,17 +247,10 @@ bool Chassis_Init(void)
 void Chassis_Update(void)
 {
     /* 仅在命令 Topic 仍新鲜时沿用目标；过期后使用默认 ZERO_FORCE 关闭输出。 */
-    ChassisCmd command{};
+    ctx.command = {};
     // 命令需存在且年龄不超过 100 ms；双板由 Transport 发布，本地由 RobotCmd 发布。
-    if (MessageCenter::Chassis_Command_Topic.ReadFresh(
-            command, CHASSIS_COMMAND_MAX_AGE_US))
-    {
-        ctx.command = command;
-    }
-    else
-    {
-        ctx.command = {};
-    }
+    (void) MessageCenter::Chassis_Command_Topic.ReadFresh(
+        ctx.command, CHASSIS_COMMAND_MAX_AGE_US);
 
 #if CHASSIS
     if (ctx.initialized) // 初始化失败时不访问正常组控制流程，反馈仍按周期发布。

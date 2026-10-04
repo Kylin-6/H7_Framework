@@ -96,7 +96,7 @@ const bool ins_valid = MessageCenter::INS_State_Topic.ReadFresh(ins, 10000U);
 反馈由云台在固定分频时发布，消费者可使用
 `RobotCmd_GetGimbalFeedback(feedback)`：其返回值只说明 Topic 数据不超过 100 ms，
 还要检查 `feedback.ins_valid` 与 `feedback.enabled`。
-`enabled` 仅表示两轴快照均 ready，不等于当前控制模式允许输出，也不表示 CAN 已发送。
+`enabled` 表示本周期云台功能获许可且两轴快照均 ready，不表示 CAN 已发送。
 `Gimbal_GetStatus()` 不在反馈消息内，不能作为跨板状态接口直接使用。
 
 ## 参数配置
@@ -147,18 +147,17 @@ const bool ins_valid = MessageCenter::INS_State_Topic.ReadFresh(ins, 10000U);
 发布 LOCK，因此打开云台编译选项后会自动进入此流程，不能把示例参数当作上板标定结果。
 
 - INS 必须不超过 10 ms；两轴运动反馈必须小于 100 ms，在线判断不等待 StatusTask。INS 发布端拒绝非有限姿态或角速度。
-- 云台每周期读取命令、INS 与两轴快照；活动模式请求两轴使能，两轴 ready 后立即捕获当前姿态并执行控制。没有就绪超时、退避或稳定窗口。
+- 云台每周期只读取一次命令、INS 与两轴快照，按初始化、命令模式和 INS 有效性统一表达功能许可，再更新目标并计算控制。电机 fault/ready 不再作为 App 的停机准入条件，由驱动各自保护输出；本地许可变化在下一控制周期的快照中反映，协议使能仍以反馈为准。
 - `Gimbal_GetStatus()` 根据初始化结果、当前命令、INS 新鲜度和两轴 `ready/fault` 给出 DISABLE、ENABLING、READY、FAULT 或 CONFIG_ERROR；状态只用于观察，不驱动恢复流程。CAN 软件周期槽是否接受目标不改变云台状态。
-- DMMotor 的 `RequestEnabled()` 处理首次请求和状态边沿：`false→true` 立即尝试一次 Enable，不主动发布安全目标；首次 `false` 或 `true→false` 立即尝试发布安全目标并提交一次 Disable。相同状态重复请求不执行收发；存在待提交项时返回 `false`。云台只有在两轴 ready 后才写正常目标，DMMotor 的 `SetXXX()` 在未 ready 时仍自动安全化。
+- DMMotor 的 `RequestEnabled()` 处理首次请求和状态边沿：`false→true` 立即尝试一次 Enable，不主动发布安全目标；首次 `false` 或 `true→false` 立即尝试发布安全目标并提交一次 Disable。相同状态重复请求不执行收发；存在待提交项时返回 `false`。云台在功能获许可时持续更新目标，DMMotor 的 `SetXXX()` 在未 ready 时自动安全化。
 - 100 Hz StatusTask 调用 `ServiceAll()`：补交失败的安全目标；在线且无故障时补交失败的当前协议命令，并在反馈与请求不一致时再次提交。普通协议纠正在离线或故障时暂停；设备自身离线保护独立提交安全目标和 Disable，并补交失败项。详细提交语义见 [DM 电机驱动](../../Device/Peripheral/Motor/DMmotor/dmmotor.md)。已进入硬件 FIFO 的帧由 FDCAN Auto Retransmission 处理总线级重发。
-- DISABLED、故障或初始化部分失败时，对已注册电机调用 `RequestEnabled(false)`；
+- DISABLED、INS 无效或初始化部分失败时，对已注册电机调用 `RequestEnabled(false)`；
   DMMotor 在首次请求或 `true→false` 边沿立即尝试覆盖周期槽为零刚度/阻尼/转矩并提交一次失能，相同请求不重复发布；失败项交给低频服务补交，在线反馈仍显示使能时继续纠正失能。离线时不反复刷失能命令；停止帧不能
   保证在物理断线时送达，也不会清除已经进入硬件 FIFO 的帧。
-- 活动模式下按当前设备状态恢复。恢复先清空 PID 历史并捕获当前姿态；IMU 等待 READY 后重新
-  发布目标，LOCK 直接保持新捕获的姿态，故障前目标不会重放。
+- 两轴未就绪期间持续更新当前姿态保持目标、清空控制器历史与速度前馈，并照常向设备提交目标，避免在线轴沿用旧输出。首次就绪或恢复时再次捕获当前姿态；IMU 需要随后发布的新目标，LOCK 保持新捕获的姿态，旧目标不会重放。
 - Daemon 只判断反馈活性；DMMotor 自行执行掉线 fail-safe，并根据云台请求维护协议状态，不自动 ClearError。
 
-`GimbalFeedback` 仍为 100 Hz，字段布局不变。`enabled` 表示两轴电机均 ready；
+`GimbalFeedback` 仍为 100 Hz，字段布局不变。`enabled` 表示功能获许可且两轴电机均 ready；
 `ins_valid=false` 时发布零姿态/速度。使能命令提交成功不代表已使能。
 
 云台本身不做命令来源仲裁或命令心跳检查；输入许可与来源选择由 Input/RobotCmd 处理。
@@ -201,14 +200,13 @@ const bool gimbal_initialized = Gimbal_Init(config);
 | `GimbalContext` | 放置本模块拥有的电机、控制器、输入快照、目标和恢复状态；保持私有静态生命周期 |
 | `ConfigValid()` | 校验新算法需要的参数与资源约束；增加参数时同步配置和校验 |
 | `ResetControllers()` | 重置积分、微分及目标历史；同时在初始化与恢复路径核对调用 |
-| `PrepareControl()` | 集中处理运行许可、使能等待与恢复捕获；更新入口每周期调用一次，不发布反馈 |
 | `CapturePose()` | 捕获安全保持目标、清空前馈并记住命令序号，避免恢复后追赶旧目标 |
-| `Control()` | 计算双轴控制并通过 Device 提交限幅目标，调用前须完成运行许可与目标处理 |
-| `UpdateTarget()` | 实现模式切换和目标接收；如改变 LOCK/IMU 语义，同步所有命令产生者 |
+| `Control()` | 计算双轴控制并通过 Device 提交限幅目标，调用前须完成功能许可与目标处理 |
+| `UpdateTarget()` | 处理姿态捕获、恢复、模式切换和新目标接收；ready 只用于确定捕获时机 |
 | `Gyro()` | 按安装约定取角速度；复杂安装姿态需要在这里或明确的坐标转换层处理 |
-| `Stop()` | 对已注册设备请求安全停机，覆盖初始化失败、禁用及故障路径 |
+| `SetEnabled()` | 统一向已注册设备表达云台功能许可，设备负责安全输出及协议补交 |
 | `PublishFeedback()` | 保持 100 Hz 反馈及字段含义，失效 INS 不冒充有效姿态 |
-| `Gimbal_Update()` | 读取快照后调用一次 PrepareControl，获准才更新目标与输出，最后统一发布反馈 |
+| `Gimbal_Update()` | 读取一次快照、表达功能许可、更新目标并提交设备输出，最后统一发布反馈 |
 
 更换 Yaw PID、加入前馈或轨迹规划通常只涉及 `Control()`、控制器状态和参数。
 改变两轴耦合或坐标系时，还需要核对目标转换、捕获姿态与反馈定义。
@@ -326,7 +324,7 @@ void ResetControllers()
 <details>
 <summary>CapturePose()：建立保持目标</summary>
 
-由首次就绪、恢复或进入 LOCK 的路径调用。sequence 来自当前命令快照；保存此序号后，相同旧序号不会再次成为 IMU 目标。调用前 INS 必须有效。
+由未就绪保持、首次就绪、恢复或进入 LOCK 的路径调用。sequence 来自当前命令快照；保存此序号后，相同旧序号不会再次成为 IMU 目标。调用前 INS 必须有效。
 
 ```cpp
 void CapturePose(uint32_t sequence)
@@ -345,7 +343,7 @@ void CapturePose(uint32_t sequence)
 <details>
 <summary>Control()：双轴控制计算与输出</summary>
 
-PrepareControl 通过并更新目标后调用。Yaw 输出转矩，Pitch 输出 MIT 位置/速度目标，
+云台功能获许可并更新目标后调用。Yaw 输出转矩，Pitch 输出 MIT 位置/速度目标，
 使用本周期快照并保留既有方向、限幅与单位约定。
 
 ```cpp
@@ -377,12 +375,19 @@ void Control(const Struct_DMMotor_Snapshot& pitch)
 <details>
 <summary>UpdateTarget()：消费模式和新目标</summary>
 
-ctx.command 已由更新入口从同一 message 复制。此函数处理 LOCK 进入边沿和 IMU 新序号，不自行读取或发布命令；改变目标语义时同时同步 RobotCmd。
+ctx.command 已由更新入口从同一 message 复制。此函数处理未就绪保持、恢复捕获、LOCK 进入边沿和 IMU 新序号，不自行读取或发布命令；改变目标语义时同时同步 RobotCmd。
 
 ```cpp
 void UpdateTarget(const TopicSnapshot<GimbalCmd>& message)
 {
-    // LOCK 只在进入时捕获姿态；IMU 只接受新序号，避免恢复后重放旧目标。
+    const bool ready = ctx.yaw_snapshot.ready && ctx.pitch_snapshot.ready;
+    if (!ready || !ctx.was_ready)
+    {
+        // ready 只决定姿态捕获时机；未就绪电机的输出由驱动安全化。
+        CapturePose(message.sequence);
+        ctx.last_mode = ctx.command.mode;
+    }
+    ctx.was_ready = ready;
     if (ctx.command.mode == GimbalMode::LOCK && ctx.last_mode != GimbalMode::LOCK)
     {
         CapturePose(message.sequence);
@@ -393,7 +398,7 @@ void UpdateTarget(const TopicSnapshot<GimbalCmd>& message)
         ctx.target_pitch_angle_rad = ctx.command.pitch_angle_rad;
         ctx.target_yaw_speed_rad_s = ctx.command.yaw_speed_rad_s;
         ctx.target_pitch_speed_rad_s = ctx.command.pitch_speed_rad_s;
-        ctx.target_sequence = message.sequence; // 消费新目标序号；恢复捕获已消费旧序号，因此恢复后需要重新发布。
+        ctx.target_sequence = message.sequence;
     }
     ctx.last_mode = ctx.command.mode;
 }
@@ -417,66 +422,23 @@ float Gyro(GimbalGyroAxis axis, float sign)
 
 </details>
 
-<details>
-<summary>PrepareControl()：运行许可、使能等待与恢复</summary>
 
-调用前已读取本周期 INS、命令与两轴快照。此函数集中处理停机、未就绪等待和恢复捕获，
-返回 true 后才更新目标并计算输出；反馈由更新入口统一发布一次。
-
-```cpp
-bool PrepareControl(const TopicSnapshot<GimbalCmd>& message)
-{
-    if (!ctx.initialized || !message.valid ||
-        ctx.command.mode == GimbalMode::DISABLED || !ctx.ins_valid ||
-        ctx.yaw_snapshot.fault || ctx.pitch_snapshot.fault)
-    {
-        Stop();
-        ctx.was_ready = false;
-        ctx.last_mode = GimbalMode::DISABLED;
-        ctx.yaw_snapshot = ctx.yaw_motor.GetFeedbackSnapshot();
-        ctx.pitch_snapshot = ctx.pitch_motor.GetFeedbackSnapshot();
-        return false;
-    }
-
-    // 每周期表达输出许可；驱动只处理请求边沿，重复使能不会覆盖正常周期目标。
-    (void) ctx.yaw_motor.RequestEnabled(true);
-    (void) ctx.pitch_motor.RequestEnabled(true);
-    ctx.yaw_snapshot = ctx.yaw_motor.GetFeedbackSnapshot();
-    ctx.pitch_snapshot = ctx.pitch_motor.GetFeedbackSnapshot();
-    if (!ctx.yaw_snapshot.ready || !ctx.pitch_snapshot.ready)
-    {
-        // 等待两轴反馈就绪；安全输出和低频协议纠正由 DMMotor 维护。
-        ctx.was_ready = false;
-        return false;
-    }
-
-    if (!ctx.was_ready)
-    {
-        CapturePose(message.sequence);
-        ctx.last_mode = ctx.command.mode;
-        ctx.was_ready = true;
-    }
-    return true;
-}
-```
-
-</details>
 
 <details>
-<summary>Stop()：覆盖部分初始化与停机</summary>
+<summary>SetEnabled()：统一表达云台功能许可</summary>
 
-分别判断两轴注册结果，不假设两轴同时初始化成功。RequestEnabled(false) 只是表达失能请求，不代表电机已经物理停止；低频补交仍由驱动负责。
+分别判断两轴注册结果，不假设两轴同时初始化成功。初始化成功、活动模式且 INS 有效时请求使能，其他功能路径请求失能；不依据单个电机的 online 手动清零。RequestEnabled 只表达许可，不代表协议确认；低频补交仍由驱动负责。
 
 ```cpp
-void Stop()
+void SetEnabled(bool enabled)
 {
     if (ctx.yaw_registered)
     {
-        (void) ctx.yaw_motor.RequestEnabled(false); // 表达 Yaw 失能请求，提交不等于停止确认。
+        (void) ctx.yaw_motor.RequestEnabled(enabled);
     }
     if (ctx.pitch_registered)
     {
-        (void) ctx.pitch_motor.RequestEnabled(false); // 表达 Pitch 失能请求，后续补交由驱动处理。
+        (void) ctx.pitch_motor.RequestEnabled(enabled);
     }
 }
 ```
@@ -509,7 +471,7 @@ static void PublishFeedback(void)
         }
         feedback.ins_valid = ctx.ins_valid;
 #if GIMBAL
-        feedback.enabled = ctx.yaw_snapshot.ready && ctx.pitch_snapshot.ready; // 仅表示两轴都 ready，不表示控制输出被许可或 CAN 已发送。
+        feedback.enabled = ctx.was_ready; // 本周期功能获许可且两轴快照均 ready，不表示 CAN 已发送。
 #endif
         MessageCenter::Gimbal_Feedback_Topic.Publish(feedback); // Latest-Value 通道只保留最新反馈，不能用于需要逐条保留的事件。
     }
@@ -521,7 +483,7 @@ static void PublishFeedback(void)
 <details>
 <summary>Gimbal_Update()：串联完整周期</summary>
 
-下面给出当前完整入口，展示停机、等待 ready、恢复捕获和正常控制的顺序。安全与恢复由 PrepareControl 集中处理；入口最后统一调用 PublishFeedback，不在等待 ready 时阻塞。
+下面给出当前完整入口：按功能模式表达许可，目标更新负责姿态捕获，设备负责单电机 fail-safe；所有路径最后统一发布反馈。
 
 ```cpp
 void Gimbal_Update(void)
@@ -533,11 +495,17 @@ void Gimbal_Update(void)
     ctx.yaw_snapshot = ctx.yaw_motor.GetFeedbackSnapshot();
     ctx.pitch_snapshot = ctx.pitch_motor.GetFeedbackSnapshot();
 
-    if (PrepareControl(message))
+    const bool enabled = ctx.initialized && ctx.command.mode != GimbalMode::DISABLED && ctx.ins_valid;
+    SetEnabled(enabled);
+    if (enabled)
     {
         UpdateTarget(message);
-
         Control(ctx.pitch_snapshot);
+    }
+    else
+    {
+        ctx.was_ready = false;
+        ctx.last_mode = GimbalMode::DISABLED;
     }
 #endif
     PublishFeedback();
@@ -548,7 +516,7 @@ void Gimbal_Update(void)
 
 ### 完整最简例程：单轴 INS 位置环 → 达妙速度模式
 
-下面给出完整的单轴 Application 例程，按函数分段展示，每段可以单独展开。
+下面给出独立的单轴移植例程，按函数分段展示；示例保留自己的就绪等待策略，当前双轴云台使用前述模式许可与目标更新流程。
 依次排列这些代码段即可组成完整的 `Gimbal.cpp`，无需修改或拼接前面的双轴例程。
 它沿用当前 `Gimbal.h`、`Gimbal_Config.h` 与三条 Topic，由现有 ControlTask 调用。
 本节只提供例程，仓库的双轴生产实现保持原样。

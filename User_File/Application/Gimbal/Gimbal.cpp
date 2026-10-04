@@ -117,7 +117,7 @@ void ResetControllers()
 /**
  * @brief 以当前有效 INS 姿态建立保持目标，清空控制器历史及速度前馈。
  * @param sequence 当前命令发布序号，用于拒绝恢复前的旧 IMU 目标。
- * @note 调用前须确认两轴 ready 和 INS 有效；不设置电机机械零位。
+ * @note 调用前须确认 INS 有效；不设置电机机械零位。
  */
 void CapturePose(uint32_t sequence)
 {
@@ -129,66 +129,25 @@ void CapturePose(uint32_t sequence)
 }
 
 /**
- * @brief 对已经注册成功的电机表达失能请求，允许部分初始化失败时调用。
- * @note 不等待停止确认；安全目标提交和后续协议补交由 DMMotor 处理。
+ * @brief 对已经注册成功的电机表达云台功能许可，允许部分初始化失败时调用。
+ * @note 不等待协议确认；安全目标提交和后续协议补交由 DMMotor 处理。
  */
-void Stop()
+void SetEnabled(bool enabled)
 {
     if (ctx.yaw_registered)
     {
-        (void) ctx.yaw_motor.RequestEnabled(false);
+        (void) ctx.yaw_motor.RequestEnabled(enabled);
     }
     if (ctx.pitch_registered)
     {
-        (void) ctx.pitch_motor.RequestEnabled(false);
+        (void) ctx.pitch_motor.RequestEnabled(enabled);
     }
-}
-
-/**
- * @brief 集中处理运行许可、两轴使能等待和首次就绪/恢复捕获。
- * @param message 与 ctx.command 对应的本周期命令快照，INS 和电机快照已由入口读取。
- * @return 两轴允许执行正常控制时返回 true；停机或等待就绪时返回 false。
- * @note 不阻塞等待，不发布反馈；设备时效由驱动判断，协议补交由 ServiceAll 维护。
- */
-bool PrepareControl(const TopicSnapshot<GimbalCmd>& message)
-{
-    if (!ctx.initialized || !message.valid ||
-        ctx.command.mode == GimbalMode::DISABLED || !ctx.ins_valid ||
-        ctx.yaw_snapshot.fault || ctx.pitch_snapshot.fault)
-    {
-        Stop();
-        ctx.was_ready = false;
-        ctx.last_mode = GimbalMode::DISABLED;
-        ctx.yaw_snapshot = ctx.yaw_motor.GetFeedbackSnapshot();
-        ctx.pitch_snapshot = ctx.pitch_motor.GetFeedbackSnapshot();
-        return false;
-    }
-
-    // 每周期表达输出许可；驱动只处理请求边沿，重复使能不会覆盖正常周期目标。
-    (void) ctx.yaw_motor.RequestEnabled(true);
-    (void) ctx.pitch_motor.RequestEnabled(true);
-    ctx.yaw_snapshot = ctx.yaw_motor.GetFeedbackSnapshot();
-    ctx.pitch_snapshot = ctx.pitch_motor.GetFeedbackSnapshot();
-    if (!ctx.yaw_snapshot.ready || !ctx.pitch_snapshot.ready)
-    {
-        // 等待两轴反馈就绪；安全输出和低频协议纠正由 DMMotor 维护。
-        ctx.was_ready = false;
-        return false;
-    }
-
-    if (!ctx.was_ready)
-    {
-        CapturePose(message.sequence);
-        ctx.last_mode = ctx.command.mode;
-        ctx.was_ready = true;
-    }
-    return true;
 }
 
 /**
  * @brief 计算双轴控制并提交限幅后的电机目标。
  * @param pitch 本周期 Pitch 快照，位置 rad、速度 rad/s，方向已由驱动统一。
- * @note 仅在 PrepareControl 通过并更新目标后调用，不等待 CAN 发送或电机执行。
+ * @note 仅在云台功能获许可并更新目标后调用，不等待 CAN 发送或电机执行。
  */
 void Control(const Struct_DMMotor_Snapshot& pitch)
 {
@@ -215,10 +174,18 @@ void Control(const Struct_DMMotor_Snapshot& pitch)
 /**
  * @brief 根据模式切换和发布序号更新私有控制目标。
  * @param message 与 ctx.command 对应的有效命令快照；这里只使用其 sequence。
- * @note 进入 LOCK 时捕获姿态，IMU 只接收新序号；首次就绪捕获由 PrepareControl 处理。
+ * @note 未就绪期间保持当前姿态目标；首次就绪或恢复时重新捕获，IMU 只接收随后新序号。
  */
 void UpdateTarget(const TopicSnapshot<GimbalCmd>& message)
 {
+    const bool ready = ctx.yaw_snapshot.ready && ctx.pitch_snapshot.ready;
+    if (!ready || !ctx.was_ready)
+    {
+        // ready 只决定姿态捕获时机；未就绪电机的输出由驱动安全化。
+        CapturePose(message.sequence);
+        ctx.last_mode = ctx.command.mode;
+    }
+    ctx.was_ready = ready;
     if (ctx.command.mode == GimbalMode::LOCK && ctx.last_mode != GimbalMode::LOCK)
     {
         CapturePose(message.sequence);
@@ -289,7 +256,7 @@ Enum_Gimbal_Status Gimbal_GetStatus(void)
 
 /**
  * @brief 每调用十次发布一次云台反馈；1 kHz 更新入口下对应 100 Hz。
- * @note 姿态来自 INS，INS 无效时姿态/速度为零；enabled 仅表示两轴 ready。
+ * @note 姿态来自 INS，INS 无效时姿态/速度为零；enabled 表示功能获许可且两轴 ready。
  *       关闭硬件路径时仍发布 INS 反馈，enabled 保持 false。
  */
 static void PublishFeedback(void)
@@ -312,7 +279,7 @@ static void PublishFeedback(void)
         }
         feedback.ins_valid = ctx.ins_valid;
 #if GIMBAL
-        feedback.enabled = ctx.yaw_snapshot.ready && ctx.pitch_snapshot.ready;
+        feedback.enabled = ctx.was_ready;
 #endif
         MessageCenter::Gimbal_Feedback_Topic.Publish(feedback);
     }
@@ -320,8 +287,8 @@ static void PublishFeedback(void)
 
 /**
  * @brief ControlTask 的 1 kHz 周期入口：读取快照、处理许可/恢复、更新目标和输出。
- * @note 在 RobotCmd_Update 之后调用；禁用、输入无效或故障时请求停机，
- *       等待就绪期间不计算正常输出，各路径均维护反馈分频。
+ * @note 在 RobotCmd_Update 之后调用；禁用或 INS 无效时请求功能停机，
+ *       设备故障和掉线输出由驱动保护，各路径均维护反馈分频。
  *       GIMBAL=0 时仅更新 INS 反馈；本入口不阻塞、不解析 CAN、不仲裁命令来源。
  */
 void Gimbal_Update(void)
@@ -333,11 +300,17 @@ void Gimbal_Update(void)
     ctx.yaw_snapshot = ctx.yaw_motor.GetFeedbackSnapshot();
     ctx.pitch_snapshot = ctx.pitch_motor.GetFeedbackSnapshot();
 
-    if (PrepareControl(message))
+    const bool enabled = ctx.initialized && ctx.command.mode != GimbalMode::DISABLED && ctx.ins_valid;
+    SetEnabled(enabled);
+    if (enabled)
     {
         UpdateTarget(message);
-
         Control(ctx.pitch_snapshot);
+    }
+    else
+    {
+        ctx.was_ready = false;
+        ctx.last_mode = GimbalMode::DISABLED;
     }
 #endif
     PublishFeedback();
