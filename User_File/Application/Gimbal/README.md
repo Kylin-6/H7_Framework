@@ -525,10 +525,10 @@ void Gimbal_Update(void)
 默认增益与速度上限来自配置，可按机构调整 `yaw_angle_kp` 和 `yaw_speed_limit`，
 首次验证可将速度上限设为 1 rad/s。Ki、Kd 为零，先学习比例位置环。
 
-这个示例只注册 Yaw，完全不使用 Pitch 配置；`GimbalFeedback.enabled` 表示单轴 ready，
+这个示例只注册 Yaw，完全不使用 Pitch 配置；`GimbalFeedback.enabled` 表示功能获许可且单轴 ready，
 Pitch 反馈字段保持零。因此用于实际单轴工程时，反馈消费者也必须采用单轴含义。
 LOCK 捕获姿态，IMU 在首次就绪或恢复后需新发布序号的目标；速度前馈字段不参与运算。
-现有 100 Hz StatusTask 的 `Class_DMMotor::ServiceAll()` 仍需运行。
+现有 100 Hz StatusTask 的 `Class_DMMotor::ServiceAll()` 仍需运行，基础掉线保护不依赖 App 调用。
 
 <details>
 <summary>1. 头文件与私有状态</summary>
@@ -568,7 +568,7 @@ float target_rad = 0.0f; // INS 姿态坐标下的保持/跟踪目标，不是�
 <details>
 <summary>2. Capture()：捕获姿态和重置位置环</summary>
 
-首次就绪、恢复或进入 LOCK 时捕获安全保持目标，并清空 PID 历史。
+未就绪期间、首次就绪、恢复或进入 LOCK 时捕获当前姿态，并清空 App 位置 PID 历史。
 
 ```cpp
 void Capture(uint32_t sequence)
@@ -584,81 +584,17 @@ void Capture(uint32_t sequence)
 </details>
 
 <details>
-<summary>3. PrepareControl()：安全检查、掉线等待与恢复</summary>
+<summary>3. SetEnabled()：表达功能许可</summary>
 
-更新入口每周期只调用一次。集中检查初始化、命令模式/数值、INS 时效和设备故障，再处理停机、使能、未就绪等待与恢复捕获。驱动的 ready 包含在线判定，掉线会进入等待路径；不在这里循环等待反馈，也不增加另一套 Daemon。返回 true 才允许执行目标与控制计算。
+只对已注册电机表达功能许可，不检查电机掉线或故障。DMMotor 自行安全化未就绪输出，并由 StatusTask 补交协议动作；App 的姿态捕获放在 UpdateTarget 中。
 
 ```cpp
-bool PrepareControl(const TopicSnapshot<GimbalCmd>& message)
+void SetEnabled(bool enabled)
 {
-    bool safe = true; // 只使用更新入口已经读取的本周期数据，不另建掉线计时器。
-
-    if (!initialized) // 应用尚未完成有效配置和设备注册，不能正常输出。
+    if (registered) // 初始化部分失败时，只操作已经注册成功的设备。
     {
-        safe = false;
+        (void) yaw_motor.RequestEnabled(enabled);
     }
-    if (!message.valid) // 命令 Topic 尚无有效发布，不能沿用未建立的目标。
-    {
-        safe = false;
-    }
-    bool active = false;
-    if (command.mode == GimbalMode::LOCK) // LOCK 是保持姿态模式，运行许可中将它视为活动模式。
-    {
-        active = true;
-    }
-    else if (command.mode == GimbalMode::IMU) // IMU 模式使用外部姿态目标，需要校验并接收新目标。
-    {
-        active = true;
-    }
-    if (!active) // 只有 LOCK/IMU 允许活动控制，禁用或未知模式不给运行许可。
-    {
-        safe = false;
-    }
-    if (command.mode == GimbalMode::IMU) // IMU 模式使用外部姿态目标，需要校验并接收新目标。
-    {
-        if (!std::isfinite(command.yaw_angle_rad)) // 拒绝 NaN 或无穷大的目标，避免异常数值进入 PID。
-        {
-            safe = false;
-        }
-    }
-    if (!ins_valid) // INS 未发布或已经超过时效，不能使用旧姿态继续闭环。
-    {
-        safe = false;
-    }
-    if (!std::isfinite(ins.yaw_rad)) // 即使时间戳新鲜，姿态数值异常也必须禁止正常控制。
-    {
-        safe = false;
-    }
-    if (snapshot.fault) // 达妙反馈报告协议故障，进入安全处理而非正常输出。
-    {
-        safe = false;
-    }
-
-    if (!safe) // 运行许可检查有失败项，统一执行停机并清除恢复历史。
-    {
-        if (registered) // 只对注册成功的电机处理停机，兼容部分初始化失败。
-        {
-            yaw_motor.RequestEnabled(false); // 表达失能请求，协议补交仍由驱动维护。
-        }
-        was_ready = false; // 使恢复时重新捕获姿态，避免追赶旧目标。
-        last_mode = GimbalMode::DISABLED;
-        snapshot = yaw_motor.GetFeedbackSnapshot();
-        return false;
-    }
-    yaw_motor.RequestEnabled(true);
-    snapshot = yaw_motor.GetFeedbackSnapshot(); // online/ready 由驱动按反馈时效和协议状态推导。
-    if (!snapshot.ready) // 设备掉线或尚未满足使能条件，跳过控制，后续周期继续等待。
-    {
-        was_ready = false; // 掉线或未使能时跳过控制，下一周期继续检查，不阻塞等待。
-        return false;
-    }
-    if (!was_ready) // 首次就绪或掉线后恢复，重新捕获当前姿态而非追赶旧目标。
-    {
-        Capture(message.sequence); // 首次就绪或恢复先保持当前姿态，消费恢复前的目标序号。
-        last_mode = command.mode;
-        was_ready = true;
-    }
-    return true;
 }
 ```
 
@@ -667,26 +603,23 @@ bool PrepareControl(const TopicSnapshot<GimbalCmd>& message)
 <details>
 <summary>4. UpdateTarget()：模式与目标处理</summary>
 
-运行许可通过后处理正常模式切换和新发布目标；故障后的首次捕获由 PrepareControl 完成。
+合并未就绪、首次就绪／恢复和进入 LOCK 的姿态捕获条件；其余周期才接收 IMU 新序号。ready 只决定捕获时机，不阻止 App 计算和提交目标，驱动保护单设备输出。
 
 ```cpp
 void UpdateTarget(const TopicSnapshot<GimbalCmd>& message)
 {
-    if (command.mode == GimbalMode::LOCK) // LOCK 是保持姿态模式，运行许可中将它视为活动模式。
+    const bool ready = snapshot.ready;
+    if (!ready || !was_ready ||
+        (command.mode == GimbalMode::LOCK && last_mode != GimbalMode::LOCK))
     {
-        if (last_mode != GimbalMode::LOCK) // 当前已是 LOCK，但上一周期不是；只在进入边沿重新捕获姿态。
-        {
-            Capture(message.sequence); // 正常运行中进入 LOCK 时也重新捕获姿态。
-        }
+        Capture(message.sequence); // 未就绪每周期捕获；恢复时消费当前序号，避免旧目标重放。
     }
-    if (command.mode == GimbalMode::IMU) // IMU 模式使用外部姿态目标，需要校验并接收新目标。
+    else if (command.mode == GimbalMode::IMU && message.sequence != target_sequence)
     {
-        if (message.sequence != target_sequence) // 只有新发布序号才能更新 IMU 目标，恢复前旧目标不重放。
-        {
-            target_rad = command.yaw_angle_rad; // INS 姿态目标，不是电机编码器位置。
-            target_sequence = message.sequence; // 同值目标必须重新发布才会产生新序号。
-        }
+        target_rad = command.yaw_angle_rad; // INS 姿态目标，不是电机编码器位置。
+        target_sequence = message.sequence;
     }
+    was_ready = ready;
     last_mode = command.mode;
 }
 ```
@@ -696,7 +629,7 @@ void UpdateTarget(const TopicSnapshot<GimbalCmd>& message)
 <details>
 <summary>5. Control()：INS 位置环与电机输出</summary>
 
-仅在 PrepareControl 通过且目标更新后调用，计算本周期的位置环并提交电机目标。
+功能获许可且目标更新后调用，计算本周期的位置环并提交电机目标；未就绪输出由驱动安全化。
 末尾结束第一段开始的硬件条件编译。
 
 ```cpp
@@ -707,7 +640,7 @@ void Control()
     position_pid.Set_Now(0.0f); // PID 内部计算 Target-Now；这里 Target 已是误差，所以 Now 必须为零，不能再减一次 INS。
     position_pid.TIM_Calculate_PeriodElapsedCallback(); // 调用频率必须与 Init 的 dt 一致；漏周期或改调度频率时要重新核对时间参数。
     float speed_rad_s = position_pid.Get_Out();
-    yaw_motor.SetSpeed(speed_rad_s); // Get_Out 已按 yaw_speed_limit 限幅，输出 rad/s；返回值只表示软件提交，当前例程沿用驱动低频补交。
+    yaw_motor.SetSpeed(speed_rad_s); // Get_Out 已按 yaw_speed_limit 限幅，输出 rad/s；未 ready 时驱动替换为安全目标，返回值只表示软件提交。
 }
 #endif
 ```
@@ -717,7 +650,7 @@ void Control()
 <details>
 <summary>6. PublishFeedback()：100 Hz 反馈</summary>
 
-更新入口始终调用一次，不由安全函数单独发布。该段最后关闭私有命名空间。
+更新入口始终调用一次，各路径共用反馈分频。该段最后关闭私有命名空间。
 
 ```cpp
 void PublishFeedback()
@@ -740,7 +673,7 @@ void PublishFeedback()
 #endif
     }
 #if GIMBAL
-    feedback.enabled = snapshot.ready; // 本例表示唯一 Yaw 电机 ready，已改变原两轴语义。
+    feedback.enabled = was_ready; // 本周期功能获许可且 Yaw ready，采用单轴语义。
 #endif
     MessageCenter::Gimbal_Feedback_Topic.Publish(feedback); // Latest-Value 通道只保留最新反馈，不能用于需要逐条保留的事件。
 }
@@ -852,32 +785,33 @@ Enum_Gimbal_Status Gimbal_GetStatus(void)
 <details>
 <summary>9. Gimbal_Update()：主逻辑入口</summary>
 
-先读取命令、INS 和设备快照，再调用一次 PrepareControl；获得许可后更新目标并调用 Control 计算位置 PID 与速度输出。所有路径最后统一发布反馈，便于直接看清主流程。
+读取命令、INS 和一次设备快照，直接按初始化、活动模式、INS 有效性及目标数值表达功能许可，然后更新目标并计算位置环。保留示例的有限值与模式校验；设备掉线不再触发 App 的等待或清零分支。
 
 ```cpp
 void Gimbal_Update(void)
 {
-    ins_valid = MessageCenter::INS_State_Topic.ReadFresh(ins, 10000U); // 10000 的单位是 us；失败后即使 ins 仍有旧值，也不得继续正常控制。
+    ins_valid = MessageCenter::INS_State_Topic.ReadFresh(ins, 10000U); // INS 新鲜度门限为 10 ms。
 #if GIMBAL
-    TopicSnapshot<GimbalCmd> message = MessageCenter::Gimbal_Command_Topic.ReadWithMeta(); // 一次取得命令与有效标志/序号；这里没有检查命令年龄，失联许可由 Input/RobotCmd 管理。
-    if (message.valid) // 使用已发布命令；否则采用默认 DISABLED，避免沿用旧活动命令。
+    const TopicSnapshot<GimbalCmd> message = MessageCenter::Gimbal_Command_Topic.ReadWithMeta();
+    command = message.valid ? message.data : GimbalCmd{}; // 无有效发布时采用默认 DISABLED。
+    snapshot = yaw_motor.GetFeedbackSnapshot(); // 本周期只读一次，许可变化最迟在下一周期反映为 ready。
+
+    const bool active = command.mode == GimbalMode::LOCK || command.mode == GimbalMode::IMU;
+    const bool target_valid = command.mode != GimbalMode::IMU || std::isfinite(command.yaw_angle_rad);
+    const bool enabled = initialized && active && ins_valid && std::isfinite(ins.yaw_rad) && target_valid;
+    SetEnabled(enabled); // 功能许可不包含电机 online/fault/ready，基础保护由驱动执行。
+    if (enabled)
     {
-        command = message.data;
+        UpdateTarget(message);
+        Control();
     }
     else
     {
-        GimbalCmd default_command; // 成员默认值使模式为 DISABLED，不沿用之前的活动命令。
-        command = default_command;
-    }
-    snapshot = yaw_motor.GetFeedbackSnapshot(); // 读取驱动对新鲜度、协议状态与请求的判断；软件提交成功不能代替 ready。
-    if (PrepareControl(message)) // 安全与恢复处理允许控制后，才更新目标并计算电机输出。
-    {
-        UpdateTarget(message);
-
-        Control();
+        was_ready = false;
+        last_mode = GimbalMode::DISABLED;
     }
 #endif
-    PublishFeedback(); // 每周期只调用一次，故障、等待和正常路径共享同一反馈分频。
+    PublishFeedback(); // 所有路径共用一次反馈分频。
 }
 ```
 
@@ -886,7 +820,7 @@ void Gimbal_Update(void)
 ### 更换电机或改变框架接口
 
 更换电机时在云台 `Init()` 中显式注册新的 Device，在更新中读取其快照并提交输出。
-同步替换停机、就绪/故障判断和低频维护依赖；若新驱动不使用达妙协议，不要沿用达妙
+同步替换功能许可接口、设备快照和低频维护依赖；若新驱动不使用达妙协议，不要沿用达妙
 `ready` 或 `ServiceAll()` 的假设。驱动负责协议编码、CAN 接收和设备状态，Application
 负责控制算法及运行许可，不在云台中直接操作 HAL Handle 或解析 CAN 字节。
 
@@ -907,7 +841,7 @@ include 路径，避免把云台设备引入 ChassisBoard。原路径与入口�
 控制链是 `INS Yaw 角误差 → Application 位置 PID → rad/s 速度目标 → DJI 驱动速度 PID → GM6020 电压协议指令`。
 GM6020 没有达妙 SPEED 模式；位置环输出的速度不能直接当作 GM6020 电压或电流指令。
 因此保留一个最简单的驱动速度环，不启用额外的驱动角度环或电流环。
-本例仍采用 LOCK/IMU、PrepareControl 安全与恢复流程，Pitch 不参与控制。
+本例采用 LOCK/IMU，入口直接表达功能许可，UpdateTarget 处理捕获与恢复，Pitch 不参与控制。
 
 电机编号在初始化中显式设为 1，必须按实际拨码更改，不使用达妙 feedback_id。
 编号 1 的反馈为 0x205，VOLTAGE 控制发送组为 0x1FF；需匹配电机端协议选择。
@@ -918,7 +852,7 @@ GM6020 没有达妙 SPEED 模式；位置环输出的速度不能直接当作 GM
 位置增益仍使用 config.yaw_angle_kp，位置环速度上限使用 config.yaw_speed_limit；
 示例速度环 Kp=100、输出上限=1000 仅用于展示参数写法，不是已验证整定值。
 GM6020 速度反馈使用编码器输出轴 rad/s，INS 姿态与电机方向必须一致。
-单轴反馈 enabled 只表示 Yaw ready；DJI ready 是本地输出许可与反馈在线，不是达妙协议的使能确认。
+单轴反馈 enabled 表示功能获许可且 Yaw ready；DJI ready 是本地输出许可与反馈在线，不是达妙协议的使能确认。
 
 <details>
 <summary>1. 头文件与私有状态（GM6020）</summary>
@@ -945,7 +879,7 @@ Class_DJIMotor yaw_motor; // 静态生命周期覆盖 CAN 回调的使用期。
 Class_DJIMotor_Group yaw_group; // 单电机也需要组接口统一计算并提交物理报文。
 bool group_registered = false;
 Class_PID position_pid; // 输入角误差 rad，输出电机速度 rad/s；电机内部承担速度闭环。
-Struct_DJIMotor_Motion_Snapshot snapshot; // 同一次读取包含运动反馈与 ready/fault，避免跨时刻拼接状态。
+Struct_DJIMotor_Motion_Snapshot snapshot; // 同一次读取包含运动反馈与 online/ready，避免跨时刻拼接状态。
 GimbalCmd command;
 bool registered = false; // 与 initialized 分开记录：部分初始化失败时，仍需对已注册设备执行停机。
 bool initialized = false;
@@ -960,7 +894,7 @@ float target_rad = 0.0f; // INS 姿态坐标下的保持/跟踪目标，不是�
 <details>
 <summary>2. Capture()：捕获姿态和重置位置环（GM6020）</summary>
 
-恢复时重建 App 位置 PID，并清除 DJI 速度环积分，先保持当前 INS 姿态。
+捕获时重建 App 位置 PID 并保持当前 INS 姿态；设备未就绪时的速度环积分清理由 DJI 驱动处理。
 
 ```cpp
 void Capture(uint32_t sequence)
@@ -968,7 +902,6 @@ void Capture(uint32_t sequence)
     Class_PID fresh_pid;
     position_pid = fresh_pid; // PID::Init 不清除全部历史，先重建对象；以后加入 Ki/Kd 也不会沿用故障前历史。
     position_pid.Init(config.yaw_angle_kp, 0.0f, 0.0f, 0.0f, 0.0f, config.yaw_speed_limit, 0.001f); // 参数依次为 Kp/Ki/Kd/Kf、积分输出限幅、总输出限幅、dt；本例 Kp 单位 1/s，限幅 rad/s，dt=1 ms。
-    yaw_motor.speed_pid.Set_Integral_Error(0.0f); // 恢复时不沿用驱动速度环的积分。
     target_rad = ins.yaw_rad; // 恢复时用当前姿态保持，避免突然转向恢复前的旧目标。
     target_sequence = sequence; // 捕获时消费当前序号，IMU 必须收到之后的新发布才更新目标。
 }
@@ -977,84 +910,21 @@ void Capture(uint32_t sequence)
 </details>
 
 <details>
-<summary>3. PrepareControl()：安全检查、掉线等待与恢复（GM6020）</summary>
+<summary>3. SetEnabled()：表达功能许可（GM6020）</summary>
 
-集中处理运行许可、使能、掉线等待与恢复。DJI 快照没有达妙 fault 字段；online/ready 依据反馈超时和本地输出许可判断。失能通过组接口提交零目标，不依赖达妙 ServiceAll。
+组绑定成功时通过组接口表达许可；绑定失败时仍可撤销已注册电机的许可。DJI 驱动负责未就绪输出清零与积分清理，StatusTask 的 DJI ServiceAll 独立执行基础保护。
 
 ```cpp
-bool PrepareControl(const TopicSnapshot<GimbalCmd>& message)
+void SetEnabled(bool enabled)
 {
-    bool safe = true; // 只使用更新入口已经读取的本周期数据，不另建掉线计时器。
-
-    if (!initialized) // 应用尚未完成有效配置和设备注册，不能正常输出。
+    if (group_registered)
     {
-        safe = false;
+        (void) yaw_group.RequestEnabled(enabled);
     }
-    if (!message.valid) // 命令 Topic 尚无有效发布，不能沿用未建立的目标。
+    else if (registered) // 组绑定失败时，initialized 为 false，只会请求失能。
     {
-        safe = false;
+        (void) yaw_motor.RequestEnabled(enabled);
     }
-    bool active = false;
-    if (command.mode == GimbalMode::LOCK) // LOCK 是保持姿态模式，运行许可中将它视为活动模式。
-    {
-        active = true;
-    }
-    else if (command.mode == GimbalMode::IMU) // IMU 模式使用外部姿态目标，需要校验并接收新目标。
-    {
-        active = true;
-    }
-    if (!active) // 只有 LOCK/IMU 允许活动控制，禁用或未知模式不给运行许可。
-    {
-        safe = false;
-    }
-    if (command.mode == GimbalMode::IMU) // IMU 模式使用外部姿态目标，需要校验并接收新目标。
-    {
-        if (!std::isfinite(command.yaw_angle_rad)) // 拒绝 NaN 或无穷大的目标，避免异常数值进入 PID。
-        {
-            safe = false;
-        }
-    }
-    if (!ins_valid) // INS 未发布或已经超过时效，不能使用旧姿态继续闭环。
-    {
-        safe = false;
-    }
-    if (!std::isfinite(ins.yaw_rad)) // 即使时间戳新鲜，姿态数值异常也必须禁止正常控制。
-    {
-        safe = false;
-    }
-
-    if (!safe) // 运行许可检查有失败项，统一执行停机并清除恢复历史。
-    {
-        if (registered) // 只对注册成功的电机处理停机，兼容部分初始化失败。
-        {
-            if (group_registered) // 组绑定成功时通过组接口清零提交，避免各成员重复发送共享报文。
-            {
-                yaw_group.RequestEnabled(false); // 将共享报文中的本组目标清零并提交。
-            }
-            else
-            {
-                yaw_motor.RequestEnabled(false); // 组绑定失败时也清除已注册电机的指令。
-            }
-        }
-        was_ready = false; // 使恢复时重新捕获姿态，避免追赶旧目标。
-        last_mode = GimbalMode::DISABLED;
-        snapshot = yaw_motor.GetMotionSnapshot();
-        return false;
-    }
-    yaw_group.RequestEnabled(true);
-    snapshot = yaw_motor.GetMotionSnapshot(); // online/ready 由驱动按反馈时效和协议状态推导。
-    if (!snapshot.ready) // 设备掉线或尚未满足使能条件，跳过控制，后续周期继续等待。
-    {
-        was_ready = false; // 掉线或未使能时跳过控制，下一周期继续检查，不阻塞等待。
-        return false;
-    }
-    if (!was_ready) // 首次就绪或掉线后恢复，重新捕获当前姿态而非追赶旧目标。
-    {
-        Capture(message.sequence); // 首次就绪或恢复先保持当前姿态，消费恢复前的目标序号。
-        last_mode = command.mode;
-        was_ready = true;
-    }
-    return true;
 }
 ```
 
@@ -1063,26 +933,23 @@ bool PrepareControl(const TopicSnapshot<GimbalCmd>& message)
 <details>
 <summary>4. UpdateTarget()：模式与目标处理（GM6020）</summary>
 
-LOCK 捕获当前姿态，IMU 只接收新序号目标；不改变现有命令消息字段。
+合并未就绪、首次就绪／恢复和进入 LOCK 的姿态捕获条件；其余周期才接收 IMU 新序号。ready 只决定捕获时机，不阻止 App 计算和提交目标，驱动保护单设备输出。
 
 ```cpp
 void UpdateTarget(const TopicSnapshot<GimbalCmd>& message)
 {
-    if (command.mode == GimbalMode::LOCK) // LOCK 是保持姿态模式，运行许可中将它视为活动模式。
+    const bool ready = snapshot.ready;
+    if (!ready || !was_ready ||
+        (command.mode == GimbalMode::LOCK && last_mode != GimbalMode::LOCK))
     {
-        if (last_mode != GimbalMode::LOCK) // 当前已是 LOCK，但上一周期不是；只在进入边沿重新捕获姿态。
-        {
-            Capture(message.sequence); // 正常运行中进入 LOCK 时也重新捕获姿态。
-        }
+        Capture(message.sequence); // 未就绪每周期捕获；恢复时消费当前序号，避免旧目标重放。
     }
-    if (command.mode == GimbalMode::IMU) // IMU 模式使用外部姿态目标，需要校验并接收新目标。
+    else if (command.mode == GimbalMode::IMU && message.sequence != target_sequence)
     {
-        if (message.sequence != target_sequence) // 只有新发布序号才能更新 IMU 目标，恢复前旧目标不重放。
-        {
-            target_rad = command.yaw_angle_rad; // INS 姿态目标，不是电机编码器位置。
-            target_sequence = message.sequence; // 同值目标必须重新发布才会产生新序号。
-        }
+        target_rad = command.yaw_angle_rad; // INS 姿态目标，不是电机编码器位置。
+        target_sequence = message.sequence;
     }
+    was_ready = ready;
     last_mode = command.mode;
 }
 ```
@@ -1092,7 +959,7 @@ void UpdateTarget(const TopicSnapshot<GimbalCmd>& message)
 <details>
 <summary>5. Control()：INS 位置环与电机输出（GM6020）</summary>
 
-仅在 PrepareControl 通过且目标更新后调用，计算本周期的位置环并提交电机目标。
+功能获许可且目标更新后调用，计算本周期的位置环并提交电机目标；未就绪输出由驱动安全化。
 末尾结束第一段开始的硬件条件编译。
 
 ```cpp
@@ -1113,7 +980,7 @@ void Control()
 <details>
 <summary>6. PublishFeedback()：100 Hz 反馈（GM6020）</summary>
 
-100 Hz 发布 INS 姿态与单轴 ready，所有更新路径统一维护分频。该段最后关闭私有命名空间。
+100 Hz 发布 INS 姿态与单轴功能就绪状态，所有更新路径统一维护分频。该段最后关闭私有命名空间。
 
 ```cpp
 void PublishFeedback()
@@ -1136,7 +1003,7 @@ void PublishFeedback()
 #endif
     }
 #if GIMBAL
-    feedback.enabled = snapshot.ready; // 本例表示唯一 Yaw 电机 ready，已改变原两轴语义。
+    feedback.enabled = was_ready; // 本周期功能获许可且 Yaw ready，采用单轴语义。
 #endif
     MessageCenter::Gimbal_Feedback_Topic.Publish(feedback); // Latest-Value 通道只保留最新反馈，不能用于需要逐条保留的事件。
 }
@@ -1258,32 +1125,33 @@ Enum_Gimbal_Status Gimbal_GetStatus(void)
 <details>
 <summary>9. Gimbal_Update()：主逻辑入口（GM6020）</summary>
 
-每周期读取输入后只调用一次 PrepareControl，再更新目标并调用 Control 计算位置 PID。yaw_group.Control(speed_rad_s) 同时设置速度目标、执行驱动速度 PID 并提交组报文。单独调用 yaw_motor.Control() 只组帧，不会提交 CAN。
+读取命令、INS 和一次设备快照，直接按初始化、活动模式、INS 有效性及目标数值表达功能许可，然后更新目标并计算位置环。保留示例的有限值与模式校验；设备掉线不再触发 App 的等待或清零分支。 yaw_group.Control(speed_rad_s) 设置目标、执行驱动速度 PID 并提交组报文；单独调用 yaw_motor.Control() 不会提交 CAN。
 
 ```cpp
 void Gimbal_Update(void)
 {
-    ins_valid = MessageCenter::INS_State_Topic.ReadFresh(ins, 10000U); // 10000 的单位是 us；失败后即使 ins 仍有旧值，也不得继续正常控制。
+    ins_valid = MessageCenter::INS_State_Topic.ReadFresh(ins, 10000U); // INS 新鲜度门限为 10 ms。
 #if GIMBAL
-    TopicSnapshot<GimbalCmd> message = MessageCenter::Gimbal_Command_Topic.ReadWithMeta(); // 一次取得命令与有效标志/序号；这里没有检查命令年龄，失联许可由 Input/RobotCmd 管理。
-    if (message.valid) // 使用已发布命令；否则采用默认 DISABLED，避免沿用旧活动命令。
+    const TopicSnapshot<GimbalCmd> message = MessageCenter::Gimbal_Command_Topic.ReadWithMeta();
+    command = message.valid ? message.data : GimbalCmd{}; // 无有效发布时采用默认 DISABLED。
+    snapshot = yaw_motor.GetMotionSnapshot(); // 本周期只读一次，许可变化最迟在下一周期反映为 ready。
+
+    const bool active = command.mode == GimbalMode::LOCK || command.mode == GimbalMode::IMU;
+    const bool target_valid = command.mode != GimbalMode::IMU || std::isfinite(command.yaw_angle_rad);
+    const bool enabled = initialized && active && ins_valid && std::isfinite(ins.yaw_rad) && target_valid;
+    SetEnabled(enabled); // 功能许可不包含电机 online/fault/ready，基础保护由驱动执行。
+    if (enabled)
     {
-        command = message.data;
+        UpdateTarget(message);
+        Control();
     }
     else
     {
-        GimbalCmd default_command; // 成员默认值使模式为 DISABLED，不沿用之前的活动命令。
-        command = default_command;
-    }
-    snapshot = yaw_motor.GetMotionSnapshot(); // 读取驱动对新鲜度、协议状态与请求的判断；软件提交成功不能代替 ready。
-    if (PrepareControl(message)) // 安全与恢复处理允许控制后，才更新目标并计算电机输出。
-    {
-        UpdateTarget(message);
-
-        Control();
+        was_ready = false;
+        last_mode = GimbalMode::DISABLED;
     }
 #endif
-    PublishFeedback(); // 每周期只调用一次，故障、等待和正常路径共享同一反馈分频。
+    PublishFeedback(); // 所有路径共用一次反馈分频。
 }
 ```
 
