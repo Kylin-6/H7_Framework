@@ -15,6 +15,7 @@
 /* Includes ------------------------------------------------------------------*/
 
 #include "alg_matrix.h"
+#include <math.h>
 
 /* Exported macros -----------------------------------------------------------*/
 
@@ -91,7 +92,7 @@ public:
 
     void TIM_Predict_PeriodElapsedCallback();
 
-    void TIM_Update_PeriodElapsedCallback();
+    bool TIM_Update_PeriodElapsedCallback();
 
 protected:
     // 初始化相关常量
@@ -226,27 +227,74 @@ void Class_Filter_EKF<State_Dimension, Input_Dimension, Measurement_Dimension>::
 
 /**
  * @brief 扩展Kalman滤波器更新步骤, 周期与采样周期相同
+ * @note 每周期先预测；仅在本周期有有效测量时更新一次。
+ * @note 求逆或计算失败时保留当前 X/P，清零 K，下一周期可继续预测。
+ * @return true 测量修正成功；false 求逆失败或计算结果非有限。
  *
  * @tparam State_Dimension 状态维度
  * @tparam Input_Dimension 输入维度
  * @tparam Measurement_Dimension 测量维度
  */
 template<uint32_t State_Dimension, uint32_t Input_Dimension, uint32_t Measurement_Dimension>
-void Class_Filter_EKF<State_Dimension, Input_Dimension, Measurement_Dimension>::TIM_Update_PeriodElapsedCallback()
+bool Class_Filter_EKF<State_Dimension, Input_Dimension, Measurement_Dimension>::TIM_Update_PeriodElapsedCallback()
 {
     // 计算Jacobi矩阵
-    Class_Matrix_f32 < Measurement_Dimension, State_Dimension > matrix_h_x = Function_Jacobian_H_X(Vector_X_Prior, D_T);
-    Class_Matrix_f32 < Measurement_Dimension, Measurement_Dimension > matrix_h_v = Function_Jacobian_H_V(Vector_X_Prior, D_T);
+    Class_Matrix_f32<Measurement_Dimension, State_Dimension> matrix_h_x = Function_Jacobian_H_X(Vector_X_Prior, D_T);
+    Class_Matrix_f32<Measurement_Dimension, Measurement_Dimension> matrix_h_v = Function_Jacobian_H_V(Vector_X_Prior, D_T);
+    Class_Matrix_f32<State_Dimension, Measurement_Dimension> matrix_h_x_t = matrix_h_x.Get_Transpose();
+    Class_Matrix_f32<Measurement_Dimension, Measurement_Dimension> matrix_r =
+        matrix_h_v * Matrix_R * matrix_h_v.Get_Transpose();
 
     // 计算Kalman增益矩阵
-    Matrix_K = Matrix_P_Prior * matrix_h_x.Get_Transpose() * (matrix_h_x * Matrix_P_Prior * matrix_h_x.Get_Transpose() + matrix_h_v * Matrix_R * matrix_h_v.Get_Transpose()).Get_Inverse();
+    bool success = false;
+    Class_Matrix_f32<Measurement_Dimension, Measurement_Dimension> matrix_s_inverse =
+        (matrix_h_x * Matrix_P_Prior * matrix_h_x_t + matrix_r).Get_Inverse(&success);
+    if (!success)
+    {
+        Matrix_K = Namespace_ALG_Matrix::Zero<State_Dimension, Measurement_Dimension>();
+        return false;
+    }
+
+    Class_Matrix_f32<State_Dimension, Measurement_Dimension> matrix_k =
+        Matrix_P_Prior * matrix_h_x_t * matrix_s_inverse;
+    for (uint32_t i = 0; i < State_Dimension * Measurement_Dimension; i++)
+    {
+        if (!isfinite(matrix_k.Data[i]))
+        {
+            Matrix_K = Namespace_ALG_Matrix::Zero<State_Dimension, Measurement_Dimension>();
+            return false;
+        }
+    }
 
     // 更新状态向量
-    Vector_X = Vector_X_Prior + Matrix_K * (Vector_Z - Function_H(Vector_X_Prior, D_T));
+    Class_Matrix_f32<State_Dimension, 1> vector_x =
+        Vector_X_Prior + matrix_k * (Vector_Z - Function_H(Vector_X_Prior, D_T));
+    for (uint32_t i = 0; i < State_Dimension; i++)
+    {
+        if (!isfinite(vector_x.Data[i]))
+        {
+            Matrix_K = Namespace_ALG_Matrix::Zero<State_Dimension, Measurement_Dimension>();
+            return false;
+        }
+    }
 
     // 更新误差协方差矩阵, 为获得更好的数值稳定性, 采用约瑟夫形式
-    Class_Matrix_f32 < State_Dimension, State_Dimension > matrix_tmp = MATRIX_I_STATE - Matrix_K * matrix_h_x;
-    Matrix_P = matrix_tmp * Matrix_P_Prior * matrix_tmp.Get_Transpose() + Matrix_K * matrix_h_v * Matrix_R * matrix_h_v.Get_Transpose() * Matrix_K.Get_Transpose();
+    Class_Matrix_f32<State_Dimension, State_Dimension> matrix_tmp = MATRIX_I_STATE - matrix_k * matrix_h_x;
+    Class_Matrix_f32<State_Dimension, State_Dimension> matrix_p =
+        matrix_tmp * Matrix_P_Prior * matrix_tmp.Get_Transpose() + matrix_k * matrix_r * matrix_k.Get_Transpose();
+    for (uint32_t i = 0; i < State_Dimension * State_Dimension; i++)
+    {
+        if (!isfinite(matrix_p.Data[i]))
+        {
+            Matrix_K = Namespace_ALG_Matrix::Zero<State_Dimension, Measurement_Dimension>();
+            return false;
+        }
+    }
+
+    Matrix_K = matrix_k;
+    Vector_X = vector_x;
+    Matrix_P = matrix_p;
+    return true;
 }
 
 #endif

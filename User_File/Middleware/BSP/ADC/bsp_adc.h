@@ -46,7 +46,7 @@ extern struct Struct_ADC_Manage_Object ADC3_Manage_Object;
 
 /**
  * @brief 校准 ADC 并启动指定采样元素数的 DMA 接收；循环模式由 CubeMX 配置决定。
- * @param Sample_Number DMA 传输元素数，不是字节数；调用方须保证不超过 ADC_BUFFER_SIZE。
+ * @param Sample_Number DMA 传输元素数，不是字节数；仅接受 1..ADC_BUFFER_SIZE，越界时不调用 HAL。
  * @return 参数、校准、DMA 启动任一失败时返回 false；调用方可据此降级启动。
  */
 bool ADC_Init(ADC_HandleTypeDef *hadc, uint16_t Sample_Number);

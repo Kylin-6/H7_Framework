@@ -92,7 +92,7 @@ CAN/UART/SPI 回调运行环境应按实际入口核对，不能因为函数名�
 | EricTool | [dvc_erictool.h](../User_File/Device/Peripheral/EricTool/dvc_erictool.h) | 调试字典与周期输出；回调长度和 UART 发送状态不能忽略 |
 
 UART DMA 发送先复制至专用缓冲，无 TX DMA 的端口则走阻塞 HAL 路径。BSP 不负责协议拼帧。
-ADC_BUFFER_SIZE 是 uint16_t 元素个数；ADC_Init 的 Sample_Number 也是元素数，调用方须守住容量，
+ADC_BUFFER_SIZE 是 uint16_t 元素个数；ADC_Init 的 Sample_Number 也是元素数，接口在调用 HAL 前拒绝零值和超过容量的长度，
 循环模式由 CubeMX 配置决定。volatile 不能替代同步，也不能解决 DMA Cache 一致性。
 
 ## 5. 算法阅读入口
@@ -107,7 +107,7 @@ ADC_BUFFER_SIZE 是 uint16_t 元素个数；ADC_Init 的 Sample_Number 也是元
 | [Trajectory](../User_File/Middleware/Algorithm/Trajectory) | 位置量纲 U 对应 U/s、U/s²、U/s³；改目标从规划状态接续，机械位置边界由应用限制 |
 | [Fuzzy](../User_File/Middleware/Algorithm/Fuzzy) | 有序节点与完整规则表由调用方持有，不提供预设机构控制规则 |
 | [Filter](../User_File/Middleware/Algorithm/Filter) | FIR/IIR/OneEuro/Polynomial 依赖固定新采样；缺测不能靠重复输入旧值掩盖 |
-| [Kalman](../User_File/Middleware/Algorithm/Filter/Kalman)、[EKF](../User_File/Middleware/Algorithm/Filter/EKF) | 模型与协方差由使用方配置；Kalman 缺测时只预测，是否有有效测量由调用者决定 |
+| [Kalman](../User_File/Middleware/Algorithm/Filter/Kalman)、[EKF](../User_File/Middleware/Algorithm/Filter/EKF) | 模型与协方差由使用方配置；缺测时只预测，更新返回 bool；求逆或更新计算失败时保留当前 X/P 并清零 K。详细契约见公开头文件 |
 | [VQF](../User_File/Middleware/Algorithm/Filter/VQF) | 整机参数入口是 sys_imu.cpp；采样、坐标系和单位与 BMI088 链路配合 |
 | [Matrix](../User_File/Middleware/Algorithm/Matrix)、[Quaternion](../User_File/Middleware/Algorithm/Quaternion)、[Complex](../User_File/Middleware/Algorithm/Complex)、[Basic](../User_File/Middleware/Algorithm/Basic) | 数学组件；维数、坐标约定和输入数值范围由调用方保证 |
 | [Slope](../User_File/Middleware/Algorithm/Slope)、[FSM](../User_File/Middleware/Algorithm/FSM)、[Pulse](../User_File/Middleware/Algorithm/Pulse) | 变化限幅、状态存储和静态周期分发，不替代应用状态机或实时调度器 |

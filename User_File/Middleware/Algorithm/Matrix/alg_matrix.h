@@ -313,6 +313,7 @@ public:
         return (*this);
     }
 
+    // 按原始行尺度选择主元；失败返回零矩阵，调用者应检查可选的 __Success。
     template<int tmp_row = row, int tmp_column = column>
     inline std::enable_if_t<tmp_row == tmp_column, Class_Matrix_f32<tmp_row, tmp_row>> Get_Inverse(bool *__Success = NULL) const;
 
@@ -477,8 +478,12 @@ inline Class_Matrix_f32<row, 1> Class_Matrix_f32<row, column>::Get_Column(const 
  * @tparam tmp_row 行数
  * @tparam tmp_column 列数
  * @param[out] __Success 成功为true, 失败为false; 传NULL时不写回状态
- * @return Class_Matrix_f32<tmp_row, tmp_column> 逆矩阵, 主元绝对值不大于阈值时返回零矩阵
- * @note 零矩阵是求逆失败的占位结果; 需要区分失败时应传入__Success。
+ * @return Class_Matrix_f32<tmp_row, tmp_column> 逆矩阵, 数值失败时返回零矩阵
+ * @note 使用缩放部分选主元：主元绝对值除以其原始行最大绝对值，比例不大于
+ *       Matrix_Compare_Epsilon 时失败；该判据支持整体及独立行缩放，不是条件数估计。
+ *       输入、消元中间值和结果须有限；零行或无法用 float 完成的求逆过程也失败。
+ *       Matrix_Compare_Epsilon 须有限且非负；仅本函数将其作为无量纲主元阈值。
+ *       零矩阵是求逆失败的占位结果; 需要区分失败时应传入__Success。
  */
 template<int row, int column>
 template<int tmp_row, int tmp_column>
@@ -489,50 +494,85 @@ inline std::enable_if_t<tmp_row == tmp_column, Class_Matrix_f32<tmp_row, tmp_row
         *__Success = false;
     }
 
+    const double compare_epsilon = Matrix_Compare_Epsilon;
+    if (!isfinite(compare_epsilon) || compare_epsilon < 0.0)
+    {
+        return (Namespace_ALG_Matrix::Zero<tmp_row, tmp_row>());
+    }
+
     // 扩展矩阵 [A|I]
     Class_Matrix_f32<tmp_row, 2 * tmp_row> extended_matrix = Namespace_ALG_Matrix::Zero<tmp_row, 2 * tmp_row>();
+    float row_scale[tmp_row] = {0.0f};
 
     // 扩展矩阵初始化
     for (int i = 0; i < tmp_row; i++)
     {
         // 矩阵A部分
-        memcpy(&extended_matrix.Data[i * 2 * tmp_row], &Data[i * tmp_row], sizeof(float) * tmp_row);
+        for (int j = 0; j < tmp_row; j++)
+        {
+            const float value = Data[i * tmp_row + j];
+            if (!isfinite(value))
+            {
+                return (Namespace_ALG_Matrix::Zero<tmp_row, tmp_row>());
+            }
+            extended_matrix[i][j] = value;
+            const float absolute_value = fabs(value);
+            if (absolute_value > row_scale[i])
+            {
+                row_scale[i] = absolute_value;
+            }
+        }
+        if (row_scale[i] == 0.0f)
+        {
+            return (Namespace_ALG_Matrix::Zero<tmp_row, tmp_row>());
+        }
         // 单位矩阵部分
         extended_matrix[i][i + tmp_row] = 1.0f;
     }
 
-    // 高斯消元法
+    // 高斯消元法；以 double 比较比例，避免 float 除法及阈值乘尺度溢出/下溢。
     for (int i = 0; i < tmp_row; i++)
     {
-        float max_value = fabs(extended_matrix[i][i]);
+        double max_ratio = fabs((double)extended_matrix[i][i]) / row_scale[i];
         int max_index = i;
         for (int j = i + 1; j < tmp_row; j++)
         {
-            if (fabs(extended_matrix[j][i]) > max_value)
+            const double ratio = fabs((double)extended_matrix[j][i]) / row_scale[j];
+            if (ratio > max_ratio)
             {
-                max_value = fabs(extended_matrix[j][i]);
+                max_ratio = ratio;
                 max_index = j;
             }
         }
-        // 最大元太小, 认为矩阵不可逆
-        if (max_value <= Matrix_Compare_Epsilon)
+        // 相对于原始行尺度过小的主元不能可靠求逆。
+        if (!isfinite(max_ratio) || max_ratio <= compare_epsilon)
         {
             return (Namespace_ALG_Matrix::Zero<tmp_row, tmp_row>());
         }
         // 交换行, 将第i行与主元所在行交换
         if (max_index != i)
         {
-            float tmp_data[2 * tmp_row];
-            memcpy(tmp_data, &extended_matrix.Data[i * 2 * tmp_row], sizeof(float) * 2 * tmp_row);
-            memcpy(&extended_matrix.Data[i * 2 * tmp_row], &extended_matrix.Data[max_index * 2 * tmp_row], sizeof(float) * 2 * tmp_row);
-            memcpy(&extended_matrix.Data[max_index * 2 * tmp_row], tmp_data, sizeof(float) * 2 * tmp_row);
+            for (int j = 0; j < 2 * tmp_row; j++)
+            {
+                const float tmp_value = extended_matrix[i][j];
+                extended_matrix[i][j] = extended_matrix[max_index][j];
+                extended_matrix[max_index][j] = tmp_value;
+            }
+            const float tmp_scale = row_scale[i];
+            row_scale[i] = row_scale[max_index];
+            row_scale[max_index] = tmp_scale;
         }
 
-        // 行归一化
-        float divisor = 1.0f / extended_matrix[i][i];
+        // 直接除以主元，避免先计算其 float 倒数造成额外溢出或下溢。
+        const float pivot = extended_matrix[i][i];
         for (int j = 0; j < 2 * tmp_row; j++)
         {
-            extended_matrix.Data[i * 2 * tmp_row + j] *= divisor;
+            const float value = extended_matrix.Data[i * 2 * tmp_row + j] / pivot;
+            if (!isfinite(value))
+            {
+                return (Namespace_ALG_Matrix::Zero<tmp_row, tmp_row>());
+            }
+            extended_matrix.Data[i * 2 * tmp_row + j] = value;
         }
 
         // 消元
@@ -547,11 +587,20 @@ inline std::enable_if_t<tmp_row == tmp_column, Class_Matrix_f32<tmp_row, tmp_row
                 for (int k = 0; k < 2 * tmp_row; k++)
                 {
                     tmp_data[k] = -factor * extended_matrix.Data[i * 2 * tmp_row + k];
+                    if (!isfinite(tmp_data[k]))
+                    {
+                        return (Namespace_ALG_Matrix::Zero<tmp_row, tmp_row>());
+                    }
                 }
                 // 将消元行与当前行相加
                 for (int k = 0; k < 2 * tmp_row; k++)
                 {
-                    extended_matrix.Data[j * 2 * tmp_row + k] += tmp_data[k];
+                    const float value = extended_matrix.Data[j * 2 * tmp_row + k] + tmp_data[k];
+                    if (!isfinite(value))
+                    {
+                        return (Namespace_ALG_Matrix::Zero<tmp_row, tmp_row>());
+                    }
+                    extended_matrix.Data[j * 2 * tmp_row + k] = value;
                 }
             }
         }
