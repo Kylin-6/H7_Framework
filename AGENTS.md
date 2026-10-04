@@ -39,7 +39,7 @@
 - 同一设备与命令应有明确的唯一所有者；遵循 RobotCmd 的命令发布职责，避免多个模块争用输出。
 - 连续状态和目标使用 `Topic<T>` 的 Latest-Value 语义；不可覆盖的离散动作使用 `EventQueue<T,N>`。
 - 业务消息通道保持唯一静态定义；不新增动态 Topic 注册、字符串查找或另一套消息总线。
-- Daemon 负责在线判断，应用负责相应控制策略；不要把设备在线检测迁入 Message Center。
+- Daemon 负责在线判断，Device 负责基础掉线保护，Application 负责机器人功能策略；不要把设备在线检测迁入 Message Center，也不在 App 重复逐个电机清零。
 - 板型和源码由 CMake 在构建期选择；BoardConfig 管硬件资源，机构参数归属 Application。
 - 板间通信遵循固定 Transport 协议；涉及线上格式变化时同时检查发送端、接收端与兼容性。
 

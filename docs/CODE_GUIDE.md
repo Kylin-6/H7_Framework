@@ -60,11 +60,13 @@ Pulse 在调用者上下文同步执行回调，tick=0 会触发所有有效项�
 
 - InputState 的 Setter 与 RobotCmd 的缓存更新由同一 ControlTask 调用；UART ISR 只保存设备帧。
 - RobotCmd 拥有连续命令发布；应用拥有对应 Device 的控制目标，避免多处同时修改电机输出。
+- Gimbal 的 UpdateTarget 合并姿态捕获条件，恢复后 IMU 等待新序号；Shoot 在模式处理后统一选择拨弹外环和目标；RobotCmd 失联和切源共用射击事件清理。
 - Topic 的数据和元信息受短 PRIMASK 临界区保护；需要关联时调用 ReadWithMeta。
 - Subscriber 自己的已读序号没有额外同步，同一订阅实例由单一上下文持有。
 - EventQueue 满时拒绝新事件，Push 成功只表示逻辑动作已接受，不代表机构执行完成。
 - BoardTransport 的 RX ISR 保存帧与接收时刻，控制任务解码后 PublishAt；处理延迟不会延长命令时效。
 - [Daemon](../User_File/System/Daemon/README.md) 判断合法数据流是否持续；电机在线判断统一读取 Daemon；Online 不替代设备 Ready 或业务 Topic 时效。
+- 电机自行处理基础掉线安全输出，StatusTask 的 ServiceAll 独立维护保护；App 只表达功能许可、生成目标和处理机构恢复，WS2812 不检测设备掉线。
 
 [时间戳](../User_File/System/Timestamp/sys_timestamp.h) 使用 TIM5 的 1 MHz 计数与软件溢出扩展。
 ARR 为 `3600000000-1`，每 3600 s 更新一次；Init 只绑定句柄。延时 helper 为忙等待，不让出 CPU。

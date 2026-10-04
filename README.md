@@ -99,7 +99,7 @@ CAN 接收回调在中断上下文执行。UART 的 DMA 接收须同时具备 Cu
 
 达妙动作/模式请求接口返回 `bool`，表示是否成功提交到软件发送通道。提交失败时保留相应状态，调用方可据此重试；达妙置零仅在提交成功后重置位置展开状态。返回成功不代表电机已经执行或确认命令。
 
-达妙反馈以 `(FDCAN, master_id)` 注册接收入口，并用反馈首字节低四位匹配 `can_id`；电机 ID 使用非零 8 位值，高四位仍用于发送 ID。只有总线、ID、DLC 和节点号全部合法的运动反馈才刷新在线状态。Application 用 `RequestEnabled(bool)` 指定输出许可；DMMotor 在首次请求或状态边沿执行协议动作，失能请求立即尝试覆盖安全周期目标，相同状态重复请求不执行收发；具体语义见 [达妙电机驱动](User_File/Device/Peripheral/Motor/DMmotor/dmmotor.md)，由 `StatusTask` 的 `ServiceAll()` 以 100 Hz 补交失败项并依据新鲜反馈维护 Enable/Disable 协议状态。Daemon 只判断活性，DMMotor 自己在超时后覆盖安全目标并提交失能；Gimbal 根据当前 INS 与电机快照决定是否控制。
+达妙反馈以 `(FDCAN, master_id)` 注册接收入口，并用反馈首字节低四位匹配 `can_id`；电机 ID 使用非零 8 位值，高四位仍用于发送 ID。只有总线、ID、DLC 和节点号全部合法的运动反馈才刷新在线状态。Application 用 `RequestEnabled(bool)` 指定输出许可；DMMotor 在首次请求或状态边沿执行协议动作，失能请求立即尝试覆盖安全周期目标，相同状态重复请求不执行收发；具体语义见 [达妙电机驱动](User_File/Device/Peripheral/Motor/DMmotor/dmmotor.md)，由 `StatusTask` 的 `ServiceAll()` 以 100 Hz 补交失败项并依据新鲜反馈维护 Enable/Disable 协议状态。Daemon 只判断活性，DMMotor 自己在超时后覆盖安全目标并提交失能；Gimbal 根据初始化、功能模式和 INS 有效性决定控制许可，电机快照的 ready 只用于姿态捕获与恢复。
 
 ### 板载设备与外接工具
 
@@ -181,6 +181,9 @@ EricTool 的 USB/UART 解析均只读取回调传入的缓冲区及有效长度�
 Application 作为独立机器人业务层维护，不在 BSP 总览展开具体控制实现。当前模块、
 Control_Task 调度顺序、RobotCmd 所有权、Gimbal/Chassis/Shoot 行为和新应用接入规范见
 [Application 开发指南](User_File/Application/README.md)。
+
+当前 App 主流程保持“读取输入 → 表达功能许可 → 更新目标 → 计算并提交控制 → 发布反馈”。
+Gimbal 合并姿态捕获条件，并保留恢复后等待新 IMU 目标的要求；Shoot 在模式处理后统一选择拨弹外环与目标；RobotCmd 复用失联和切源时的射击事件清理。设备级掉线保护由 Motor 独立执行，WS2812 保持现有颜色缓存与刷新行为。
 
 ### 单板与双板
 

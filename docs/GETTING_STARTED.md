@@ -18,7 +18,7 @@ Vision / VTM 虚线表示待接入 Input 的适配器。Referee / VTM 的设备�
 
 - **Task = 什么时候运行。** 安排初始化顺序与周期，不写完整业务。
 - **Application = 机器人要做什么。** 仲裁目标、切换模式、计算控制量。
-- **Device = 设备怎么工作。** 封装协议、反馈和设备操作。
+- **Device = 设备怎么工作。** 封装协议、反馈、设备操作与基础掉线保护。
 - **System / Message Center = 模块共享的数据与系统服务。** 包括 INS 状态、消息、在线检测和板间 Transport。
 - **BSP = MCU 怎么收发数据。** 管理 CAN/UART/SPI、缓冲与回调。
 
@@ -30,7 +30,7 @@ Vision / VTM 虚线表示待接入 Input 的适配器。Referee / VTM 的设备�
 | --- | --- |
 | [Control_Task.cpp](../User_File/Task/Control_Task.cpp) | 找到 `Control_Task`：High1、1 kHz，按 Input → RobotCmd → Gimbal/Chassis/Shoot 顺序运行。 |
 | [RobotCmd.cpp](../User_File/Application/RobotCmd/RobotCmd.cpp) | 看输入仲裁、输出许可和命令发布，理解命令为什么有唯一所有者。 |
-| [Gimbal.cpp](../User_File/Application/Gimbal/Gimbal.cpp) | 看 Application 怎样读取命令/INS、检查设备 Ready，再控制自己拥有的电机。 |
+| [Gimbal.cpp](../User_File/Application/Gimbal/Gimbal.cpp) | 看 Application 怎样读取命令/INS、表达功能许可、捕获姿态与提交目标；设备 Ready 只决定捕获与恢复时机。 |
 | [message_types.h](../User_File/System/MessageCenter/message_types.h) | 先认识 `ChassisCmd`、`INS_State`、反馈与 `ShootEvent` 的数据形状和单位。 |
 | [DJImotor/](../User_File/Device/Peripheral/Motor/DJImotor) | 从 [驱动文档](../User_File/Device/Peripheral/Motor/DJImotor/dji_motor.md) 找 `GetMotionSnapshot()`，区分反馈新鲜度、输出许可与实际输出。 |
 | [Daemon/](../User_File/System/Daemon) | 从 [在线监控说明](../User_File/System/Daemon/README.md) 看 Feed、Check 和状态跃迁。 |
@@ -73,7 +73,7 @@ Gimbal 使用 10 ms 新鲜度检查；具体坐标系、单位和控制条件见
 [StatusTask](../User_File/Task/StatusTask.cpp) 以 Low 优先级、100 Hz 调用 `DaemonManager::CheckAll()` → 记录在线/离线跃迁。
 
 **Daemon = liveness（活性）**：判断在线、离线、离线时长与 Transition。
-急停、电机控制和整车安全策略由拥有设备的 Application 决定。
+设备基础掉线保护由 Device 执行；功能停机、机构目标和整车安全策略由 Application 决定。
 在线只证明数据源活跃；例如合法的 S.BUS failsafe 帧仍可 Feed，控制许可还要检查失控标志与新鲜度。
 StatusTask 随后调用已编入的 DJI、DM 设备安全/协议服务：设备自己覆盖旧输出并执行必要失能，App 负责机器人功能策略。这不属于 Daemon 的控制职责。
 
