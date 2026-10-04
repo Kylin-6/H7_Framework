@@ -2,7 +2,7 @@
   "bundles": [
     {
       "name": "cmake",
-      "version": "4.2.3+st.1"
+      "version": "4.4.0+st.1"
     },
     {
       "name": "ninja",
@@ -18,7 +18,7 @@
     },
     {
       "name": "jlink-gdbserver",
-      "version": "9.14.1+st.1"
+      "version": "9.42.0+st.1"
     }
   ]
 }
