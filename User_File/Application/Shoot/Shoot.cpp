@@ -98,7 +98,6 @@ static void Shoot_ApplyCommand(void)
     {
         // 连发以角速度控制，退出之前的事件角度保持；射速乘单弹角得到 rad/s。
         ctx.event_angle_active = false;
-        ctx.loader.Set_Outer_Loop(DJI_MOTOR_SPEED_LOOP);
         const float rate = ctx.command.shoot_rate_hz > 0.0f
                                ? ctx.command.shoot_rate_hz
                                : kShootConfig.default_rate_hz;
@@ -110,7 +109,6 @@ static void Shoot_ApplyCommand(void)
 
     case LoaderMode::REVERSE:
         ctx.event_angle_active = false;
-        ctx.loader.Set_Outer_Loop(DJI_MOTOR_SPEED_LOOP);
         loader_speed_target_rad_s = ctx.command.loader_speed_rad_s != 0.0f
                                         ? -std::fabs(ctx.command.loader_speed_rad_s)
                                         : kShootConfig.reverse_speed_rad_s;
@@ -135,27 +133,13 @@ static void Shoot_ApplyCommand(void)
                 bullet_count * kShootConfig.one_bullet_angle_rad;
             ctx.event_angle_active = true;
         }
-        if (ctx.event_angle_active) // 已累加事件目标时切到角度外环持续保持。
-        {
-            ctx.loader.Set_Outer_Loop(DJI_MOTOR_ANGLE_LOOP);
-        }
-        else
-        {
-            ctx.loader.Set_Outer_Loop(DJI_MOTOR_SPEED_LOOP);
-        }
         break;
     }
     }
 
     // 应用只选择目标和外环；角度/速度/电流 PID 及 CAN 发布复用 DJI 电机组接口。
-    if (ctx.event_angle_active) // 事件保持使用累计角目标；其他路径使用速度目标。
-    {
-        ctx.loader_group.Control(ctx.loader_angle_target_rad);
-    }
-    else
-    {
-        ctx.loader_group.Control(loader_speed_target_rad_s);
-    }
+    ctx.loader.Set_Outer_Loop(ctx.event_angle_active ? DJI_MOTOR_ANGLE_LOOP : DJI_MOTOR_SPEED_LOOP);
+    ctx.loader_group.Control(ctx.event_angle_active ? ctx.loader_angle_target_rad : loader_speed_target_rad_s);
 }
 
 /**

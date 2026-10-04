@@ -375,24 +375,19 @@ void Control(const Struct_DMMotor_Snapshot& pitch)
 <details>
 <summary>UpdateTarget()：消费模式和新目标</summary>
 
-ctx.command 已由更新入口从同一 message 复制。此函数处理未就绪保持、恢复捕获、LOCK 进入边沿和 IMU 新序号，不自行读取或发布命令；改变目标语义时同时同步 RobotCmd。
+ctx.command 已由更新入口从同一 message 复制。未就绪、首次就绪／恢复及进入 LOCK 合并为一次姿态捕获；其余周期才接收 IMU 新序号。不自行读取或发布命令；改变目标语义时同时同步 RobotCmd。
 
 ```cpp
 void UpdateTarget(const TopicSnapshot<GimbalCmd>& message)
 {
     const bool ready = ctx.yaw_snapshot.ready && ctx.pitch_snapshot.ready;
-    if (!ready || !ctx.was_ready)
+    if (!ready || !ctx.was_ready ||
+        (ctx.command.mode == GimbalMode::LOCK && ctx.last_mode != GimbalMode::LOCK))
     {
         // ready 只决定姿态捕获时机；未就绪电机的输出由驱动安全化。
         CapturePose(message.sequence);
-        ctx.last_mode = ctx.command.mode;
     }
-    ctx.was_ready = ready;
-    if (ctx.command.mode == GimbalMode::LOCK && ctx.last_mode != GimbalMode::LOCK)
-    {
-        CapturePose(message.sequence);
-    }
-    if (ctx.command.mode == GimbalMode::IMU && message.sequence != ctx.target_sequence)
+    else if (ctx.command.mode == GimbalMode::IMU && message.sequence != ctx.target_sequence)
     {
         ctx.target_yaw_angle_rad = ctx.command.yaw_angle_rad;
         ctx.target_pitch_angle_rad = ctx.command.pitch_angle_rad;
@@ -400,6 +395,7 @@ void UpdateTarget(const TopicSnapshot<GimbalCmd>& message)
         ctx.target_pitch_speed_rad_s = ctx.command.pitch_speed_rad_s;
         ctx.target_sequence = message.sequence;
     }
+    ctx.was_ready = ready;
     ctx.last_mode = ctx.command.mode;
 }
 ```

@@ -55,7 +55,7 @@ GimbalChanged 与 ShootChanged 显式比较所有现有字段。扩展消息时�
 失去输入许可的边沿装载默认安全命令，标记三个通道立即发布，并清空发射队列。
 许可已关闭时 Set 接口拒绝新目标；恢复后由当前仲裁结果重新装载。
 来源改变且仲裁允许控制时，底盘立即刷新并清除前一来源积压事件；不会混用两份输入。
-当前事件清队列使用 Pop 到空，调用约定应维持 ControlTask 中的唯一生产流程；不要从另一任务持续并发灌入事件。
+两处通过私有函数 RobotCmd_DiscardShootEvents 使用 Pop 到空，调用约定应维持 ControlTask 中的唯一生产流程；不要从另一任务持续并发灌入事件。
 
 ## 公共接口与调用边界
 
@@ -194,6 +194,21 @@ bool RobotCmd_Init(Output<GimbalCmd> gimbal_output,
 </details>
 
 <details>
+<summary>RobotCmd_DiscardShootEvents()</summary>
+
+```cpp
+static void RobotCmd_DiscardShootEvents(void)
+{
+    ShootEvent discarded{};
+    while (MessageCenter::Shoot_Event_Queue.Pop(discarded))
+    {
+    }
+}
+```
+
+</details>
+
+<details>
 <summary>RobotCmd_Update()</summary>
 
 ```cpp
@@ -207,11 +222,7 @@ void RobotCmd_Update(void)
         if (source_changed) // 来源改变时立即刷新底盘，并丢弃前一来源积压的射击请求。
         {
             Chassis_Command_Dirty = true;
-            ShootEvent discarded{};
-            // 切源清除旧动作；同一 ControlTask 拥有事件生产流程。
-            while (MessageCenter::Shoot_Event_Queue.Pop(discarded))
-            {
-            }
+            RobotCmd_DiscardShootEvents();
         }
         if (GimbalChanged(decision.gimbal)) // 模式或目标变化才产生新的云台命令序号。
         {
@@ -269,10 +280,7 @@ static void RobotCmd_SetInputArmed(bool armed)
         Gimbal_Command_Dirty = true;
         Chassis_Command_Dirty = true;
         Shoot_Command_Dirty = true;
-        ShootEvent discarded{};
-        while (MessageCenter::Shoot_Event_Queue.Pop(discarded))
-        {
-        }
+        RobotCmd_DiscardShootEvents();
     }
 }
 ```

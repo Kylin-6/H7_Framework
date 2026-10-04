@@ -31,6 +31,15 @@ static uint8_t RobotCmd_Chassis_Publish_Divider;
 static InputSource Last_Input_Source;
 static void RobotCmd_SetInputArmed(bool armed);
 
+/** @brief 清除旧来源的射击请求；事件生产流程由同一 ControlTask 拥有。 */
+static void RobotCmd_DiscardShootEvents(void)
+{
+    ShootEvent discarded{};
+    while (MessageCenter::Shoot_Event_Queue.Pop(discarded))
+    {
+    }
+}
+
 /**
  * @brief 比较云台模式、角目标和速度前馈，决定是否发布新序号。
  * @note 对比缓存字段，不检测消息年龄或设备状态。
@@ -108,11 +117,7 @@ void RobotCmd_Update(void)
         if (source_changed) // 来源改变时立即刷新底盘，并丢弃前一来源积压的射击请求。
         {
             Chassis_Command_Dirty = true;
-            ShootEvent discarded{};
-            // 切源清除旧动作；同一 ControlTask 拥有事件生产流程。
-            while (MessageCenter::Shoot_Event_Queue.Pop(discarded))
-            {
-            }
+            RobotCmd_DiscardShootEvents();
         }
         if (GimbalChanged(decision.gimbal)) // 模式或目标变化才产生新的云台命令序号。
         {
@@ -167,10 +172,7 @@ static void RobotCmd_SetInputArmed(bool armed)
         Gimbal_Command_Dirty = true;
         Chassis_Command_Dirty = true;
         Shoot_Command_Dirty = true;
-        ShootEvent discarded{};
-        while (MessageCenter::Shoot_Event_Queue.Pop(discarded))
-        {
-        }
+        RobotCmd_DiscardShootEvents();
     }
 }
 
