@@ -187,7 +187,7 @@ Gimbal 合并姿态捕获条件，并保留恢复后等待新 IMU 目标的要�
 
 ### 单板与双板
 
-构建目标在编译期确定应用与任务：`SingleBoard` 的 Gimbal、Chassis、Shoot 默认关闭；关闭云台时不编译或调度云台 App，也不发布云台反馈，Chassis/Shoot 保持现有硬件开关实现；`GimbalBoard` 运行 RobotCmd、Gimbal、Shoot；`ChassisBoard` 运行 Chassis。BoardConfig 只绑定本板硬件，TransportConfig 固定板间总线和报文号。运行时不使用 Router 或动态 Topic 路由。
+构建目标在编译期确定应用与任务：`SingleBoard` 的 Gimbal、Chassis、Shoot 默认关闭；关闭应用时不编译或调度对应 App，也不发布对应本地应用反馈；关闭 Shoot 时拒绝射击事件；`GimbalBoard` 运行 RobotCmd、Gimbal、Shoot；`ChassisBoard` 运行 Chassis。BoardConfig 只绑定本板硬件，TransportConfig 固定板间总线和报文号。运行时不使用 Router 或动态 Topic 路由。
 
 单板 RobotCmd 的三个 Output 都是 LocalPublisher；云台板的底盘 Output 是 RemotePublisher。`ChassisCmd` 经 CAN 标准 ID `0x141` 到达底盘板本地 Topic，`ChassisFeedback` 经 `0x222` 返回云台板本地 Topic。两者是 8 字节 Classic CAN 最新值，接收任务按实际 RX 时间和序号校验，底盘命令超过 100 ms 变为 `ZERO_FORCE`。INS、Gimbal、Shoot 的 1 kHz 板内路径不经过 Transport。协议和接线见 [双板 Transport](User_File/System/Transport/README.md)。
 

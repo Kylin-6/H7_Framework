@@ -13,12 +13,10 @@
 #include "board_config.h"
 #include "message_center.h"
 
-#if SHOOT
 #include "dji_motor.h"
 #include "fdcan.h"
 
 #include <cmath>
-#endif
 
 namespace
 {
@@ -29,7 +27,6 @@ struct ShootContext
     ShootCmd command{};
     ShootFeedback feedback{};
     uint8_t feedback_divider = 0U;
-#if SHOOT
     Class_DJIMotor friction_left;
     Class_DJIMotor friction_right;
     Class_DJIMotor loader;
@@ -41,13 +38,10 @@ struct ShootContext
     bool initialized = false;
     bool event_angle_active = false; // 表示正在保持事件累加的角目标，不表示弹丸已完成发射。
     float loader_angle_target_rad = 0.0f;
-#endif
 };
 
 ShootContext ctx;
 } // namespace
-
-#if SHOOT
 
 /**
  * @brief 将应用 PID 参数转换为驱动配置，固定控制周期为 0.001 s。
@@ -162,11 +156,10 @@ static void Shoot_UpdateFeedback(void)
                           ctx.friction_right_snapshot.online &&
                           ctx.loader_snapshot.online;
 }
-#endif
 
 /**
  * @brief 清空应用消息状态，注册摩擦轮和拨弹盘并绑定各自的 DJI 发送组。
- * @return 硬件路径全部注册成功返回 true；SHOOT=0 时不注册设备并返回 true。
+ * @return 全部电机注册与发送组绑定成功返回 true。
  * @note 由 ControlTask 启动时调用一次；总线归 BoardConfig，机构参数归 Shoot_Config。
  */
 bool Shoot_Init(void)
@@ -175,7 +168,6 @@ bool Shoot_Init(void)
     ctx.feedback = {};
     ctx.feedback_divider = 0U;
 
-#if SHOOT
     Struct_DJIMotor_Init_Config friction_config{};
     friction_config.hfdcan = BoardConfig_Get().shoot_bus;
     friction_config.motor_type = Enum_DJIMotor_Type::M3508;
@@ -216,9 +208,6 @@ bool Shoot_Init(void)
     ctx.event_angle_active = false;
     ctx.loader_angle_target_rad = 0.0f;
     return ctx.initialized;
-#else
-    return true;
-#endif
 }
 
 /**
@@ -245,7 +234,6 @@ void Shoot_Update(void)
         }
     }
 
-#if SHOOT
     if (ctx.initialized) // 初始化成功才访问设备并运行硬件控制路径。
     {
         ctx.friction_left_snapshot = ctx.friction_left.GetMotionSnapshot();
@@ -254,7 +242,6 @@ void Shoot_Update(void)
         Shoot_ApplyCommand();
         Shoot_UpdateFeedback();
     }
-#endif
 
     /* 控制按 1 kHz 更新，应用层反馈降频到 100 Hz。 */
     ctx.feedback_divider++;

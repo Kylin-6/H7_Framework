@@ -26,13 +26,14 @@ Application 把底盘速度分解为轮速与舵角，DJI Device 执行电机闭
 | `bool Chassis_Init(void)` | 所选 ControlTask 启动时仅调用一次 | 清空应用状态、注册电机、绑定发送组，返回是否成功 |
 | `void Chassis_Update(void)` | 同一个 ControlTask 每 1 ms 调用 | 读取命令、快照，计算并提交输出，更新并分频发布反馈 |
 
-SingleBoard 的顺序是输入更新 → RobotCmd → Gimbal → Chassis → Shoot。
+SingleBoard 的顺序是输入更新 → RobotCmd → Gimbal → Chassis → Shoot，其中只调度已编入的应用。
 ChassisBoard 的顺序是 `BoardTransport_Poll()` → `Chassis_Update()`，该板不运行 RobotCmd。
 两份任务当前都忽略初始化返回值；应用内部 `initialized` 阻止失败后的正常控制。
 需要启动诊断时在已有初始化位置处理返回值，不在周期里重复 Init。
 
 SingleBoard 默认 `H7_APP_CHASSIS=OFF`；ChassisBoard 固定开启，GimbalBoard 不编译本应用。
-`CHASSIS=0` 时仍保留两个公开入口，但不注册电机，反馈按 100 Hz 发布默认值。
+CMake 仅在 `H7_APP_CHASSIS=ON` 时加入 Chassis.cpp；关闭时不编译、不调度本应用，也不发布本地底盘反馈。
+应用内部保留完整实现，单板任务边界控制 include、初始化与更新。GimbalBoard 仍通过 Transport 接收远端底盘反馈。
 不用另建控制任务，也不要在 CAN 接收中断中调用底盘更新。
 
 ### 命令与反馈
@@ -138,7 +139,6 @@ struct ChassisContext
     ChassisCmd command{};
     ChassisFeedback feedback{};
     uint8_t feedback_divider = 0U;
-#if CHASSIS
     Class_DJIMotor wheel_motor[4];
     Class_DJIMotor steer_motor[4];
     Struct_DJIMotor_Motion_Snapshot wheel_snapshot[4];
@@ -147,7 +147,6 @@ struct ChassisContext
     Class_DJIMotor_Group steer_group;
     bool initialized = false;
     int8_t wheel_direction[4] = {1, 1, 1, 1};
-#endif
 };
 
 ChassisContext ctx;
@@ -313,7 +312,6 @@ bool Chassis_Init(void)
     ctx.feedback = {};
     ctx.feedback_divider = 0U;
 
-#if CHASSIS
     Struct_DJIMotor_Init_Config wheel_config{};
     wheel_config.hfdcan = BoardConfig_Get().chassis_wheel_bus;
     wheel_config.motor_type = Enum_DJIMotor_Type::M3508;
@@ -353,9 +351,6 @@ bool Chassis_Init(void)
         (void) ctx.steer_group.RequestEnabled(false);
     }
     return initialized;
-#else
-    return true;
-#endif
 }
 ```
 
@@ -371,11 +366,10 @@ void Chassis_Update(void)
 {
     /* 仅在命令 Topic 仍新鲜时沿用目标；过期后使用默认 ZERO_FORCE 关闭输出。 */
     ctx.command = {};
-    // 读取失败保持默认 ZERO_FORCE；命令超时仍为 100 ms。
+    // 命令需存在且年龄不超过 100 ms；双板由 Transport 发布，本地由 RobotCmd 发布。
     (void) MessageCenter::Chassis_Command_Topic.ReadFresh(
         ctx.command, CHASSIS_COMMAND_MAX_AGE_US);
 
-#if CHASSIS
     if (ctx.initialized) // 初始化失败时不访问正常组控制流程，反馈仍按周期发布。
     {
         for (uint8_t index = 0U; index < 4U; ++index)
@@ -398,7 +392,6 @@ void Chassis_Update(void)
         }
         Chassis_UpdateFeedback();
     }
-#endif
 
     /* 电机控制按 1 kHz 执行，反馈消息按 100 Hz 发布。 */
     ctx.feedback_divider++;
@@ -448,7 +441,7 @@ ChassisCmd MakeChassisExampleCommand(bool allow_motion)
 
 ## 四麦轮底盘完整实现例程
 
-下面按函数给出基于当前框架的完整 `Chassis.cpp`，使用四台达妙 DM3519、现有 Topic 和达妙速度模式。各段依次组合即可组成文件；只作教学示例，生产代码仍为四舵轮。
+下面按函数给出基于当前框架的完整 `Chassis.cpp`，使用四台达妙 DM3519、现有 Topic 和达妙速度模式。各段依次组合即可组成文件；只作教学示例，生产代码仍为四舵轮。例程也由 CMake 选择是否编入，文件内部不再判断 CHASSIS 宏。
 
 混合符号参考老步兵，采用 45°麦轮的几何转换：车体 m/s 与 rad/s 先换算为轮轴 rad/s。
 轮序与电机逻辑正向需满足代码中的混合矩阵；半径和半长/半宽按实际机构配置；本例假设电机输出轴直接驱动轮轴。
@@ -466,16 +459,13 @@ ChassisCmd MakeChassisExampleCommand(bool allow_motion)
 #include "board_config.h"
 #include "message_center.h"
 #include <cmath>
-#if CHASSIS
 #include "dmmotor.h"
-#endif
 
 namespace
 {
 ChassisCmd command;
 ChassisFeedback feedback;
 uint8_t feedback_divider = 0U;
-#if CHASSIS
 Class_DMMotor wheel_motor[4];
 Struct_DMMotor_Snapshot snapshot[4];
 bool registered[4] = {false, false, false, false};
@@ -605,7 +595,6 @@ void Control()
         }
     }
 }
-#endif
 ```
 
 </details>
@@ -617,7 +606,6 @@ void Control()
 void PublishFeedback(bool allowed)
 {
     ChassisFeedback next;
-#if CHASSIS
     bool online = true;
     bool ready = true;
     float q[4];
@@ -648,7 +636,6 @@ void PublishFeedback(bool allowed)
         next.velocity_y_m_s = (q[0] + q[1] - q[2] - q[3]) * radius_m * 0.25f;
         next.angular_velocity_rad_s = (q[0] + q[1] + q[2] + q[3]) * radius_m / (4.0f * lever_m);
     }
-#endif
     feedback = next; // 不在线时速度保持默认零，但消费者仍必须检查 online。
     feedback_divider = feedback_divider + 1U;
     if (feedback_divider >= 10U) // 1 kHz 下每 10 ms 发布一次。
@@ -668,7 +655,6 @@ void PublishFeedback(bool allowed)
 ```cpp
 bool Chassis_Init(void)
 {
-#if CHASSIS
     if (!std::isfinite(kChassisConfig.wheel_radius_m)) // 半径用于除法，必须为有限值。
     {
         return false;
@@ -704,9 +690,6 @@ bool Chassis_Init(void)
     }
     initialized = true;
     return true;
-#else
-    return true;
-#endif
 }
 ```
 
@@ -729,14 +712,11 @@ void Chassis_Update(void)
         ChassisCmd stopped;
         command = stopped;
     }
-    bool allowed = false;
-#if CHASSIS
-    allowed = PrepareControl(command_valid);
+    const bool allowed = PrepareControl(command_valid);
     if (allowed) // 通过集中运行许可后，主逻辑只负责轮速解算与提交。
     {
         Control();
     }
-#endif
     PublishFeedback(allowed);
 }
 ```
@@ -764,7 +744,7 @@ cmake --preset ChassisBoard
 cmake --build --preset ChassisBoard
 ```
 
-单板需要显式打开硬件路径：
+单板需要显式编入底盘应用：
 
 ```sh
 cmake --preset SingleBoard -DH7_APP_CHASSIS=ON

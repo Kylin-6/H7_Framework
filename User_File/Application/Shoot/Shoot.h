@@ -3,7 +3,7 @@
 
 /**
  * @brief ControlTask 启动时调用一次，注册三个电机及两个发送组。
- * @return 全部注册成功返回 true；SHOOT=0 时返回 true，不访问硬件。
+ * @return 全部设备注册与发送组绑定成功返回 true。
  */
 bool Shoot_Init(void);
 /**

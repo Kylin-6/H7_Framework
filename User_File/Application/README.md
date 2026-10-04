@@ -53,8 +53,10 @@ Chassis 与 Shoot 的机械参数和 PID 初值分别放在 `Chassis_Config.h`�
 `Input` 保存 Remote 输入适配、输入状态和来源仲裁；设备协议仍由 Device/BSP 处理。
 接口、通道映射与来源接入例程见 [Input 开发指南](Input/README.md)。
 
-单板固件的云台 App 及底盘/发射硬件路径由 `H7_APP_GIMBAL`、`H7_APP_CHASSIS`、`H7_APP_SHOOT` 控制，默认均关闭；
-关闭云台时，CMake 排除其源码，任务不调用云台入口，云台反馈无发布者；INS 独立发布，反馈 getter 返回 false。
+单板固件的 Gimbal、Chassis、Shoot App 由 `H7_APP_GIMBAL`、`H7_APP_CHASSIS`、`H7_APP_SHOOT` 控制，默认均关闭。
+关闭时 CMake 排除对应源码，任务不包含其头文件、不调用入口，也不发布对应应用反馈；INS 独立发布。
+RobotCmd 初始化由任务显式传入 Shoot 是否编入，未编入时拒绝射击事件；静态 Topic 与连续命令发布契约保留。
+本地应用关闭且无远端发布者时，对应反馈 getter 返回 false，保持调用者对象不变。
 双板固件由 CMake 在构建期分别选择应用和任务源码。板内命令通过 `LocalPublisher` 进入
 Message Center，云台板的底盘命令通过 `RemotePublisher` 进入固定 CAN Transport。
 
@@ -63,8 +65,8 @@ Message Center，云台板的底盘命令通过 `RemotePublisher` 进入固定 C
 各板的 `Control_Task` 均由 1 ms 线程标志唤醒，当前初始化和更新顺序为：
 
 ```text
-SingleBoard: RobotCmd_Init → RemoteInput_Init → Gimbal_Init(启用时) → Chassis_Init → Shoot_Init
-             RemoteInput_Update → RobotCmd_Update → Gimbal_Update(启用时) → Chassis_Update → Shoot_Update
+SingleBoard: RobotCmd_Init → RemoteInput_Init → Gimbal_Init(启用时) → Chassis_Init(启用时) → Shoot_Init(启用时)
+             RemoteInput_Update → RobotCmd_Update → Gimbal_Update(启用时) → Chassis_Update(启用时) → Shoot_Update(启用时)
 GimbalBoard: BoardTransport_Init → RobotCmd_Init → RemoteInput_Init → Gimbal_Init → Shoot_Init
              BoardTransport_Poll → RemoteInput_Update → RobotCmd_Update → Gimbal_Update → Shoot_Update
 ChassisBoard: BoardTransport_Init → Chassis_Init
@@ -229,7 +231,7 @@ STOP 模式每周期最多消费一个事件：首次事件从当前反馈角建
 调用一次 `loader_group.Control()`；总开关 OFF 提前返回，不计算或提交主动控制目标。
 当前没有摩擦轮就绪、卡弹检测/回退、热量限制、裁判系统互锁或完整 FEEDING 状态机。
 
-调用者必须检查 `RobotCmd_PushShootEvent()` 返回值。返回 false 表示队列已满，本次动作
+调用者必须检查 `RobotCmd_PushShootEvent()` 返回值。返回 false 表示 Shoot 未编入、输入未获许可或队列已满，本次动作
 没有被接受。
 
 ## 8. Message Center 使用规则

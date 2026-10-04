@@ -15,7 +15,9 @@ RobotCmd 拥有云台、底盘和发射的缓存命令，统一接收输入仲�
 | [SourceArbitration](../Input/source_arbitration.h) | 来源许可、新鲜度、合法性与视觉目标仲裁 |
 | [Output](../../System/MessageCenter/output.h) | 无动态分配的输出句柄，具体对象决定本地或远端发布 |
 
-ControlTask 启动时绑定三个输出并调用 RobotCmd_Init，随后初始化输入和机构。
+ControlTask 启动时绑定三个输出，并向 RobotCmd_Init 传入 `shoot_available`，随后初始化输入和已编入的机构。
+SingleBoard 传入 `SHOOT != 0`，GimbalBoard 固定传入 true；该标志表示构建中有 Shoot 应用，不表示设备初始化成功或 ready。
+连续命令发布契约保持不变，关闭 Shoot 时事件接口返回 false，不占用 FIFO。
 每 1 ms 的顺序为输入更新 → RobotCmd_Update → 各机构 Update。
 SingleBoard 使用三个静态 LocalPublisher；GimbalBoard 的底盘输出使用静态 RemotePublisher，
 云台与 Shoot 仍为本地 Topic；ChassisBoard 消费远端底盘命令，不运行 RobotCmd。
@@ -61,12 +63,12 @@ GimbalChanged 与 ShootChanged 显式比较所有现有字段。扩展消息时�
 
 | 接口 | 接受条件与结果 |
 | --- | --- |
-| RobotCmd_Init | 三个 Output 已绑定；只负责命令状态，不初始化电机 |
+| RobotCmd_Init | 三个 Output 已绑定，并显式传入 shoot_available；只负责命令状态，不初始化电机 |
 | RobotCmd_Update | 每 1 ms 调用，仲裁结果会覆盖 Set 接口缓存 |
 | RobotCmd_SetGimbal | Input_Armed 时缓存并置 dirty；未许可则拒绝 |
 | RobotCmd_SetChassis | Input_Armed 时缓存，等待周期发布 |
 | RobotCmd_SetShoot | Input_Armed 时缓存持续状态并置 dirty |
-| RobotCmd_PushShootEvent | Input_Armed 且 FIFO 有空间时返回 true；未许可或满返回 false |
+| RobotCmd_PushShootEvent | Shoot_Available、Input_Armed 且 FIFO 有空间时返回 true；未编入、未许可或满返回 false |
 | RobotCmd_Get*Feedback | Topic 存在且最近 100 ms 发布返回 true，失败不修改输出对象 |
 
 缓存、dirty 和 Input_Armed 无同步保护，Init/Update/Set/Push 按控制任务单一上下文使用，
@@ -78,7 +80,7 @@ GimbalChanged 与 ShootChanged 显式比较所有现有字段。扩展消息时�
 
 持续目标使用 ShootCmd：总开关、摩擦轮、拨弹模式以及速度/射速。
 按钮边沿的一次动作使用 ShootEvent：ShootOnce 或 ShootTriple。
-RobotCmd_PushShootEvent 只检查输入许可与队列容量，不检查 Shoot 总开关、达速或设备 ready。
+RobotCmd_PushShootEvent 检查 Shoot 是否编入、输入许可与队列容量，不检查 Shoot 总开关、达速或设备 ready。
 成功表示逻辑动作入队；Shoot 在 ON+STOP 路径消费，在 OFF 路径清除，BURST/REVERSE 留在队列。
 
 若需要“达速后才能单发”，应明确 Shoot 的消费条件与动作状态，不能把成功 Push 当作发射完成。
@@ -162,7 +164,8 @@ static bool ShootChanged(const ShootCmd& next)
 ```cpp
 bool RobotCmd_Init(Output<GimbalCmd> gimbal_output,
                    Output<ChassisCmd> chassis_output,
-                   Output<ShootCmd> shoot_output)
+                   Output<ShootCmd> shoot_output,
+                   bool shoot_available)
 {
     // 三个通道均需绑定，避免未绑定 Publish 静默丢弃命令。
     if (!gimbal_output.IsBound() || !chassis_output.IsBound() ||
@@ -185,6 +188,7 @@ bool RobotCmd_Init(Output<GimbalCmd> gimbal_output,
     Shoot_Command_Dirty = true;
     Chassis_Command_Dirty = false;
     Input_Armed = true;
+    Shoot_Available = shoot_available;
     RobotCmd_Chassis_Publish_Divider = 0U;
     Last_Input_Source = InputSource::Remote;
     return true;
@@ -337,7 +341,7 @@ void RobotCmd_SetShoot(const ShootCmd& command)
 ```cpp
 bool RobotCmd_PushShootEvent(const ShootEvent& event)
 {
-    return Input_Armed && MessageCenter::Shoot_Event_Queue.Push(event);
+    return Shoot_Available && Input_Armed && MessageCenter::Shoot_Event_Queue.Push(event);
 }
 ```
 

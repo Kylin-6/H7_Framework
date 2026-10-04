@@ -168,8 +168,8 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
 )
 
 option(H7_APP_GIMBAL "Build the Gimbal application" OFF)
-option(H7_APP_CHASSIS "Build the Chassis hardware-control path" OFF)
-option(H7_APP_SHOOT "Build the Shoot hardware-control path" OFF)
+option(H7_APP_CHASSIS "Build the Chassis application" OFF)
+option(H7_APP_SHOOT "Build the Shoot application" OFF)
 if(H7_BOARD STREQUAL "GimbalBoard")
     set(H7_APP_GIMBAL ON)
     set(H7_APP_CHASSIS OFF)
@@ -206,9 +206,7 @@ if(H7_BOARD STREQUAL "SingleBoard")
         User_File/Application/RobotCmd/RobotCmd.cpp
         User_File/Application/Input/remote_input.cpp
         User_File/Application/Input/input_state.cpp
-        User_File/Application/Input/source_arbitration.cpp
-        User_File/Application/Chassis/Chassis.cpp
-        User_File/Application/Shoot/Shoot.cpp)
+        User_File/Application/Input/source_arbitration.cpp)
 elseif(H7_BOARD STREQUAL "GimbalBoard")
     target_sources(${CMAKE_PROJECT_NAME} PRIVATE
         User_Config/Board/gimbal_board_config.cpp
@@ -219,21 +217,27 @@ elseif(H7_BOARD STREQUAL "GimbalBoard")
         User_File/Application/RobotCmd/RobotCmd.cpp
         User_File/Application/Input/remote_input.cpp
         User_File/Application/Input/input_state.cpp
-        User_File/Application/Input/source_arbitration.cpp
-        User_File/Application/Shoot/Shoot.cpp)
+        User_File/Application/Input/source_arbitration.cpp)
 else()
     target_sources(${CMAKE_PROJECT_NAME} PRIVATE
         User_Config/Board/chassis_board_config.cpp
         User_Config/Board/board_tasks_chassis.c
         ${H7_CHASSIS_DEVICE_SOURCES}
         User_File/System/Transport/transport_chassis.cpp
-        User_File/Task/Control_Task_Chassis.cpp
-        User_File/Application/Chassis/Chassis.cpp)
+        User_File/Task/Control_Task_Chassis.cpp)
 endif()
 
 if(H7_APP_GIMBAL)
     target_sources(${CMAKE_PROJECT_NAME} PRIVATE
         User_File/Application/Gimbal/Gimbal.cpp)
+endif()
+if(H7_APP_CHASSIS)
+    target_sources(${CMAKE_PROJECT_NAME} PRIVATE
+        User_File/Application/Chassis/Chassis.cpp)
+endif()
+if(H7_APP_SHOOT)
+    target_sources(${CMAKE_PROJECT_NAME} PRIVATE
+        User_File/Application/Shoot/Shoot.cpp)
 endif()
 
 # Add include paths

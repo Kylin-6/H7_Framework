@@ -15,9 +15,10 @@
 | `void Shoot_Update(void)` | 在 RobotCmd_Update 后每 1 ms 调用，反馈每 10 ms 发布 |
 | `BoardConfig_Get().shoot_bus` | 提供硬件总线，机构参数不放入 BoardConfig |
 
-SingleBoard 在 `H7_APP_SHOOT=ON` 时启用设备路径，默认关闭；GimbalBoard 启用 Shoot，
-ChassisBoard 不编译本应用。`SHOOT=0` 时 Init 返回 true，不注册电机；Update 仍读取消息、
-清理 OFF 时的事件并发布默认反馈。当前任务忽略 Shoot_Init 的返回值，应用通过 initialized 跳过失败的硬件路径。
+CMake 仅在 `H7_APP_SHOOT=ON` 时加入 Shoot.cpp；SingleBoard 默认关闭，GimbalBoard 固定开启，
+ChassisBoard 固定关闭。关闭时任务不包含头文件、不调用初始化与更新，也不发布发射反馈；
+RobotCmd 拒绝射击事件。应用内部保留完整实现，不提供空入口或替代反馈文件。
+编入时任务仍忽略 Shoot_Init 的返回值，应用通过 initialized 跳过失败的硬件路径。
 
 依赖约定见 [Application 指南](../README.md)、[Message Center](../../System/MessageCenter/README.md)
 和 [DJI 驱动](../../Device/Peripheral/Motor/DJImotor/dji_motor.md)。
@@ -245,7 +246,6 @@ bool Shoot_Init(void)
     ctx.feedback = {};
     ctx.feedback_divider = 0U;
 
-#if SHOOT
     Struct_DJIMotor_Init_Config friction_config{};
     friction_config.hfdcan = BoardConfig_Get().shoot_bus;
     friction_config.motor_type = Enum_DJIMotor_Type::M3508;
@@ -286,9 +286,6 @@ bool Shoot_Init(void)
     ctx.event_angle_active = false;
     ctx.loader_angle_target_rad = 0.0f;
     return ctx.initialized;
-#else
-    return true;
-#endif
 }
 ```
 
@@ -318,7 +315,6 @@ void Shoot_Update(void)
         }
     }
 
-#if SHOOT
     if (ctx.initialized) // 初始化成功才访问设备并运行硬件控制路径。
     {
         ctx.friction_left_snapshot = ctx.friction_left.GetMotionSnapshot();
@@ -327,7 +323,6 @@ void Shoot_Update(void)
         Shoot_ApplyCommand();
         Shoot_UpdateFeedback();
     }
-#endif
 
     /* 控制按 1 kHz 更新，应用层反馈降频到 100 Hz。 */
     ctx.feedback_divider++;
@@ -374,7 +369,7 @@ RobotCmd_SetShoot(command);
 ShootEvent event;
 event.type = ShootEventType::ShootOnce;
 bool accepted = RobotCmd_PushShootEvent(event); // 在按钮边沿调用一次，不能每 1 ms 重复提交。
-if (!accepted) // FIFO 已满，本次请求未接受；由输入层决定提示或后续重试。
+if (!accepted) // Shoot 未编入、输入未获许可或 FIFO 已满；由输入层决定提示或后续重试。
 {
     // 在调用方记录请求失败；不要在控制周期阻塞等待队列腾出空间。
 }

@@ -7,13 +7,17 @@
  * 周期内不得等待 I/O；本任务不解析协议、不承担板间 CAN 传输。
  */
 
+#if CHASSIS
 #include "Chassis.h"
+#endif
 #if GIMBAL
 #include "Gimbal.h"
 #endif
 #include "RobotCmd.h"
 #include "remote_input.h"
+#if SHOOT
 #include "Shoot.h"
+#endif
 #include "Init.h"
 #include "message_center.h"
 #include "output.h"
@@ -35,7 +39,7 @@ extern "C" void Control_Task(void* argument)
     static LocalPublisher<GimbalCmd> gimbal_output(MessageCenter::Gimbal_Command_Topic);
     static LocalPublisher<ChassisCmd> chassis_output(MessageCenter::Chassis_Command_Topic);
     static LocalPublisher<ShootCmd> shoot_output(MessageCenter::Shoot_Command_Topic);
-    if (!RobotCmd_Init(gimbal_output.Bind(), chassis_output.Bind(), shoot_output.Bind()))
+    if (!RobotCmd_Init(gimbal_output.Bind(), chassis_output.Bind(), shoot_output.Bind(), SHOOT != 0))
     {
         for (;;) osDelay(1000U);
     }
@@ -43,8 +47,12 @@ extern "C" void Control_Task(void* argument)
 #if GIMBAL
     Gimbal_Init();
 #endif
+#if CHASSIS
     (void)Chassis_Init();
+#endif
+#if SHOOT
     (void)Shoot_Init();
+#endif
     // Balance_init();
 
     for (;;)
@@ -57,8 +65,12 @@ extern "C" void Control_Task(void* argument)
 #if GIMBAL
         Gimbal_Update();
 #endif
+#if CHASSIS
         Chassis_Update();
+#endif
+#if SHOOT
         Shoot_Update();
+#endif
         // Balance_loop();
     }
 }

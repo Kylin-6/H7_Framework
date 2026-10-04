@@ -27,6 +27,7 @@ static bool Gimbal_Command_Dirty;
 static bool Shoot_Command_Dirty;
 static bool Chassis_Command_Dirty;
 static bool Input_Armed;
+static bool Shoot_Available;
 static uint8_t RobotCmd_Chassis_Publish_Divider;
 static InputSource Last_Input_Source;
 static void RobotCmd_SetInputArmed(bool armed);
@@ -68,13 +69,15 @@ static bool ShootChanged(const ShootCmd& next)
 }
 
 /**
- * @brief 绑定三个输出句柄并装载启动默认命令。
+ * @brief 绑定三个输出句柄、记录发射应用可用性并装载启动默认命令。
+ * @param shoot_available 由任务根据构建选择传入；为 false 时拒绝射击事件。
  * @return 任一输出未绑定返回 false，且不修改已有绑定与缓存。
  * @note 输出绑定对象须保持静态生命周期；启动 LOCK 在首次仲裁失效时会被 DISABLED 覆盖。
  */
 bool RobotCmd_Init(Output<GimbalCmd> gimbal_output,
                    Output<ChassisCmd> chassis_output,
-                   Output<ShootCmd> shoot_output)
+                   Output<ShootCmd> shoot_output,
+                   bool shoot_available)
 {
     // 三个通道均需绑定，避免未绑定 Publish 静默丢弃命令。
     if (!gimbal_output.IsBound() || !chassis_output.IsBound() ||
@@ -97,6 +100,7 @@ bool RobotCmd_Init(Output<GimbalCmd> gimbal_output,
     Shoot_Command_Dirty = true;
     Chassis_Command_Dirty = false;
     Input_Armed = true;
+    Shoot_Available = shoot_available;
     RobotCmd_Chassis_Publish_Divider = 0U;
     Last_Input_Source = InputSource::Remote;
     return true;
@@ -213,12 +217,12 @@ void RobotCmd_SetShoot(const ShootCmd& command)
 
 /**
  * @brief 提交一次离散射击请求到容量 8 的 FIFO。
- * @return 输入许可关闭或队列已满返回 false；true 仅表示入队成功。
+ * @return Shoot 未编入、输入许可关闭或队列已满返回 false；true 仅表示入队成功。
  * @note 不检查 ShootMode、摩擦轮达速或设备 ready，不确认物理发射完成。
  */
 bool RobotCmd_PushShootEvent(const ShootEvent& event)
 {
-    return Input_Armed && MessageCenter::Shoot_Event_Queue.Push(event);
+    return Shoot_Available && Input_Armed && MessageCenter::Shoot_Event_Queue.Push(event);
 }
 
 /**

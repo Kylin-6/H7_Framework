@@ -17,12 +17,10 @@
 
 static constexpr uint64_t CHASSIS_COMMAND_MAX_AGE_US = 100000U;
 
-#if CHASSIS
 #include "dji_motor.h"
 #include "fdcan.h"
 
 #include <cmath>
-#endif
 
 namespace
 {
@@ -32,7 +30,6 @@ struct ChassisContext
     ChassisCmd command{};
     ChassisFeedback feedback{};
     uint8_t feedback_divider = 0U;
-#if CHASSIS
     Class_DJIMotor wheel_motor[4];
     Class_DJIMotor steer_motor[4];
     Struct_DJIMotor_Motion_Snapshot wheel_snapshot[4];
@@ -41,13 +38,10 @@ struct ChassisContext
     Class_DJIMotor_Group steer_group;
     bool initialized = false;
     int8_t wheel_direction[4] = {1, 1, 1, 1};
-#endif
 };
 
 ChassisContext ctx;
 } // namespace
-
-#if CHASSIS
 
 /**
  * @brief 将机构配置转换为 DJI 驱动 PID 参数，计算周期固定为 1 ms。
@@ -181,11 +175,10 @@ static void Chassis_UpdateFeedback(void)
     ctx.feedback.enabled = ctx.command.mode != ChassisMode::ZERO_FORCE && ready;
     ctx.feedback.online = online;
 }
-#endif
 
 /**
  * @brief 启动阶段注册八台电机，再绑定两个四电机发送组。
- * @return 硬件路径全部注册/绑定成功时为 true；CHASSIS=0 时仅清空应用状态并返回 true。
+ * @return 全部电机注册与发送组绑定成功时为 true。
  * @note 仅调用一次；成功后请求零输出，不执行机械寻零，不等待电机反馈。
  */
 bool Chassis_Init(void)
@@ -194,7 +187,6 @@ bool Chassis_Init(void)
     ctx.feedback = {};
     ctx.feedback_divider = 0U;
 
-#if CHASSIS
     Struct_DJIMotor_Init_Config wheel_config{};
     wheel_config.hfdcan = BoardConfig_Get().chassis_wheel_bus;
     wheel_config.motor_type = Enum_DJIMotor_Type::M3508;
@@ -234,9 +226,6 @@ bool Chassis_Init(void)
         (void) ctx.steer_group.RequestEnabled(false);
     }
     return initialized;
-#else
-    return true;
-#endif
 }
 
 /**
@@ -252,7 +241,6 @@ void Chassis_Update(void)
     (void) MessageCenter::Chassis_Command_Topic.ReadFresh(
         ctx.command, CHASSIS_COMMAND_MAX_AGE_US);
 
-#if CHASSIS
     if (ctx.initialized) // 初始化失败时不访问正常组控制流程，反馈仍按周期发布。
     {
         for (uint8_t index = 0U; index < 4U; ++index)
@@ -275,7 +263,6 @@ void Chassis_Update(void)
         }
         Chassis_UpdateFeedback();
     }
-#endif
 
     /* 电机控制按 1 kHz 执行，反馈消息按 100 Hz 发布。 */
     ctx.feedback_divider++;

@@ -134,7 +134,7 @@ if (!fresh) // 尚未发布、时间戳异常或消息超过门限，使用默�
 不使用虚函数或动态分配。`LocalPublisher<T>` 将其绑定到现有 Topic；远端绑定由
 Transport 的 `RemotePublisher` 提供。调用前必须检查 `IsBound()`：未绑定时
 `Publish()` 当前会直接返回，因此绝不能把它当作有效输出配置；`RobotCmd_Init()`
-会拒绝任一未绑定的三个输出。绑定对象必须比 Output 活得更久，当前任务使用静态发布器。
+会拒绝任一未绑定的三个输出；任务同时显式传入 Shoot 是否编入，控制事件是否可入队。绑定对象必须比 Output 活得更久，当前任务使用静态发布器。
 
 ### 3.4 Publisher / Subscriber
 
@@ -192,7 +192,7 @@ bool available = queue.Pop(event);
 - 总开关 OFF 时有界排空当时已经排队的事件，避免重新使能后延迟射击。
 - RobotCmd 失去输入许可或在许可成立时切换来源，会清除旧射击事件。
 
-RobotCmd 的事件接口在输入未获许可或队列满时返回 false，且不检查摩擦轮达速、
+RobotCmd 的事件接口在 Shoot 未编入、输入未获许可或队列满时返回 false，且不检查摩擦轮达速、
 Shoot 总开关或设备 ready。Push 成功和 Pop 成功只表示软件请求的入队与取出，
 角度目标累加也不证明弹丸已发射；事件本身不携带超时时戳。
 
@@ -229,7 +229,8 @@ Gimbal_Update（Control_Task，1 kHz）
 ```
 
 中间没有消息队列、额外任务或阻塞等待。Topic 只在数据复制与元数据更新时关闭中断。
-关闭云台 App 时，INS_State_Topic 仍独立发布；Gimbal_Feedback_Topic 无发布者，RobotCmd_GetGimbalFeedback 返回 false，保持调用者对象不变。
+关闭本地 Gimbal、Chassis 或 Shoot App 时，对应反馈 Topic 无本地发布者；没有远端发布者时，RobotCmd 的对应反馈 getter 返回 false，保持调用者对象不变。
+INS_State_Topic 仍独立发布；GimbalBoard 的 Chassis_Feedback_Topic 仍由 Transport 接收远端反馈后发布。
 
 ### 6.2 RobotCmd 与 Application
 
