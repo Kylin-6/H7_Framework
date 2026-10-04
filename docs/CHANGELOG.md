@@ -10,6 +10,7 @@
 
 ### 设备安全职责与 App 流程
 
+- 云台启用改为构建期源码选择：关闭时不编译、不调度、不发布云台反馈；INS 独立发布。Gimbal 与两套单轴例程内部移除功能条件编译，仅在单板任务边界保留 `#if GIMBAL`，不新增替代反馈文件或空实现。
 - 保留 Daemon + Device + App 分层：Daemon 只判断反馈活性和状态跃迁；DJI、DM 驱动自行保护离线输出，StatusTask 在 CheckAll 后调用设备 ServiceAll，不依赖 App 持续调用控制接口。
 - DJI 独立清零未就绪成员的输出与积分并覆盖共享周期帧，保留其他成员槽位。DM 离线回调登记安全动作，由设备服务覆盖协议安全目标、提交 Disable 并补交失败项；不自动 ClearError。
 - Gimbal 移除生产实现的 PrepareControl 设备准入流程，按初始化、功能模式和 INS 有效性表达许可。UpdateTarget 合并未就绪、首次就绪／恢复及进入 LOCK 的捕获条件；保留未就绪每周期捕获，以及恢复后 IMU 等待新序号目标的行为。
@@ -19,6 +20,7 @@
 
 ### 验证
 
+- 云台源码选择改动后，单板云台 OFF、单板云台 ON（独立构建目录）、GimbalBoard、ChassisBoard 均构建通过；编译清单与符号检查确认关闭时排除云台，开启分支源码与此前一致。两套单轴文档例程编译检查通过。
 - 生产代码改动后 SingleBoard、GimbalBoard、ChassisBoard 配置与构建通过，逐路径核对捕获、目标和事件流程；文档示例与生产函数一致，git diff --check 通过。云台板仍有既有 PID typedef 编译警告。
 - 未完成实机 CAN 断线、协议失能、姿态恢复和电机闭环验证；构建通过不代表设备已经执行安全输出。
 

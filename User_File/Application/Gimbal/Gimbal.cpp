@@ -1,9 +1,7 @@
 #include "Gimbal.h"
 #include "message_center.h"
-#if GIMBAL
 #include "alg_pid.h"
 #include "dmmotor.h"
-#endif
 #include <cmath>
 
 namespace
@@ -14,7 +12,6 @@ struct GimbalContext
     INS_State ins{};
     bool ins_valid = false;
     uint8_t feedback_divider = 0U;
-#if GIMBAL
     Struct_Gimbal_Config config{};
     Class_DMMotor yaw_motor;
     Class_DMMotor pitch_motor;
@@ -33,14 +30,12 @@ struct GimbalContext
     bool yaw_registered = false;
     bool pitch_registered = false;
     uint32_t target_sequence = 0U;
-#endif
 };
 
 GimbalContext ctx;
 
 } // namespace
 
-#if GIMBAL
 namespace
 {
 constexpr float GIMBAL_PI = 3.14159265358979323846f;
@@ -248,12 +243,10 @@ Enum_Gimbal_Status Gimbal_GetStatus(void)
                ? Gimbal_Status_READY
                : Gimbal_Status_ENABLING;
 }
-#endif
 
 /**
  * @brief 每调用十次发布一次云台反馈；1 kHz 更新入口下对应 100 Hz。
  * @note 姿态来自 INS，INS 无效时姿态/速度为零；enabled 表示功能获许可且两轴 ready。
- *       关闭硬件路径时仍发布 INS 反馈，enabled 保持 false。
  */
 static void PublishFeedback(void)
 {
@@ -265,18 +258,11 @@ static void PublishFeedback(void)
         {
             feedback.yaw_rad = ctx.ins.yaw_rad;
             feedback.pitch_rad = ctx.ins.pitch_rad;
-#if GIMBAL
             feedback.yaw_speed_rad_s = Gyro(ctx.config.yaw_gyro_axis, ctx.config.yaw_gyro_sign);
             feedback.pitch_speed_rad_s = Gyro(ctx.config.pitch_gyro_axis, ctx.config.pitch_gyro_sign);
-#else
-            feedback.yaw_speed_rad_s = ctx.ins.gyro_z_rad_s;
-            feedback.pitch_speed_rad_s = ctx.ins.gyro_y_rad_s;
-#endif
         }
         feedback.ins_valid = ctx.ins_valid;
-#if GIMBAL
         feedback.enabled = ctx.was_ready;
-#endif
         MessageCenter::Gimbal_Feedback_Topic.Publish(feedback);
     }
 }
@@ -285,12 +271,11 @@ static void PublishFeedback(void)
  * @brief ControlTask 的 1 kHz 周期入口：读取快照、处理许可/恢复、更新目标和输出。
  * @note 在 RobotCmd_Update 之后调用；禁用或 INS 无效时请求功能停机，
  *       设备故障和掉线输出由驱动保护，各路径均维护反馈分频。
- *       GIMBAL=0 时仅更新 INS 反馈；本入口不阻塞、不解析 CAN、不仲裁命令来源。
+ *       本入口不阻塞、不解析 CAN、不仲裁命令来源。
  */
 void Gimbal_Update(void)
 {
     ctx.ins_valid = MessageCenter::INS_State_Topic.ReadFresh(ctx.ins, GIMBAL_INS_MAX_AGE_US);
-#if GIMBAL
     const auto message = MessageCenter::Gimbal_Command_Topic.ReadWithMeta();
     ctx.command = message.valid ? message.data : GimbalCmd{};
     ctx.yaw_snapshot = ctx.yaw_motor.GetFeedbackSnapshot();
@@ -308,6 +293,5 @@ void Gimbal_Update(void)
         ctx.was_ready = false;
         ctx.last_mode = GimbalMode::DISABLED;
     }
-#endif
     PublishFeedback();
 }

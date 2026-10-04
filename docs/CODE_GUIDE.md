@@ -16,7 +16,7 @@
 | [heap_regions_patched.c](../User_Config/FreeRTOS_Patch/heap_regions_patched.c) | heap_5 的 DTCM 与 D1 两个区域，地址递增排列并以空项终止 |
 | [H7_BSP.ioc](../H7_BSP.ioc)、[Core](../Core) | 外设、DMA、IRQ 与 HAL 初始化；生成文件只在 USER CODE 区集成用户逻辑 |
 
-SingleBoard 的三个硬件控制开关默认关闭；GimbalBoard/ChassisBoard 在配置期固定所属应用开关。
+SingleBoard 的三个应用开关默认关闭；关闭云台时排除其源码与任务调用，也不发布云台反馈。GimbalBoard/ChassisBoard 在配置期固定所属应用开关。
 Debug/Release 默认使用 SingleBoard，但已有 CMake 缓存可以改变 `H7_BOARD`，应核对缓存。
 烧录选择当前 preset 目录的 ELF；操作入口见 [根 README](../README.md#烧录与观察)。
 `Drivers`、`Middlewares`、`SystemView` 和 `USB_DEVICE` 是依赖或生成集成层，不应为了补项目注释改写上游实现。

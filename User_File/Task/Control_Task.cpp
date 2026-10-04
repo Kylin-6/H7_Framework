@@ -8,7 +8,9 @@
  */
 
 #include "Chassis.h"
+#if GIMBAL
 #include "Gimbal.h"
+#endif
 #include "RobotCmd.h"
 #include "remote_input.h"
 #include "Shoot.h"
@@ -52,7 +54,9 @@ extern "C" void Control_Task(void* argument)
         RemoteInput_Update();
         /* 命令所有者先发布最新目标，再由各 Application 消费并执行。 */
         RobotCmd_Update();
+#if GIMBAL
         Gimbal_Update();
+#endif
         Chassis_Update();
         Shoot_Update();
         // Balance_loop();

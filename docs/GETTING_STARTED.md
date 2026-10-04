@@ -10,7 +10,7 @@
 [打开交互版](../Assets/Architecture/H7_RM_GettingStarted.html)，按「机器人控制 / 姿态 / 在线监控」切换关注范围。
 图中两处 Gimbal 是同一个云台应用，分别展示命令输入和姿态输入。
 
-实线展示现有接口调用链，不代表默认构建已驱动电机：SingleBoard 的 Gimbal、Chassis、Shoot 硬件开关默认均为 OFF。
+实线展示现有接口调用链，不代表默认构建已驱动电机：SingleBoard 的 Gimbal、Chassis、Shoot 开关默认均为 OFF；云台 App 不编入，其余两者关闭硬件路径。
 Remote 已接 UART5 S.BUS，当前只映射底盘；云台/发射通道尚未接入。
 Vision / VTM 虚线表示待接入 Input 的适配器。Referee / VTM 的设备解析与 Daemon 入口需要显式 Init，默认不绑定 UART；BoardTransport 用于双板。
 
@@ -52,7 +52,7 @@ S.BUS（UART5，Device 解析完整帧）
 沿着 [remote_input.cpp](../User_File/Application/Input/remote_input.cpp) 与 RobotCmd 阅读即可。
 InputState 是固定输入状态，命令 Topic 是跨模块通道，两者职责不同。
 ControlTask 以 1 kHz 调度，但 RobotCmd 的底盘命令每 10 ms 刷新；调度频率不等于消息发布频率。
-设备反馈反向回到 Application，机构再发布 Feedback Topic 给 RobotCmd。
+设备反馈反向回到 Application，机构再发布 Feedback Topic 给 RobotCmd。关闭云台时没有云台反馈发布；需要姿态的模块读取独立 INS Topic。
 双板时底盘命令经过固定 Transport，进入底盘板本地 Topic，见 [Transport](../User_File/System/Transport/README.md)。
 
 ## 5. 姿态是怎么走的

@@ -167,6 +167,19 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Middleware/Algorithm/CRC/crc16.c
 )
 
+option(H7_APP_GIMBAL "Build the Gimbal application" OFF)
+option(H7_APP_CHASSIS "Build the Chassis hardware-control path" OFF)
+option(H7_APP_SHOOT "Build the Shoot hardware-control path" OFF)
+if(H7_BOARD STREQUAL "GimbalBoard")
+    set(H7_APP_GIMBAL ON)
+    set(H7_APP_CHASSIS OFF)
+    set(H7_APP_SHOOT ON)
+elseif(H7_BOARD STREQUAL "ChassisBoard")
+    set(H7_APP_GIMBAL OFF)
+    set(H7_APP_CHASSIS ON)
+    set(H7_APP_SHOOT OFF)
+endif()
+
 set(H7_GIMBAL_TASK_DEVICE_SOURCES
     User_File/Task/TransportTask.cpp
     User_File/Task/TIM_1ms_Task.cpp
@@ -194,7 +207,6 @@ if(H7_BOARD STREQUAL "SingleBoard")
         User_File/Application/Input/remote_input.cpp
         User_File/Application/Input/input_state.cpp
         User_File/Application/Input/source_arbitration.cpp
-        User_File/Application/Gimbal/Gimbal.cpp
         User_File/Application/Chassis/Chassis.cpp
         User_File/Application/Shoot/Shoot.cpp)
 elseif(H7_BOARD STREQUAL "GimbalBoard")
@@ -208,7 +220,6 @@ elseif(H7_BOARD STREQUAL "GimbalBoard")
         User_File/Application/Input/remote_input.cpp
         User_File/Application/Input/input_state.cpp
         User_File/Application/Input/source_arbitration.cpp
-        User_File/Application/Gimbal/Gimbal.cpp
         User_File/Application/Shoot/Shoot.cpp)
 else()
     target_sources(${CMAKE_PROJECT_NAME} PRIVATE
@@ -218,6 +229,11 @@ else()
         User_File/System/Transport/transport_chassis.cpp
         User_File/Task/Control_Task_Chassis.cpp
         User_File/Application/Chassis/Chassis.cpp)
+endif()
+
+if(H7_APP_GIMBAL)
+    target_sources(${CMAKE_PROJECT_NAME} PRIVATE
+        User_File/Application/Gimbal/Gimbal.cpp)
 endif()
 
 # Add include paths
@@ -282,19 +298,6 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
         User_File/Application/Input/
         User_File/Application/Balance/
 )
-
-option(H7_APP_GIMBAL "Build the Gimbal hardware-control path" OFF)
-option(H7_APP_CHASSIS "Build the Chassis hardware-control path" OFF)
-option(H7_APP_SHOOT "Build the Shoot hardware-control path" OFF)
-if(H7_BOARD STREQUAL "GimbalBoard")
-    set(H7_APP_GIMBAL ON)
-    set(H7_APP_CHASSIS OFF)
-    set(H7_APP_SHOOT ON)
-elseif(H7_BOARD STREQUAL "ChassisBoard")
-    set(H7_APP_GIMBAL OFF)
-    set(H7_APP_CHASSIS ON)
-    set(H7_APP_SHOOT OFF)
-endif()
 
 # Add project symbols (macros)
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE

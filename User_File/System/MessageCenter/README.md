@@ -229,6 +229,7 @@ Gimbal_Update（Control_Task，1 kHz）
 ```
 
 中间没有消息队列、额外任务或阻塞等待。Topic 只在数据复制与元数据更新时关闭中断。
+关闭云台 App 时，INS_State_Topic 仍独立发布；Gimbal_Feedback_Topic 无发布者，RobotCmd_GetGimbalFeedback 返回 false，保持调用者对象不变。
 
 ### 6.2 RobotCmd 与 Application
 

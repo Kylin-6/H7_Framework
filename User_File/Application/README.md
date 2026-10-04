@@ -53,7 +53,8 @@ Chassis 与 Shoot 的机械参数和 PID 初值分别放在 `Chassis_Config.h`�
 `Input` 保存 Remote 输入适配、输入状态和来源仲裁；设备协议仍由 Device/BSP 处理。
 接口、通道映射与来源接入例程见 [Input 开发指南](Input/README.md)。
 
-单板固件的硬件路径由 `H7_APP_GIMBAL`、`H7_APP_CHASSIS`、`H7_APP_SHOOT` 控制，默认均关闭；
+单板固件的云台 App 及底盘/发射硬件路径由 `H7_APP_GIMBAL`、`H7_APP_CHASSIS`、`H7_APP_SHOOT` 控制，默认均关闭；
+关闭云台时，CMake 排除其源码，任务不调用云台入口，云台反馈无发布者；INS 独立发布，反馈 getter 返回 false。
 双板固件由 CMake 在构建期分别选择应用和任务源码。板内命令通过 `LocalPublisher` 进入
 Message Center，云台板的底盘命令通过 `RemotePublisher` 进入固定 CAN Transport。
 
@@ -63,7 +64,7 @@ Message Center，云台板的底盘命令通过 `RemotePublisher` 进入固定 C
 
 ```text
 SingleBoard: RobotCmd_Init → RemoteInput_Init → Gimbal_Init(启用时) → Chassis_Init → Shoot_Init
-             RemoteInput_Update → RobotCmd_Update → Gimbal_Update → Chassis_Update → Shoot_Update
+             RemoteInput_Update → RobotCmd_Update → Gimbal_Update(启用时) → Chassis_Update → Shoot_Update
 GimbalBoard: BoardTransport_Init → RobotCmd_Init → RemoteInput_Init → Gimbal_Init → Shoot_Init
              BoardTransport_Poll → RemoteInput_Update → RobotCmd_Update → Gimbal_Update → Shoot_Update
 ChassisBoard: BoardTransport_Init → Chassis_Init

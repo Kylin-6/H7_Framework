@@ -2,7 +2,7 @@
 
 云台由统一 ControlTask 以 1 kHz 调度，两轴均使用现有 `Class_DMMotor` 和 MIT 模式。
 SingleBoard 默认
-`H7_APP_GIMBAL=OFF`；GimbalBoard 构建固定启用云台硬件路径。
+`H7_APP_GIMBAL=OFF`，不编译云台 App；GimbalBoard 构建固定启用云台。
 
 ## 移植时先看哪些文件
 
@@ -27,11 +27,12 @@ SingleBoard 默认
 | --- | --- | --- |
 | `bool Gimbal_Init(const Struct_Gimbal_Config& config)` | 所选 ControlTask 启动阶段，只调用一次；省略参数时使用 `Gimbal_Default_Config()` | 校验并复制配置、注册本模块拥有的设备、初始化控制器；成功返回 true，失败返回 false |
 | `void Gimbal_Update()` | 同一个 ControlTask 每 1 ms 调用一次，在 `RobotCmd_Update()` 之后 | 读取输入快照、判断运行许可、处理目标、计算并提交设备输出、按分频发布反馈 |
-| `Enum_Gimbal_Status Gimbal_GetStatus()` | 同任务上下文按需读取，仅在 `GIMBAL=1` 时存在 | 提供只读状态；读取本身不执行控制、重试或恢复 |
+| `Enum_Gimbal_Status Gimbal_GetStatus()` | 云台编入时，由同任务上下文按需读取 | 提供只读状态；读取本身不执行控制、重试或恢复 |
 
-`Gimbal_Update()` 在 `GIMBAL=0` 时仍存在：读取 INS 并以 100 Hz 发布姿态反馈，
-不创建电机控制路径。`Gimbal_Init()` 和状态枚举只在 `GIMBAL=1` 时编译。
-因此新实现也应保留关闭硬件路径时可编译的更新入口。
+CMake 仅在 `H7_APP_GIMBAL=ON` 时加入 `Gimbal.cpp`，文件内部只保留完整实现。
+关闭云台时，任务不包含云台头文件、不调用初始化与更新，也不发布 `GimbalFeedback`；
+不提供替代文件或空入口。公开头文件保留一致的声明，调用方由构建边界确保实现存在。
+INS 仍独立发布 `INS_State_Topic`；`RobotCmd_GetGimbalFeedback()` 在无发布时返回 false，保持输出对象不变。
 
 现有两份 ControlTask 都调用了初始化，但没有处理其返回值；当前应用通过内部
 `initialized` 阻止初始化失败后的正常控制。移植时若需要启动故障记录，可在已有
@@ -40,7 +41,7 @@ SingleBoard 默认
 ### 框架已经安排好的调用顺序
 
 SingleBoard 每周期执行 `RemoteInput_Update()` → `RobotCmd_Update()` →
-`Gimbal_Update()` → `Chassis_Update()` → `Shoot_Update()`。
+`Gimbal_Update()`（启用时）→ `Chassis_Update()` → `Shoot_Update()`。
 GimbalBoard 先执行 `BoardTransport_Poll()`，再更新输入、RobotCmd、云台和发射。
 ChassisBoard 不编译云台 Application。
 
@@ -168,7 +169,7 @@ const bool ins_valid = MessageCenter::INS_State_Topic.ReadFresh(ins, 10000U);
 ### 只移植现有实现
 
 1. 选择 SingleBoard 或 GimbalBoard，核对 BoardConfig 的总线接线。SingleBoard 需要
-   `H7_APP_GIMBAL=ON` 才编译硬件控制路径；GimbalBoard 固定启用。
+   `H7_APP_GIMBAL=ON` 才编译云台 App；GimbalBoard 固定启用。
 2. 在 `Gimbal_Config.h` 填入电机端实际 ID、Master ID、协议量程、方向和机构限位。
    总线资源归 BoardConfig，机构参数归云台配置。角度和速度进入控制前统一为 rad、rad/s。
 3. 核对 IMU 安装方向和电机反馈方向，区分 INS 姿态与编码器位置。修改减速比或安装轴时，
@@ -220,7 +221,7 @@ const bool gimbal_initialized = Gimbal_Init(config);
 以下十一段取自当前 [Gimbal.cpp](Gimbal.cpp)，与上表逐项对应。它们使用同一个私有
 `ctx`，需要文件已有的头文件、常量、`Clamp()` 和公开初始化代码；不是十个独立程序。
 在原文件中替换对应实现即可，不要在另一个文件重复创建电机对象或重复定义函数。
-除反馈与更新入口外，电机相关实现处于 `#if GIMBAL` 内；Context 同样保留条件编译。
+云台源码和 Context 不使用功能条件编译；`#if GIMBAL` 仅保留在单板任务的 include、初始化与更新调用边界。
 
 <details>
 <summary>GimbalContext：私有状态与设备所有权</summary>
@@ -235,7 +236,6 @@ struct GimbalContext
     INS_State ins{}; // 本周期 INS 快照；读取失败时变量可能保留旧值，因此使用前必须检查 ins_valid。
     bool ins_valid = false; // 表达传感器数据的新鲜度，不等于电机就绪或整车允许运动。
     uint8_t feedback_divider = 0U; // 按更新次数分频；1 kHz 下十次为 10 ms，任务周期改变时必须同步分频。
-#if GIMBAL
     Struct_Gimbal_Config config{}; // 持有参数副本；总线归 BoardConfig，机构增益与限幅归 Application。
     Class_DMMotor yaw_motor; // 电机必须保持静态生命周期，注册的 CAN 回调和驱动维护列表会持续访问它。
     Class_DMMotor pitch_motor;
@@ -254,7 +254,6 @@ struct GimbalContext
     bool yaw_registered = false;
     bool pitch_registered = false;
     uint32_t target_sequence = 0U; // 区分新发布与旧目标；数值相同也可以是新命令，判断依据是 Topic 序号。
-#endif
 };
 
 GimbalContext ctx;
@@ -452,23 +451,16 @@ static void PublishFeedback(void)
     if (++ctx.feedback_divider >= 10U)
     {
         ctx.feedback_divider = 0;
-        GimbalFeedback feedback{}; // 未填字段保持零，包括本单轴例程不控制的 Pitch；无效 INS 不能冒充零姿态。
+        GimbalFeedback feedback{}; // INS 无效时姿态和速度保持零，并通过 ins_valid 标记。
         if (ctx.ins_valid)
         {
             feedback.yaw_rad = ctx.ins.yaw_rad; // 反馈 INS Yaw 姿态，不是电机编码器角度。
             feedback.pitch_rad = ctx.ins.pitch_rad; // 反馈 INS Pitch 姿态，单位 rad。
-#if GIMBAL
             feedback.yaw_speed_rad_s = Gyro(ctx.config.yaw_gyro_axis, ctx.config.yaw_gyro_sign);
             feedback.pitch_speed_rad_s = Gyro(ctx.config.pitch_gyro_axis, ctx.config.pitch_gyro_sign);
-#else
-            feedback.yaw_speed_rad_s = ctx.ins.gyro_z_rad_s;
-            feedback.pitch_speed_rad_s = ctx.ins.gyro_y_rad_s;
-#endif
         }
         feedback.ins_valid = ctx.ins_valid;
-#if GIMBAL
         feedback.enabled = ctx.was_ready; // 本周期功能获许可且两轴快照均 ready，不表示 CAN 已发送。
-#endif
         MessageCenter::Gimbal_Feedback_Topic.Publish(feedback); // Latest-Value 通道只保留最新反馈，不能用于需要逐条保留的事件。
     }
 }
@@ -485,7 +477,6 @@ static void PublishFeedback(void)
 void Gimbal_Update(void)
 {
     ctx.ins_valid = MessageCenter::INS_State_Topic.ReadFresh(ctx.ins, GIMBAL_INS_MAX_AGE_US);
-#if GIMBAL
     const auto message = MessageCenter::Gimbal_Command_Topic.ReadWithMeta();
     ctx.command = message.valid ? message.data : GimbalCmd{};
     ctx.yaw_snapshot = ctx.yaw_motor.GetFeedbackSnapshot();
@@ -503,7 +494,6 @@ void Gimbal_Update(void)
         ctx.was_ready = false;
         ctx.last_mode = GimbalMode::DISABLED;
     }
-#endif
     PublishFeedback();
 }
 ```
@@ -512,10 +502,10 @@ void Gimbal_Update(void)
 
 ### 完整最简例程：单轴 INS 位置环 → 达妙速度模式
 
-下面给出独立的单轴移植例程，按函数分段展示；示例保留自己的就绪等待策略，当前双轴云台使用前述模式许可与目标更新流程。
+下面给出独立的单轴移植例程，按函数分段展示；示例沿用前述功能许可与目标更新流程，ready 只决定姿态捕获与恢复时机。
 依次排列这些代码段即可组成完整的 `Gimbal.cpp`，无需修改或拼接前面的双轴例程。
 它沿用当前 `Gimbal.h`、`Gimbal_Config.h` 与三条 Topic，由现有 ControlTask 调用。
-本节只提供例程，仓库的双轴生产实现保持原样。
+本节只提供例程，仓库的双轴生产实现保持原样。例程仅在云台 App 启用时编入，内部不再使用功能条件编译。
 例程使用明确的变量类型和展开的 `if/else`；`::` 是作用域限定，`.` 调用对象接口，
 初始化参数中的 `&` 表示引用，这些写法来自项目现有接口。
 
@@ -539,17 +529,14 @@ LOCK 捕获姿态，IMU 在首次就绪或恢复后需新发布序号的目标�
 #include "Gimbal.h"
 #include "message_center.h"
 #include <cmath>
-#if GIMBAL
 #include "alg_pid.h"
 #include "dmmotor.h"
-#endif
 namespace
 {
 const float kTwoPi = 6.28318530718f; // 一个完整旋转，单位 rad。
 INS_State ins; // 本周期 INS 快照；读取失败时变量可能保留旧值，因此使用前必须检查 ins_valid。
 bool ins_valid = false; // 表达传感器数据的新鲜度，不等于电机就绪或整车允许运动。
 uint8_t feedback_divider = 0U; // 按更新次数分频；1 kHz 下十次为 10 ms，任务周期改变时必须同步分频。
-#if GIMBAL
 Struct_Gimbal_Config config; // 持有参数副本；总线归 BoardConfig，机构增益与限幅归 Application。
 Class_DMMotor yaw_motor; // 电机必须保持静态生命周期，注册的 CAN 回调和驱动维护列表会持续访问它。
 Class_PID position_pid; // 输入角误差 rad，输出电机速度 rad/s；电机内部承担速度闭环。
@@ -630,7 +617,6 @@ void UpdateTarget(const TopicSnapshot<GimbalCmd>& message)
 <summary>5. Control()：INS 位置环与电机输出</summary>
 
 功能获许可且目标更新后调用，计算本周期的位置环并提交电机目标；未就绪输出由驱动安全化。
-末尾结束第一段开始的硬件条件编译。
 
 ```cpp
 void Control()
@@ -642,7 +628,6 @@ void Control()
     float speed_rad_s = position_pid.Get_Out();
     yaw_motor.SetSpeed(speed_rad_s); // Get_Out 已按 yaw_speed_limit 限幅，输出 rad/s；未 ready 时驱动替换为安全目标，返回值只表示软件提交。
 }
-#endif
 ```
 
 </details>
@@ -666,15 +651,9 @@ void PublishFeedback()
     if (ins_valid) // 只将有效 INS 姿态填入反馈，失效时保持零值并显式标记无效。
     {
         feedback.yaw_rad = ins.yaw_rad; // 单轴反馈 INS Yaw，单位 rad。
-#if GIMBAL
         feedback.yaw_speed_rad_s = config.yaw_gyro_sign * ins.gyro_z_rad_s; // 本例固定 Z 轴，速度单位 rad/s。
-#else
-        feedback.yaw_speed_rad_s = ins.gyro_z_rad_s;
-#endif
     }
-#if GIMBAL
     feedback.enabled = was_ready; // 本周期功能获许可且 Yaw ready，采用单轴语义。
-#endif
     MessageCenter::Gimbal_Feedback_Topic.Publish(feedback); // Latest-Value 通道只保留最新反馈，不能用于需要逐条保留的事件。
 }
 } // namespace
@@ -689,10 +668,9 @@ void PublishFeedback()
 
 增益必须有限且非负，速度上限必须有限且为正，否则 NaN 或异常限幅可能进入输出。
 本例固定 Z 轴，其他安装姿态会被拒绝，不能只修改配置就假定坐标变换已经完成。
-驱动注册成功并不表示反馈在线或电机使能；正常输出还需等待更新入口确认 ready。
+驱动注册成功并不表示反馈在线或电机使能；驱动依据 ready 保护控制输出，更新入口不等待设备就绪。
 
 ```cpp
-#if GIMBAL
 bool Gimbal_Init(const Struct_Gimbal_Config& requested)
 {
     config = requested; // 复制参数，调用者的局部配置可以在初始化后销毁；总线指向的 HAL 对象仍须长期有效。
@@ -743,7 +721,7 @@ bool Gimbal_Init(const Struct_Gimbal_Config& requested)
 <details>
 <summary>8. Gimbal_GetStatus()：读取单轴状态</summary>
 
-从最近更新的快照推导状态，不执行控制。末尾结束公开硬件接口的条件编译。
+从最近更新的快照推导状态，不执行控制。
 
 状态优先级是初始化错误、禁用、输入/设备故障、就绪判断。读取不会刷新 Topic 或电机，
 也不能替代周期入口；跨任务观察优先读取反馈 Topic。READY 只表明设备就绪，
@@ -777,7 +755,6 @@ Enum_Gimbal_Status Gimbal_GetStatus(void)
         return Gimbal_Status_ENABLING;
     }
 }
-#endif
 ```
 
 </details>
@@ -791,7 +768,6 @@ Enum_Gimbal_Status Gimbal_GetStatus(void)
 void Gimbal_Update(void)
 {
     ins_valid = MessageCenter::INS_State_Topic.ReadFresh(ins, 10000U); // INS 新鲜度门限为 10 ms。
-#if GIMBAL
     const TopicSnapshot<GimbalCmd> message = MessageCenter::Gimbal_Command_Topic.ReadWithMeta();
     command = message.valid ? message.data : GimbalCmd{}; // 无有效发布时采用默认 DISABLED。
     snapshot = yaw_motor.GetFeedbackSnapshot(); // 本周期只读一次，许可变化最迟在下一周期反映为 ready。
@@ -810,7 +786,6 @@ void Gimbal_Update(void)
         was_ready = false;
         last_mode = GimbalMode::DISABLED;
     }
-#endif
     PublishFeedback(); // 所有路径共用一次反馈分频。
 }
 ```
@@ -836,7 +811,7 @@ include 路径，避免把云台设备引入 ChassisBoard。原路径与入口�
 ### GM6020 最简位置例程：INS 位置环 + 驱动速度环
 
 本例将上面的单轴 Yaw 达妙方案改成 GM6020，按函数提供完整代码。各段依次组合可构成
-独立的 `Gimbal.cpp`；不要与前面的达妙例程同时编译，也不会修改仓库生产代码。
+独立的 `Gimbal.cpp`；仅在云台 App 启用时编入，不与前面的达妙例程同时编译，也不会修改仓库生产代码。
 
 控制链是 `INS Yaw 角误差 → Application 位置 PID → rad/s 速度目标 → DJI 驱动速度 PID → GM6020 电压协议指令`。
 GM6020 没有达妙 SPEED 模式；位置环输出的速度不能直接当作 GM6020 电压或电流指令。
@@ -863,17 +838,14 @@ GM6020 速度反馈使用编码器输出轴 rad/s，INS 姿态与电机方向必
 #include "Gimbal.h"
 #include "message_center.h"
 #include <cmath>
-#if GIMBAL
 #include "alg_pid.h"
 #include "dji_motor.h"
-#endif
 namespace
 {
 const float kTwoPi = 6.28318530718f; // 一个完整旋转，单位 rad。
 INS_State ins; // 本周期 INS 快照；读取失败时变量可能保留旧值，因此使用前必须检查 ins_valid。
 bool ins_valid = false; // 表达传感器数据的新鲜度，不等于电机就绪或整车允许运动。
 uint8_t feedback_divider = 0U; // 按更新次数分频；1 kHz 下十次为 10 ms，任务周期改变时必须同步分频。
-#if GIMBAL
 Struct_Gimbal_Config config; // 持有参数副本；总线归 BoardConfig，机构增益与限幅归 Application。
 Class_DJIMotor yaw_motor; // 静态生命周期覆盖 CAN 回调的使用期。
 Class_DJIMotor_Group yaw_group; // 单电机也需要组接口统一计算并提交物理报文。
@@ -960,7 +932,6 @@ void UpdateTarget(const TopicSnapshot<GimbalCmd>& message)
 <summary>5. Control()：INS 位置环与电机输出（GM6020）</summary>
 
 功能获许可且目标更新后调用，计算本周期的位置环并提交电机目标；未就绪输出由驱动安全化。
-末尾结束第一段开始的硬件条件编译。
 
 ```cpp
 void Control()
@@ -972,7 +943,6 @@ void Control()
     float speed_rad_s = position_pid.Get_Out();
     yaw_group.Control(speed_rad_s); // Get_Out 已按 yaw_speed_limit 限幅，输出 rad/s；返回值只表示软件提交，本例明确提交组报文，不能省略组发送。
 }
-#endif
 ```
 
 </details>
@@ -996,15 +966,9 @@ void PublishFeedback()
     if (ins_valid) // 只将有效 INS 姿态填入反馈，失效时保持零值并显式标记无效。
     {
         feedback.yaw_rad = ins.yaw_rad; // 单轴反馈 INS Yaw，单位 rad。
-#if GIMBAL
         feedback.yaw_speed_rad_s = config.yaw_gyro_sign * ins.gyro_z_rad_s; // 本例固定 Z 轴，速度单位 rad/s。
-#else
-        feedback.yaw_speed_rad_s = ins.gyro_z_rad_s;
-#endif
     }
-#if GIMBAL
     feedback.enabled = was_ready; // 本周期功能获许可且 Yaw ready，采用单轴语义。
-#endif
     MessageCenter::Gimbal_Feedback_Topic.Publish(feedback); // Latest-Value 通道只保留最新反馈，不能用于需要逐条保留的事件。
 }
 } // namespace
@@ -1018,7 +982,6 @@ void PublishFeedback()
 先注册 GM6020，再注册单电机组；位置环属于 App，速度环由 DJI 配置启用。
 
 ```cpp
-#if GIMBAL
 bool Gimbal_Init(const Struct_Gimbal_Config& requested)
 {
     config = requested; // 复制参数，调用者的局部配置可以在初始化后销毁；总线指向的 HAL 对象仍须长期有效。
@@ -1117,7 +1080,6 @@ Enum_Gimbal_Status Gimbal_GetStatus(void)
         return Gimbal_Status_ENABLING;
     }
 }
-#endif
 ```
 
 </details>
@@ -1131,7 +1093,6 @@ Enum_Gimbal_Status Gimbal_GetStatus(void)
 void Gimbal_Update(void)
 {
     ins_valid = MessageCenter::INS_State_Topic.ReadFresh(ins, 10000U); // INS 新鲜度门限为 10 ms。
-#if GIMBAL
     const TopicSnapshot<GimbalCmd> message = MessageCenter::Gimbal_Command_Topic.ReadWithMeta();
     command = message.valid ? message.data : GimbalCmd{}; // 无有效发布时采用默认 DISABLED。
     snapshot = yaw_motor.GetMotionSnapshot(); // 本周期只读一次，许可变化最迟在下一周期反映为 ready。
@@ -1150,7 +1111,6 @@ void Gimbal_Update(void)
         was_ready = false;
         last_mode = GimbalMode::DISABLED;
     }
-#endif
     PublishFeedback(); // 所有路径共用一次反馈分频。
 }
 ```
