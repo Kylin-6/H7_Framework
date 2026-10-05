@@ -40,6 +40,9 @@
 - 连续状态和目标使用 `Topic<T>` 的 Latest-Value 语义；不可覆盖的离散动作使用 `EventQueue<T,N>`。
 - 业务消息通道保持唯一静态定义；不新增动态 Topic 注册、字符串查找或另一套消息总线。
 - Daemon 负责在线判断，Device 负责基础掉线保护，Application 负责机器人功能策略；不要把设备在线检测迁入 Message Center，也不在 App 重复逐个电机清零。
+- 电机控制顺序为：初始化成功 → Application 根据功能条件请求使能 → 驱动条件满足后 `ready` → 允许有效控制输出。`ready` 包含请求使能条件，不能先等待 `ready` 再调用 `RequestEnabled(true)`，否则会形成循环依赖。
+- 在线反馈可以在使能请求前后到达；DJI 的使能是软件输出许可，DM 还要求新鲜反馈确认实际使能且无故障。Application 使用 `ready` 处理姿态捕获与恢复，未就绪时的基础输出保护由驱动执行；具体条件见 [DJI 电机驱动](User_File/Device/Peripheral/Motor/DJImotor/dji_motor.md) 与 [达妙电机驱动](User_File/Device/Peripheral/Motor/DMmotor/dmmotor.md)。
+- `Init()` 返回成功仅表示初始化成功，`RequestEnabled(true)` 返回成功表示驱动接受请求或成功提交所需命令，均不等于设备已经 `ready`；需要设备确认的协议必须以有效反馈为准。
 - 板型和源码由 CMake 在构建期选择；BoardConfig 管硬件资源，机构参数归属 Application。
 - 板间通信遵循固定 Transport 协议；涉及线上格式变化时同时检查发送端、接收端与兼容性。
 
