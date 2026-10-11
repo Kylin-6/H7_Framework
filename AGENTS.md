@@ -85,25 +85,26 @@
 
 ### 固件构建
 
-需要 CMake 3.22 或更高版本、Ninja 和 PATH 中可用的 GNU Arm 工具链。在仓库根目录执行：
+需要 CMake 3.22 或更高版本、Ninja 和 PATH 中可用的 GNU Arm 工具链。
+
+编译验证只构建当前配置的板型与构建配置，以用户指定、IDE/CMake 当前选择或正在使用的构建目录为准。
+共用代码或构建集成变更也不自动扩展到全部板型；只有用户明确要求时才构建其他板型。
+沿用当前配置，不为验证擅自切换板型、应用开关或 Debug/Release 配置。
+
+在仓库根目录使用当前选中的 preset（以下占位符需替换为实际名称）：
 
 ```sh
-cmake --preset Debug
-cmake --build --preset Debug
+cmake --preset <当前选中的preset>
+cmake --build --preset <当前选中的preset>
 ```
 
-发布配置使用 `Release` 的同名 configure/build preset。板型验证使用：
+已有配置的构建目录可直接构建：
 
 ```sh
-cmake --preset SingleBoard
-cmake --build --preset SingleBoard
-cmake --preset GimbalBoard
-cmake --build --preset GimbalBoard
-cmake --preset ChassisBoard
-cmake --build --preset ChassisBoard
+cmake --build <当前构建目录>
 ```
 
-单板型变更验证对应目标；共用代码或构建集成变更覆盖三个板型。内存相关变更检查链接映射与占用。
+内存相关变更检查当前板型的链接映射与占用。
 构建产物保留在 `build/`，不要提交 ELF、map 或本地工具路径。
 
 
