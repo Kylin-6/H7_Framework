@@ -9,6 +9,7 @@
 #include "daemon.h"
 #include "cmsis_os2.h"
 #include "dji_motor.h"
+#include "lk_motor.h"
 #if H7_HAS_DM_MOTOR
 #include "dmmotor.h"
 #endif
@@ -24,6 +25,7 @@ extern "C" void Status_Task(void *argument)
         // 100 Hz 统一记录跃迁；实时控制的新鲜度检查不等待此任务。
         DaemonManager::CheckAll();
         Class_DJIMotor::ServiceAll();
+        Class_LKMotor::ServiceAll();
 #if H7_HAS_DM_MOTOR
         Class_DMMotor::ServiceAll();
 #endif

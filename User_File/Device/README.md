@@ -22,6 +22,7 @@ Application 使用 Device 接口，不直接解析 CAN/UART 或管理 DMA。
 | --- | --- | --- |
 | 达妙电机 | [dmmotor.h](Peripheral/Motor/DMmotor/dmmotor.h) | Gimbal 拥有设备；StatusTask 维护 ServiceAll |
 | DJI 电机 | [dji_motor.h](Peripheral/Motor/DJImotor/dji_motor.h) | Chassis/Shoot 初始化电机与发送组；StatusTask 维护设备 ServiceAll |
+| 瓴控 LK 电机 | [lk_motor.h](Peripheral/Motor/LKmotor/lk_motor.h) | 单机/广播与本地 PID；StatusTask 维护安全服务，未绑定实际机构 |
 | S.BUS / DJI 遥控 | [sbus.h](Peripheral/Remote/sbus.h)、[remote_control.h](Peripheral/Remote/remote_control.h) | 当前 Input 绑定 UART5 S.BUS |
 | 裁判 / VTM / UI | [Referee 指南](Peripheral/Referee/README.md) | 当前 System_Init 不自动绑定，业务数据尚未接入 Shoot/Chassis |
 | EricTool | [dvc_erictool.h](Peripheral/EricTool/dvc_erictool.h) | UART/USB 调试与遥测 |
@@ -122,6 +123,18 @@ bool MotorExample_Update(bool allowed, float speed_rad_s)
 
 不能只调用单电机 Control 而漏掉组 Send；不能让不同逻辑组占用同一物理组报文。
 公开 feedback 和 PID 对象不是整体原子快照；应用读取运动状态使用 GetMotionSnapshot。
+
+## 瓴控 Class_LKMotor 与广播组
+
+详见 [LK 驱动指南](Peripheral/Motor/LKmotor/lk_motor.md)。目前支持 MG4005-i10v3 单机
+`0xA1`、四电机广播 `0x280` 与主控串级 PID；电流使用协议 raw，角度/速度为输出轴 SI。
+默认应用电流限幅为零，CAN 编码器每圈计数暂定 65536，接入前须实测核对。
+
+`Init(config)` 后先 `RequestEnabled(true)` 表达许可，再读 `GetFeedbackSnapshot().ready`；
+驱动自行查询状态和运动反馈，先确认关闭，再开启并等待新鲜状态确认。
+单机 `SetRef()` → `Control()` → `Send()`；广播组 `Control(ref1,...ref4)` 计算并提交一次整帧。
+`RequestEnabled(false)` 立即清零目标并提交关闭命令，StatusTask 的 `ServiceAll()`
+独立维护掉线、状态过期和故障保护，不自动清错。当前没有 Application 实例使用 LK。
 
 ## 遥控 S.BUS 与 DJI 遥控
 
