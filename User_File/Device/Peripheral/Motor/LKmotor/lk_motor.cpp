@@ -9,6 +9,7 @@ Class_LKMotor* Class_LKMotor::head = nullptr;
 namespace
 {
 constexpr float RAD_PER_DEG = 0.017453292519943295f;
+constexpr float DEG_PER_RAD = 57.29577951308232f;
 constexpr float TWO_PI = 6.283185307179586f;
 constexpr uint64_t SERVICE_QUERY_US = 20000;
 
@@ -91,6 +92,11 @@ bool Class_LKMotor::Init(const Struct_LKMotor_Init_Config& value)
     if (registration_attempted || initialized ||
         (value.hfdcan != &hfdcan1 && value.hfdcan != &hfdcan2 && value.hfdcan != &hfdcan3) ||
         (value.mode != Enum_LKMotor_Mode::SINGLE && value.mode != Enum_LKMotor_Mode::BROADCAST) ||
+        (value.native_speed_control && value.native_position_control) ||
+        (value.native_speed_control &&
+         (value.mode != Enum_LKMotor_Mode::SINGLE || value.close_loop != LK_MOTOR_OPEN_LOOP)) ||
+        (value.native_position_control &&
+         (value.mode != Enum_LKMotor_Mode::SINGLE || value.close_loop != LK_MOTOR_OPEN_LOOP)) ||
         value.can_id == 0 || value.can_id > (value.mode == Enum_LKMotor_Mode::SINGLE ? 32 : 4) ||
         !std::isfinite(value.gear_ratio) || value.gear_ratio <= 0 ||
         (value.encoder_counts != 16384U && value.encoder_counts != 32768U && value.encoder_counts != 65536U) ||
@@ -165,6 +171,7 @@ bool Class_LKMotor::IsOnline() const
 void Class_LKMotor::InvalidateOutput()
 {
     command_raw = 0;
+    command_speed_raw = 0;
     reset_pid = true;
     safe_output_pending = true;
     ++output_epoch;
@@ -198,6 +205,72 @@ void Class_LKMotor::SetRef(float ref)
     ExitCritical(state);
 }
 
+bool Class_LKMotor::SetSpeed(float output_rpm)
+{
+    if (!initialized || !config.native_speed_control)
+    {
+        return false;
+    }
+    const uint32_t state = EnterCritical();
+    CheckSafety();
+    const float rotor_dps = output_rpm * config.gear_ratio * 6.0f *
+                            (config.reverse ? -1.0f : 1.0f);
+    const bool valid = std::isfinite(output_rpm) && std::isfinite(rotor_dps) &&
+                       std::fabs(rotor_dps) <= 72000.0f && GetFeedbackSnapshot().ready;
+    if (valid)
+    {
+        command_speed_raw = static_cast<int32_t>(std::lround(rotor_dps * 100.0f));
+        safe_output_pending = false;
+    }
+    else
+    {
+        InvalidateOutput();
+    }
+    ExitCritical(state);
+    return valid;
+}
+
+bool Class_LKMotor::SetSpeedDps(float output_dps)
+{
+    return SetSpeed(output_dps / 6.0f);
+}
+
+bool Class_LKMotor::MoveRelativeDegrees(float output_deg, float max_output_dps)
+{
+    if (!initialized || !config.native_position_control)
+    {
+        return false;
+    }
+    const uint32_t state = EnterCritical();
+    CheckSafety();
+    const float rotor_deg = output_deg * config.gear_ratio * (config.reverse ? -1.0f : 1.0f);
+    const float rotor_max_dps = max_output_dps * config.gear_ratio;
+    const bool valid = GetFeedbackSnapshot().ready && std::isfinite(rotor_deg) &&
+                       std::isfinite(rotor_max_dps) && rotor_max_dps >= 1.0f &&
+                       rotor_max_dps <= 65535.0f && std::fabs(rotor_deg) <= 359999.0f;
+    bool submitted = false;
+    if (valid)
+    {
+        const int32_t angle_raw = static_cast<int32_t>(std::lround(rotor_deg * 100.0f));
+        const uint16_t speed_raw = static_cast<uint16_t>(std::lround(rotor_max_dps));
+        Struct_CAN_Tx_Msg message{};
+        message.hfdcan = config.hfdcan;
+        message.id = 0x140U + config.can_id;
+        message.len = 8;
+        message.data[0] = 0xA8;
+        message.data[2] = static_cast<uint8_t>(speed_raw);
+        message.data[3] = static_cast<uint8_t>(speed_raw >> 8);
+        const uint32_t bits = static_cast<uint32_t>(angle_raw);
+        message.data[4] = static_cast<uint8_t>(bits);
+        message.data[5] = static_cast<uint8_t>(bits >> 8);
+        message.data[6] = static_cast<uint8_t>(bits >> 16);
+        message.data[7] = static_cast<uint8_t>(bits >> 24);
+        submitted = CAN_Tx_Submit(&message);
+    }
+    ExitCritical(state);
+    return submitted;
+}
+
 void Class_LKMotor::ResetPID()
 {
     if (config.close_loop & LK_MOTOR_CURRENT_LOOP)
@@ -216,7 +289,7 @@ void Class_LKMotor::ResetPID()
 
 bool Class_LKMotor::Control()
 {
-    if (!initialized)
+    if (!initialized || config.native_speed_control || config.native_position_control)
     {
         return false;
     }
@@ -415,8 +488,20 @@ bool Class_LKMotor::PublishOutput()
     message.hfdcan = config.hfdcan;
     message.id = 0x140U + config.can_id;
     message.len = 8;
-    message.data[0] = 0xA1;
-    WriteI16(&message.data[4], command_raw);
+    if (config.native_speed_control)
+    {
+        message.data[0] = 0xA2;
+        const uint32_t bits = static_cast<uint32_t>(command_speed_raw);
+        message.data[4] = static_cast<uint8_t>(bits);
+        message.data[5] = static_cast<uint8_t>(bits >> 8);
+        message.data[6] = static_cast<uint8_t>(bits >> 16);
+        message.data[7] = static_cast<uint8_t>(bits >> 24);
+    }
+    else
+    {
+        message.data[0] = 0xA1;
+        WriteI16(&message.data[4], command_raw);
+    }
     const bool submitted = CAN_Tx_Perform(&message);
     if (submitted)
     {
@@ -427,7 +512,7 @@ bool Class_LKMotor::PublishOutput()
 
 bool Class_LKMotor::Send()
 {
-    if (!initialized || config.mode != Enum_LKMotor_Mode::SINGLE)
+    if (!initialized || config.mode != Enum_LKMotor_Mode::SINGLE || config.native_position_control)
     {
         return false;
     }
@@ -446,7 +531,7 @@ void Class_LKMotor::RxCallback(FDCAN_HandleTypeDef* bus, uint32_t id, uint8_t* d
     {
         return;
     }
-    const bool motion = data[0] == 0xA1 || data[0] == 0x9C;
+    const bool motion = data[0] == 0xA1 || data[0] == 0xA2 || data[0] == 0xA8 || data[0] == 0x9C;
     const bool status = data[0] == 0x9A || data[0] == 0x9B;
     if (!motion && !status)
     {
@@ -560,13 +645,14 @@ void Class_LKMotor::ServiceAll()
             motor->poll_started = true;
             motor->poll_timestamp_us = now;
             motor->status_query_pending = true;
-            motor->motion_query_pending = !motor->GetFeedbackSnapshot().ready;
+            motor->motion_query_pending = motor->config.native_position_control ||
+                                          !motor->GetFeedbackSnapshot().ready;
         }
         if (motor->status_query_pending)
         {
             motor->status_query_pending = !motor->SubmitCommand(0x9A);
         }
-        if (motor->GetFeedbackSnapshot().ready)
+        if (!motor->config.native_position_control && motor->GetFeedbackSnapshot().ready)
         {
             motor->motion_query_pending = false;
         }

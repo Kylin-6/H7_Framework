@@ -1,5 +1,5 @@
 /** @file lk_motor.h
- * @brief MG4005-i10v3：CAN 电流控制、主控串级 PID 与设备安全服务。
+ * @brief LK MF/MH/MG 系列：CAN 电流/速度/增量位置控制与设备安全服务。
  */
 #ifndef LK_MOTOR_H
 #define LK_MOTOR_H
@@ -31,8 +31,10 @@ struct Struct_LKMotor_Init_Config
     FDCAN_HandleTypeDef* hfdcan = nullptr;
     uint8_t can_id = 1; ///< 节点编号；单机 1~32，广播 1~4。
     Enum_LKMotor_Mode mode = Enum_LKMotor_Mode::SINGLE;
-    float gear_ratio = 10.0f;         ///< 转子/输出轴减速比。
-    uint32_t encoder_counts = 65536U; ///< 暂定 CAN 每转子圈计数，须实测；不是硬件位数。
+    bool native_speed_control = false; ///< 单机 A2 速度闭环；广播仍只支持电流。
+    bool native_position_control = false; ///< 单机 A8 增量位置闭环；命令只提交一次。
+    float gear_ratio = 0.0f;         ///< 必填：转子/输出轴减速比。
+    uint32_t encoder_counts = 0U;   ///< 必填：CAN 每转子圈计数，不是硬件位数。
     float current_limit_raw = 0.0f;   ///< 应用幅值上限 [0,2000]；0 禁止非零输出。
     bool reverse = false;
     uint32_t feedback_timeout_ms = 50;
@@ -91,8 +93,11 @@ class Class_LKMotor
     Class_LKMotor& operator=(const Class_LKMotor&) = delete;
     bool Init(const Struct_LKMotor_Init_Config& config);
     void SetRef(float ref);
+    bool SetSpeed(float output_rpm); ///< A2 减速后输出轴速度目标，单位 rpm；仅单机原生速度模式。
+    bool SetSpeedDps(float output_dps); ///< A2 减速后输出轴速度目标，单位 dps；仅单机原生速度模式。
+    bool MoveRelativeDegrees(float output_deg, float max_output_dps); ///< A8 单次增量，均为减速后输出轴单位。
     bool Control();                    ///< 只计算；未就绪/非法输入时清零并返回 false。
-    bool Send();                       ///< 仅单机模式；返回周期槽提交结果，未就绪时提交零电流。
+    bool Send();                       ///< 仅单机模式；返回周期槽提交结果，未就绪时提交对应模式的零目标。
     bool RequestEnabled(bool enabled); ///< 返回当前必要操作的软件提交结果，不是使能确认。
     bool ClearError();                 ///< 显式清错；失败由 ServiceAll 补交，不自动清错。
     Struct_LKMotor_Snapshot GetFeedbackSnapshot() const;
@@ -146,6 +151,7 @@ class Class_LKMotor
     uint64_t poll_timestamp_us = 0;
     float reference = 0.0f;
     int16_t command_raw = 0;
+    int32_t command_speed_raw = 0;
 };
 
 /** 一个广播组独占一条总线的全部已注册 LK 广播电机；参数顺序决定目标顺序。 */

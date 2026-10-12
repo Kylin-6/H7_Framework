@@ -126,13 +126,16 @@ bool MotorExample_Update(bool allowed, float speed_rad_s)
 
 ## 瓴控 Class_LKMotor 与广播组
 
-详见 [LK 驱动指南](Peripheral/Motor/LKmotor/lk_motor.md)。目前支持 MG4005-i10v3 单机
-`0xA1`、四电机广播 `0x280` 与主控串级 PID；电流使用协议 raw，角度/速度为输出轴 SI。
-默认应用电流限幅为零，CAN 编码器每圈计数暂定 65536，接入前须实测核对。
+详见 [LK 驱动指南](Peripheral/Motor/LKmotor/lk_motor.md)。目前支持使用相同协议的 MF/MH/MG 系列单机
+`0xA1` 电流、`0xA2` 原生速度、`0xA8` 单次增量位置、四电机广播 `0x280` 与主控串级 PID；电流使用协议 raw，主控环角度/速度为输出轴 SI，`A2` 目标为减速后输出轴 rpm。
+默认应用电流限幅为零；减速比和 CAN 编码器每转子圈计数必须由应用配置并实测核对。
 
 `Init(config)` 后先 `RequestEnabled(true)` 表达许可，再读 `GetFeedbackSnapshot().ready`；
 驱动自行查询状态和运动反馈，先确认关闭，再开启并等待新鲜状态确认。
-单机 `SetRef()` → `Control()` → `Send()`；广播组 `Control(ref1,...ref4)` 计算并提交一次整帧。
+单机主控环使用 `SetRef()` → `Control()` → `Send()`；单机原生速度模式使用
+`SetSpeed(output_rpm)` → `Send()`；广播组 `Control(ref1,...ref4)` 计算并提交一次整帧。
+原生速度模式也可调用 `SetSpeedDps(output_dps)`，参数为减速后输出轴 dps。
+单机增量位置模式在 `ready` 后调用一次 `MoveRelativeDegrees(output_deg, max_output_dps)`，参数为减速后输出轴单位。
 `RequestEnabled(false)` 立即清零目标并提交关闭命令，StatusTask 的 `ServiceAll()`
 独立维护掉线、状态过期和故障保护，不自动清错。当前没有 Application 实例使用 LK。
 

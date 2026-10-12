@@ -93,7 +93,7 @@ CAN 接收回调在中断上下文执行。UART 的 DMA 接收须同时具备 Cu
 | 驱动 | 支持范围 | 接入说明 |
 | --- | --- | --- |
 | DJI | M2006/C610、M3508/C620、GM6020；反馈、控制环与分组发送 | [DJI 电机驱动](User_File/Device/Peripheral/Motor/DJImotor/dji_motor.md) |
-| 瓴控 LK | MG4005-i10v3；单机/广播电流指令、本地串级 PID；编码器参数待实测 | [LK 电机驱动](User_File/Device/Peripheral/Motor/LKmotor/lk_motor.md) |
+| 瓴控 LK | MF/MH/MG 同协议型号；单机电流/原生速度/增量位置、广播电流指令；减速比与编码器参数须按型号配置 | [LK 电机驱动](User_File/Device/Peripheral/Motor/LKmotor/lk_motor.md) |
 | 达妙 | MIT、位置-速度、速度、力位混控接口；实际模式取决于型号与固件 | [达妙电机驱动](User_File/Device/Peripheral/Motor/DMmotor/dmmotor.md) |
 
 电机型号、CAN ID、反馈源、方向、映射范围和控制参数由使用方配置；应用层负责控制周期、目标生成与输出边界。

@@ -1,7 +1,7 @@
 # LK 电机驱动
 
-本驱动面向瓴控 **MG4005-i10v3**，使用当前框架的 BSP CAN、Daemon 和 Class_PID，提供
-单机电流指令、四电机广播电流指令及主控串级 PID。未创建实际设备实例，未修改机构控制。
+本驱动面向使用相同 CAN 命令与运动回包格式的瓴控 **MF/MH/MG 系列**，使用当前框架的 BSP CAN、Daemon 和 Class_PID，提供
+单机电流/速度/增量位置指令、四电机广播电流指令及主控串级 PID。未创建实际设备实例，未修改机构控制。
 驱动已接入所有板型的源码列表及现有 100 Hz StatusTask；无实例时服务直接返回。
 
 ## 资料依据与待实测参数
@@ -10,7 +10,7 @@
 
 | 文件名 | 文档及依据 |
 | --- | --- |
-| `20260326142653f.pdf` | 《电机 CAN 总线通讯协议》V2.36，第 5～10 页：状态、启停、单机电流命令 |
+| `20260326142653f.pdf` | 《电机 CAN 总线通讯协议》V2.36，第 5～10 页：状态、启停、单机电流与速度命令 |
 | `20260317100100f.pdf` | 《电机 CAN 广播通讯协议》V2.35，第 1～3 页：0x280、0x288、节点与频率限制 |
 | `20260609135629f.pdf` | 《MG40～50 电机驱动系统使用说明》，第 4、10、14、15 页：型号、广播设置、轴侧与显示单位 |
 
@@ -24,14 +24,15 @@
 - 单机协议允许 ±2048，广播协议与 MG 使用说明使用 ±2000；两种模式统一采用 **±2000 raw**。
   `current_limit_raw` 在此范围内进一步限幅，默认 **0**。这不是电机额定或峰值电流。
   A1 不受上位机 Max Torque Current 限制，不能把上位机限幅当作本接口保护。
-- MG 硬件标称 18 位编码器，运动回包只给两字节，未说明本型号映射。
-  `encoder_counts` 暂定 **65536**，可配置协议列出的 16384、32768、65536；这表示
-  **CAN 反馈每转子圈计数**，不是物理编码器分辨率，不能填入 262144。
-- `gear_ratio` 默认 **10.0**。反馈的转子速度按 `1 deg/s/LSB` 转 rad/s，再除减速比；
+- 运动回包的编码器字段只有两字节。`encoder_counts` 必须按型号和固件配置为协议列出的
+  16384、32768 或 65536，并实测每转子圈映射；这表示 **CAN 反馈每转子圈计数**，
+  不是物理编码器分辨率。
+- `gear_ratio` 必须按实际减速比配置。反馈的转子速度按 `1 deg/s/LSB` 转 rad/s，再除减速比；
   单圈与累计角同样先转换到转子 rad，再除减速比。暂按编码器递增与正速度同向解释。
 - 广播协议新增速度/位置命令，但 MG 使用说明仍写仅支持扭矩广播；第一版只实现广播电流控制。
+- MS 系列使用 `0xA0` 开环命令且运动回包格式不同；本驱动不支持 MS，不能仅修改减速比后使用。
 
-**以上编码器映射和正方向尚未实机确认。** 接入时对照上位机与 CAN 原始反馈，缓慢转动
+**各型号的编码器映射和正方向须实机确认。** 接入时对照上位机与 CAN 原始反馈，缓慢转动
 输出轴一圈核对计数和回绕次数，并核对固件、电流比例及温度符号。参数由应用配置传入，
 修改配置后重新初始化固件；不提供运行期切换总线模式、减速比或编码器范围的接口。
 
@@ -53,7 +54,7 @@ Daemon 的框架总容量仍为 32 个设备，不因 CAN 节点范围为 32 就
   CAN 字节位置始终由节点 ID 决定。允许缺少物理 ID，例如只使用 1、3，但不允许 Init 参数中间留空。
   Group 创建后禁止再注册同总线电机，未成组的广播实例始终不能 ready。
 
-电流周期帧走 `CAN_Tx_Perform()`；启停、清错和查询走 `CAN_Tx_Submit()`。
+电流与单机速度周期帧走 `CAN_Tx_Perform()`；单机增量位置、启停、清错和查询走 `CAN_Tx_Submit()`。
 广播离散命令使用 `0x288`，只填写对应节点的命令字，其他字节为零。
 **所有发送返回值仅表示软件接受，不表示 HAL 已发送或电机已执行。**
 
@@ -66,15 +67,16 @@ Daemon 的框架总容量仍为 32 个设备，不因 CAN 节点范围为 32 就
 
 static Class_LKMotor motor;
 
-bool Example_Init(FDCAN_HandleTypeDef *bus, float checked_current_limit_raw,
+bool Example_Init(FDCAN_HandleTypeDef *bus, float gear_ratio, uint32_t encoder_counts,
+                  float checked_current_limit_raw,
                   const PID_InitTypeDef &speed_pid)
 {
     Struct_LKMotor_Init_Config config{};
     config.hfdcan = bus;
     config.can_id = 1;
     config.mode = Enum_LKMotor_Mode::SINGLE;
-    config.gear_ratio = 10.0f;
-    config.encoder_counts = 65536; // 临时值，实测后修改。
+    config.gear_ratio = gear_ratio;
+    config.encoder_counts = encoder_counts;
     config.current_limit_raw = checked_current_limit_raw;
     config.close_loop = LK_MOTOR_SPEED_LOOP;
     config.outer_loop = LK_MOTOR_SPEED_LOOP;
@@ -99,6 +101,20 @@ bool Example_Update(bool allowed, float speed_rad_s)
 `SetRef()` 按 outer_loop 使用输出轴累计 rad、输出轴 rad/s 或电流 raw。
 `Control()` 只计算，`Send()` 才发布；BSP 只发送更新过的周期槽，调用方需按实际控制周期持续更新。
 `Send()` 未就绪时仍可成功提交零电流，因此判断设备可用性应读取快照的 `ready`。
+
+单机原生速度模式设置 `native_speed_control = true`，不配置主控 PID 环；先请求使能，
+再用 `SetSpeed(output_rpm)` 设置减速后输出轴 rpm 速度目标并调用 `Send()`。驱动按减速比转为
+转子侧 `0.01 dps/LSB` 的 `A2` 帧，未就绪时安全目标也是 `A2` 零速度。
+也可用 `SetSpeedDps(output_dps)` 直接设置减速后输出轴 dps 目标（1 rpm = 6 dps）。
+此模式的速度和转矩电流限制由电机内部的上位机设置负责；`current_limit_raw` 只用于主控 `A1`
+电流模式，不能限制 `A2`。上位机参数必须保存并在实机核对。
+
+单机原生增量位置模式设置 `native_position_control = true`，在 `ready` 后调用一次
+`MoveRelativeDegrees(output_deg, max_output_dps)`。两个参数分别是减速后输出轴增量角度和
+输出轴限速；驱动按减速比编码为转子侧 `0.01°/LSB`、`1 dps/LSB` 的 `A8` 命令。
+重复提交会继续累加位置，不能放在周期循环中无条件调用。位置模式每 20 ms 查询运动反馈；
+掉线或故障时沿用关闭与零电流保护。上位机的速度、转矩电流和加速度设置仍会影响动作。
+当前仓库未保存 V2.36 CAN 原件，A8 字段依据厂家编写的 V2.35 协议副本，需与实机版本核对。
 
 主控环按角度→速度→电流顺序执行：角度环只在 angle 为外环时运行，速度环在 angle/speed
 为入口且已启用时运行，电流环只要已配置就运行。开环目标为 raw；若只启用位置环而没有速度环，
@@ -186,9 +202,9 @@ Control 计算期间发生安全状态变化时，版本检查会丢弃旧计算
 恢复边沿重新捕获姿态与目标。配置错误和跨多圈失联无法靠软件展开恢复真实绝对角度。
 
 协议没有事务序号；启停确认只保证在软件提交后观察到新鲜状态，不能严格关联 CAN 队列中迟到的回复。
-不提供 ROM 置零、参数烧写、电机原生速度/位置环或自动配置广播模式。
+不提供 ROM 置零、参数烧写、电机原生绝对位置环或自动配置广播模式。
 
 ## 验证
 
-固件验证沿用当前选中的 ChassisBoard / Debug：`cmake --build build/ChassisBoard`。
+固件验证沿用当前选中的 `SingleBoard` / Debug：`cmake --build build/SingleBoard`。
 编译不能替代实机接线、方向、编码器映射、电流比例、总线负载及拔线测试。
