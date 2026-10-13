@@ -46,6 +46,7 @@ App 决定功能许可、目标和恢复策略。StatusTask 在 CheckAll 后调�
 | `Chassis` | 四舵轮运动学、最短转向和电机目标 | 8 个 DJI 电机及电机组 |
 | `Shoot` | 摩擦轮、拨弹连续模式和离散射击动作 | 3 个 DJI 电机、ShootEvent FIFO |
 | `Input` | UART5 S.BUS 适配、固定来源输入状态与仲裁 | RemoteInput、InputState |
+| `PowerControl` | 1～4 个电机的功率预测、统一力矩限幅和可选在线辨识；当前为可调用模块 | Class_RLS，不拥有 Device |
 
 Chassis 与 Shoot 的机械参数和 PID 初值分别放在 `Chassis_Config.h`、`Shoot_Config.h`；
 运行状态和设备实例由各自 `.cpp` 内的私有 Context 持有。BoardConfig 只提供总线等硬件
@@ -168,6 +169,7 @@ Yaw 使用 INS 角度/速度串级闭环，通过达妙 MIT 纯转矩指令输�
 ## 6. Chassis
 
 底盘移植、框架接口及按函数代码例程见 [四舵轮底盘指南](Chassis/README.md)。
+可选的力矩功率限幅与在线辨识见 [PowerControl](PowerControl/README.md)，已编入工程但尚未接入底盘控制链。
 
 当前底盘模型为四舵轮 AGV：
 

@@ -127,6 +127,7 @@ EricTool 的 USB/UART 解析均只读取回调传入的缓冲区及有效长度�
 | 轨迹 | [Trajectory](User_File/Middleware/Algorithm/Trajectory) | 单轴三阶 S 曲线，位置/速度目标，限制速度、加速度和 jerk，支持运动中改目标 |
 | 模糊推理 | [Fuzzy](User_File/Middleware/Algorithm/Fuzzy) | 双输入、多输出零阶 Sugeno 推理，完整规则表与分片双线性插值 |
 | 观测 | [DOB](User_File/Middleware/Algorithm/DOB) | 一阶名义模型、零阶保持离散与 Q 滤波扰动估计 |
+| 辨识 | [RLS](User_File/Middleware/Algorithm/RLS/README.md) | 1～6 维定长递推最小二乘，遗忘因子、数值失败与协方差正定性保护 |
 | 状态估计 | [Kalman](User_File/Middleware/Algorithm/Filter/Kalman)、[EKF](User_File/Middleware/Algorithm/Filter/EKF) | 线性与扩展卡尔曼滤波组件 |
 | 姿态估计 | [VQF](User_File/Middleware/Algorithm/Filter/VQF) | 姿态与陀螺仪零偏估计 |
 | 信号滤波 | [Frequency](User_File/Middleware/Algorithm/Filter/Frequency)、[IIR](User_File/Middleware/Algorithm/Filter/IIR) | FIR 频率滤波与 IIR 低通、陷波等组件 |
@@ -136,6 +137,10 @@ EricTool 的 USB/UART 解析均只读取回调传入的缓冲区及有效长度�
 | 辅助 | [Slope](User_File/Middleware/Algorithm/Slope)、[FSM](User_File/Middleware/Algorithm/FSM)、[Queue](User_File/Middleware/Algorithm/Queue)、[Pulse](User_File/Middleware/Algorithm/Pulse) | 斜坡、状态机、队列与周期分频 |
 
 使用算法时需要明确量纲、采样周期、状态初始化和输出限幅。模型相关约定以模块头文件为准，例如 DOB 使用 `y[k]` 与上一周期实际输入 `u[k-1]`，SMC 由调用方提供同一时刻的状态及其导数。
+
+[PowerControl](User_File/Application/PowerControl/README.md) 提供最多四个电机的功率预测与统一输出轴力矩限幅，
+可选 RLS 在线估计摩擦和铜耗系数。模块已注册构建，尚未接入底盘、裁判系统或电机发送；
+使用方须提供 N·m、rad/s、W 输入，完成电流/力矩换算和功率测量时序对齐。
 
 ### 控制与轨迹约定
 

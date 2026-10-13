@@ -123,6 +123,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Middleware/Algorithm/Complex/alg_complex.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Middleware/Algorithm/Quaternion/alg_quaternion.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Middleware/Algorithm/Queue/alg_queue.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/User_File/Middleware/Algorithm/RLS/alg_rls.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Middleware/Algorithm/Slope/alg_slope.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Middleware/Algorithm/Trajectory/alg_trajectory.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Middleware/Algorithm/SMC/alg_smc.cpp
@@ -166,6 +167,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Middleware/Algorithm/Pulse/alg_pulse.cpp
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Middleware/Algorithm/CRC/crc8.c
         ${CMAKE_CURRENT_LIST_DIR}/User_File/Middleware/Algorithm/CRC/crc16.c
+        ${CMAKE_CURRENT_LIST_DIR}/User_File/Application/PowerControl/power_control.cpp
 )
 
 option(H7_APP_GIMBAL "Build the Gimbal application" OFF)
@@ -260,6 +262,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
         User_File/Middleware/Algorithm/PID
         User_File/Middleware/Algorithm/Quaternion
         User_File/Middleware/Algorithm/Queue
+        User_File/Middleware/Algorithm/RLS
         User_File/Middleware/Algorithm/Slope
         User_File/Middleware/Algorithm/Trajectory
         User_File/Middleware/Algorithm/SMC
@@ -302,6 +305,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
         User_File/Application/Chassis/
         User_File/Application/Shoot/
         User_File/Application/Input/
+        User_File/Application/PowerControl/
         User_File/Application/Balance/
 )
 
