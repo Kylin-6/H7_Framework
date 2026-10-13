@@ -282,7 +282,7 @@ inline bool Class_W25Q64JV::Set_Sector_Erased(const uint32_t &Address)
  */
 inline void Class_W25Q64JV::Set_Bolck_Erased_32K(const uint32_t &Address)
 {
-    if (Is_Busy())
+    if (!Initialized || Is_Busy())
     {
         return;
     }
@@ -321,7 +321,7 @@ inline void Class_W25Q64JV::Set_Bolck_Erased_32K(const uint32_t &Address)
  */
 inline void Class_W25Q64JV::Set_Bolck_Erased_64K(const uint32_t &Address)
 {
-    if (Is_Busy())
+    if (!Initialized || Is_Busy())
     {
         return;
     }
@@ -360,7 +360,7 @@ inline void Class_W25Q64JV::Set_Bolck_Erased_64K(const uint32_t &Address)
  */
 inline void Class_W25Q64JV::Set_Chip_Erased()
 {
-    if (Is_Busy())
+    if (!Initialized || Is_Busy())
     {
         return;
     }

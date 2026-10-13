@@ -237,6 +237,7 @@ float yaw_rad = state.yaw_rad; // 控制层使用 SI 角度，安装坐标由传
 
 地址单位 byte，Flash 8 MiB、页 256 byte，DMA 缓冲 512 byte。Write_Data 自动处理页边界与写使能，
 不自动擦除旧内容；Read_Data/Write_Data 不用于 ISR 或 1 kHz 控制任务。
+初始化未成功时，读写与擦除接口均拒绝操作；32 KiB、64 KiB 和整片擦除直接返回，不访问时间戳或 OSPI。
 Get_Buffer 的结果在 OSPI 管理缓冲中，下一次传输会复用，消费后应复制到自己的对象。
 
 ## 电源、按键、蜂鸣器与 RGB
