@@ -15,6 +15,7 @@ extern Topic<GimbalFeedback> Gimbal_Feedback_Topic;
 extern Topic<ChassisFeedback> Chassis_Feedback_Topic;
 extern Topic<ShootFeedback> Shoot_Feedback_Topic;
 extern EventQueue<ShootEvent, 8U> Shoot_Event_Queue;
+extern Topic<Struct_Client_UI_State> Client_UI_State_Topic;
 }
 
 #endif

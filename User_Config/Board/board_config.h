@@ -2,6 +2,7 @@
 #define H7_BOARD_CONFIG_H
 
 #include "fdcan.h"
+#include "usart.h"
 
 /** 当前构建目标的物理硬件资源；不决定应用源码，也不保存板间通信路由。 */
 struct BoardHardware
@@ -17,6 +18,7 @@ struct BoardHardware
     bool power;
     bool indicators;
     bool usb_debug;
+    UART_HandleTypeDef *referee_uart; ///< H7_APP_CLIENT_UI 启用时由 System_Init 独占绑定。
 };
 
 const BoardHardware &BoardConfig_Get(void);

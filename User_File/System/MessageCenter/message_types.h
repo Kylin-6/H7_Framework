@@ -123,4 +123,54 @@ struct ShootFeedback
     bool online = false;
 };
 
+/** UI 状态独立于控制模式，Unknown 不代表停机。 */
+enum class Enum_Client_UI_Chassis : uint8_t
+{
+    Unknown,
+    Stopped,
+    Waiting,
+    Active,
+    Spin,
+};
+
+enum class Enum_Client_UI_Motion : uint8_t
+{
+    Unknown,
+    Stopped,
+    Moving,
+};
+
+enum class Enum_Client_UI_AutoAim : uint8_t
+{
+    Unknown,
+    Off,
+    Waiting,
+    Active,
+};
+
+/** ControlTask 唯一发布，StatusTask 消费；原始反馈时间戳不会随采集刷新。
+ * 文字为至多 29 字节的 ASCII 加结尾 NUL；报警无需显示时置空。
+ * yaw/autoaim/文字由具体机器人适配器提供，整体快照有效期 200 ms。
+ */
+struct Struct_Client_UI_State
+{
+    uint64_t pitch_timestamp_us = 0U;
+    uint64_t shoot_timestamp_us = 0U;
+    uint64_t chassis_timestamp_us = 0U;
+    float pitch_rad = 0.0f;
+    float relative_yaw_rad = 0.0f;
+    float left_speed_rad_s = 0.0f;
+    float right_speed_rad_s = 0.0f;
+    bool pitch_valid = false;
+    bool yaw_valid = false;
+    bool speed_valid = false;
+    Enum_Client_UI_Chassis chassis = Enum_Client_UI_Chassis::Unknown;
+    Enum_Client_UI_Motion friction = Enum_Client_UI_Motion::Unknown;
+    Enum_Client_UI_Motion loader = Enum_Client_UI_Motion::Unknown;
+    Enum_Client_UI_AutoAim autoaim = Enum_Client_UI_AutoAim::Unknown;
+    char mode_text[30] = "UNKNOWN";
+    char alert_text[3][30]{};
+    bool alert_warning[3]{};
+};
+
 #endif

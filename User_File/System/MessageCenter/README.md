@@ -207,6 +207,7 @@ Shoot 总开关或设备 ready。Push 成功和 Pop 成功只表示软件请求�
 | `Gimbal_Feedback_Topic` | Gimbal | RobotCmd | 最新云台反馈 |
 | `Chassis_Feedback_Topic` | 底盘板 Chassis；云台板 Transport 接收入口 | RobotCmd；底盘板 Transport | 最新底盘反馈 |
 | `Shoot_Feedback_Topic` | Shoot | RobotCmd | 最新发射反馈 |
+| `Client_UI_State_Topic` | ControlTask 的 ClientUI_Capture | StatusTask 的 ClientUI_Update | 唯一 HUD 显示快照，原始反馈时间与有效性见 [ClientUI](../../Application/ClientUI/README.md) |
 | `Shoot_Event_Queue` | RobotCmd | Shoot | 单发/三连发 FIFO，容量 8 |
 
 `message_center.cpp` 是这些实例的唯一实体定义。禁止在其他翻译单元再定义同类型同用途

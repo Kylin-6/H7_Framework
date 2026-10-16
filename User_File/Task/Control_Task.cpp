@@ -23,6 +23,10 @@
 #include "output.h"
 #include "user_task.h"
 
+#if H7_CLIENT_UI
+#include "ClientUI.h"
+#endif
+
 extern "C" void Control_Task(void* argument)
 {
     // 在每个 1 kHz CAN 发送周期前生成最新目标；BMI088 High2 任务仍优先处理传感器数据。
@@ -72,5 +76,8 @@ extern "C" void Control_Task(void* argument)
         Shoot_Update();
 #endif
         // Balance_loop();
+#if H7_CLIENT_UI
+        ClientUI_Capture();
+#endif
     }
 }

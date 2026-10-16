@@ -14,9 +14,16 @@
 #include "dmmotor.h"
 #endif
 
+#if H7_CLIENT_UI
+#include "ClientUI.h"
+#endif
+
 extern "C" void Status_Task(void *argument)
 {
     (void)argument;
+#if H7_CLIENT_UI
+    (void)ClientUI_Init();
+#endif
     // 使用绝对唤醒时间，避免 CheckAll() 执行时间累积到任务周期中。
     uint32_t next_wake_tick = osKernelGetTickCount();
 
@@ -28,6 +35,9 @@ extern "C" void Status_Task(void *argument)
         Class_LKMotor::ServiceAll();
 #if H7_HAS_DM_MOTOR
         Class_DMMotor::ServiceAll();
+#endif
+#if H7_CLIENT_UI
+        ClientUI_Update();
 #endif
         next_wake_tick += 10U;
         osDelayUntil(next_wake_tick);

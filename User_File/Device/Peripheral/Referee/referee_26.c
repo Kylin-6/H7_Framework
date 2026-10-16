@@ -15,6 +15,7 @@
 #include "bsp_uart.h"
 #include "cmsis_os.h"
 #include "referee_daemon.h"
+#include "referee_ui_sender.h"
 
 #define RE_RX_BUFFER_SIZE 320u // 覆盖当前协议最长 300 字节数据段及 9 字节包头/尾
 
@@ -22,6 +23,9 @@ static UART_HandleTypeDef *referee_uart; // 裁判系统串口实例
 static referee_info_t referee_info;			  // 裁判系统数据
 static uint8_t referee_rx_buffer[RE_RX_BUFFER_SIZE];
 static uint16_t referee_rx_length;
+static uint16_t ui_robot_id;
+static uint32_t ui_robot_id_ms;
+static uint8_t ui_robot_id_received;
 
 /* 已校验 CRC 的已知命令必须匹配该命令的固定载荷长度；未知命令只计链路在线。 */
 static uint8_t JudgeStoreFrame(const uint8_t *frame, uint16_t payload_length)
@@ -58,6 +62,12 @@ static uint8_t JudgeStoreFrame(const uint8_t *frame, uint16_t payload_length)
         break;
     }
 #undef JUDGE_COPY
+    if (command_id == ID_robot_status)
+    {
+        ui_robot_id = referee_info.GameRobotState.robot_id;
+        ui_robot_id_ms = HAL_GetTick();
+        ui_robot_id_received = TRUE;
+    }
     memcpy(&referee_info.FrameHeader, frame, LEN_HEADER);
     referee_info.CmdID = command_id;
     referee_info.init_flag = 1U;
@@ -137,6 +147,7 @@ referee_info_t *RefereeInit(UART_HandleTypeDef *referee_usart_handle)
     }
     memset(&referee_info, 0, sizeof(referee_info));
     referee_rx_length = 0U;
+    ui_robot_id_received = FALSE;
     referee_uart = referee_usart_handle;
     UART_Init(referee_usart_handle, RefereeRxCallback);
 
@@ -149,6 +160,34 @@ void RefereeSend(uint8_t *send, uint16_t tx_len)
     if (referee_uart != NULL &&
         UART_Transmit_Data(referee_uart, send, tx_len) == HAL_OK)
         osDelay(115);
+}
+
+uint8_t RefereeUIIsReady(void)
+{
+    return referee_uart != NULL && referee_uart->hdmatx != NULL;
+}
+
+uint8_t RefereeTrySend(uint8_t *send, uint16_t tx_len)
+{
+    return RefereeUIIsReady() && send != NULL && tx_len != 0U &&
+           UART_Transmit_Data(referee_uart, send, tx_len) == HAL_OK;
+}
+
+uint8_t RefereeReadUIRobotId(uint16_t *robot_id)
+{
+    if (robot_id == NULL || referee_uart == NULL)
+        return FALSE;
+    const uint32_t mask = __get_PRIMASK();
+    __disable_irq();
+    const uint16_t id = ui_robot_id;
+    const uint8_t received = ui_robot_id_received;
+    const uint32_t age_ms = HAL_GetTick() - ui_robot_id_ms;
+    __DMB();
+    __set_PRIMASK(mask);
+    if (!received || age_ms >= 500U || !RefereeUIRobotIdIsValid(id))
+        return FALSE;
+    *robot_id = id;
+    return TRUE;
 }
 
 void RefereeReceiveData(uint8_t *data, uint16_t length)

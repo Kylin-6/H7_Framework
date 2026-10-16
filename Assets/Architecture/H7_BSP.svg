@@ -452,7 +452,7 @@ rect.c-bg-rect { fill: var(--bg); }
         <path data-edge-from="callbacks" data-edge-to="bsp" data-edge-key="5" data-edge-id="callback_bsp" data-composition-points="545.5,177;545.5,330" d="M 545.5 177 L 545.5 330" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         <path data-edge-from="callbacks" data-edge-to="tasks" data-edge-label="线程标志" data-edge-key="6" data-edge-id="callback_tasks" data-composition-points="650,141;674,141;674,159;711,159;711,143;735,143" d="M 650 141 L 666 141 Q 674 141 674 149 L 674 151 Q 674 159 682 159 L 703 159 Q 711 159 711 151 L 711 151 Q 711 143 719 143 L 735 143" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         <path data-edge-from="tasks" data-edge-to="device" data-edge-label="采样 / 服务 / 状态检查" data-edge-key="7" data-edge-id="tasks_device" data-composition-points="910,191;910,260.5;812.5,260.5;812.5,330" d="M 910 191 L 910 252.5 Q 910 260.5 902 260.5 L 820.5 260.5 Q 812.5 260.5 812.5 268.5 L 812.5 330" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="tasks" data-edge-to="application" data-edge-label="1 kHz 调度" data-edge-key="8" data-edge-id="tasks_app" data-composition-points="1085,143;1147.5,143;1147.5,330" d="M 1085 143 L 1139.5 143 Q 1147.5 143 1147.5 151 L 1147.5 330" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="tasks" data-edge-to="application" data-edge-label="控制 / UI 调度" data-edge-key="8" data-edge-id="tasks_app" data-composition-points="1085,143;1147.5,143;1147.5,330" d="M 1085 143 L 1139.5 143 Q 1147.5 143 1147.5 151 L 1147.5 330" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
         <path data-edge-from="algorithms" data-edge-to="device" data-edge-label="估计与信号处理" data-edge-key="9" data-edge-id="alg_device" data-composition-points="552.5,555;552.5,483.5;805.5,483.5;805.5,412" d="M 552.5 555 L 552.5 491.5 Q 552.5 483.5 560.5 483.5 L 797.5 483.5 Q 805.5 483.5 805.5 475.5 L 805.5 412" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         <path data-edge-from="algorithms" data-edge-to="application" data-edge-label="控制与轨迹" data-edge-key="10" data-edge-id="alg_app" data-composition-points="552.5,631;552.5,700;1370,700;1370,371;1255,371" d="M 552.5 631 L 552.5 692 Q 552.5 700 560.5 700 L 1362 700 Q 1370 700 1370 692 L 1370 379 Q 1370 371 1362 371 L 1255 371" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         <path data-edge-from="system" data-edge-to="device" data-edge-label="初始化、时间与在线状态" data-edge-key="11" data-edge-id="system_device" data-composition-points="819.5,555;819.5,412" d="M 819.5 555 L 819.5 412" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
@@ -510,8 +510,8 @@ rect.c-bg-rect { fill: var(--bg); }
         <text x="812.5" y="385" class="t-muted" font-size="9" text-anchor="middle">电机 · BMI088 · Flash</text>
         </g>
 
-        <g id="node-application" data-node-id="application" data-node-label="Application" tabindex="0" role="button" aria-label="聚焦Application，RobotCmd 与控制应用, H7_RM Firmware Project" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="RobotCmd 与控制应用" data-node-tag="1 kHz 控制" data-node-context="H7_RM Firmware Project">
-          <title>Application · RobotCmd 与控制应用 · H7_RM Firmware Project · 1 kHz 控制</title>
+        <g id="node-application" data-node-id="application" data-node-label="Application" tabindex="0" role="button" aria-label="聚焦Application，控制应用 · 可选 HUD, H7_RM Firmware Project" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="控制应用 · 可选 HUD" data-node-tag="Control 1 kHz · UI 100 Hz" data-node-context="H7_RM Firmware Project">
+          <title>Application · 控制应用 · 可选 HUD · H7_RM Firmware Project · Control 1 kHz · UI 100 Hz</title>
           <rect x="1040" y="330" width="215" height="82" rx="6" class="c-mask"/>
           <rect x="1040" y="330" width="215" height="82" rx="6" class="c-frontend" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(1046 336) scale(0.6875)">
@@ -521,8 +521,8 @@ rect.c-bg-rect { fill: var(--bg); }
             <circle cx="6.3" cy="4.8" r=".7" class="sigil-fill"/>
           </g>
           <text data-node-label="" x="1147.5" y="369" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Application</text>
-        <text x="1147.5" y="385" class="t-muted" font-size="9" text-anchor="middle">RobotCmd 与控制应用</text>
-        <text x="1147.5" y="404" class="t-frontend" font-size="7" text-anchor="middle">1 kHz 控制</text>
+        <text x="1147.5" y="385" class="t-muted" font-size="9" text-anchor="middle">控制应用 · 可选 HUD</text>
+        <text x="1147.5" y="404" class="t-frontend" font-size="7" text-anchor="middle">Control 1 kHz · UI 100 Hz</text>
         </g>
 
         <g id="node-callbacks" data-node-id="callbacks" data-node-label="Callback 分发" tabindex="0" role="button" aria-label="聚焦Callback 分发，HAL ISR → BSP / Device, H7_RM Firmware Project" aria-pressed="false" data-node-kind="backend" data-node-sublabel="HAL ISR → BSP / Device" data-node-context="H7_RM Firmware Project">
@@ -627,9 +627,9 @@ rect.c-bg-rect { fill: var(--bg); }
           <rect x="755.2" y="235" width="115.6" height="14" rx="3" class="c-mask"/>
           <text x="813" y="245" class="t-muted" font-size="8" text-anchor="middle">采样 / 服务 / 状态检查</text>
         </g>
-        <g data-edge-from="tasks" data-edge-to="application" data-edge-label="1 kHz 调度" data-edge-key="8" data-edge-id="tasks_app">
-          <rect x="1118.5" y="216.5" width="58" height="14" rx="3" class="c-mask"/>
-          <text x="1147.5" y="226.5" class="t-backend" font-size="8" text-anchor="middle">1 kHz 调度</text>
+        <g data-edge-from="tasks" data-edge-to="application" data-edge-label="控制 / UI 调度" data-edge-key="8" data-edge-id="tasks_app">
+          <rect x="1108.9" y="216.5" width="77.2" height="14" rx="3" class="c-mask"/>
+          <text x="1147.5" y="226.5" class="t-backend" font-size="8" text-anchor="middle">控制 / UI 调度</text>
         </g>
         <g data-edge-from="algorithms" data-edge-to="device" data-edge-label="估计与信号处理" data-edge-key="9" data-edge-id="alg_device">
           <rect x="640.4" y="463.5" width="77.2" height="14" rx="3" class="c-mask"/>

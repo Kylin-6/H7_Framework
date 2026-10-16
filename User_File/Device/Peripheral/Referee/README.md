@@ -2,7 +2,10 @@
 
 ## 当前状态
 
-本目录保留裁判系统帧解析、UI 绘制与 VTM 解析代码。当前 `System_Init()` 只初始化 UART BSP，没有调用 `RefereeInit()`；`Control_Task` 和板级任务列表也没有裁判系统 UI 任务。底盘应用没有消费裁判数据，功率、热量和发射互锁尚未接入。因此不能把本模块当作已运行的比赛功能。
+本目录提供裁判系统帧解析、UI 绘制与 VTM 解析代码。`H7_APP_CLIENT_UI` 默认关闭；
+启用时 `System_Init()` 按 `BoardHardware::referee_uart` 统一绑定 Referee，StatusTask
+非阻塞绘制 [ClientUI HUD 示例](../../../Application/ClientUI/README.md)。
+底盘功率、热量和发射互锁仍未接入，VTM 不随 UI 自动绑定。
 
 ## 协议解析与 UART 接入
 
@@ -20,11 +23,24 @@ Referee 只有完整 CRC8/CRC16、长度检查通过的帧才 Feed；已知命�
 
 VTM 的 `VTMIsEnabled/Online/DataValid/Healthy()` 与上述通信设备语义一致。完整 CRC16 合法遥控帧，或 CRC8/CRC16 与完整声明长度校验通过的图传链路帧才 Feed；坏帧、半帧不 Feed。图传业务载荷仍未实现，DataValid/Online 不保证遥控字段都已更新。门限暂定 300 ms，需按实际图传帧周期上车验证。保留当前 chunk 内解析方式，本轮不实现跨 chunk 重组；长度计算使用宽整数，避免溢出后错误地 Feed。未来业务接入仍须独立检查对应载荷 freshness。参见 [Daemon](../../../System/Daemon/README.md)。
 
+## 非阻塞 UI 接口
+
+`referee_ui_sender.h` 提供 `RefereeUITryDraw`（1/2/5/7 图元）、`RefereeUITryText`
+和 `RefereeUITryDeleteLayer`。组包复用现有协议布局与 CRC，序号只在提交成功后递增。
+底层 `RefereeTrySend()` 要求 TX DMA，返回 0 时未接受，不会走阻塞发送回退。
+仅允许单一任务调用；接口不含队列、延时或自动限频，调用方负责速率与失败重试，
+不要与旧阻塞发送器争用串口。DMA BSP 复制内容，返回后可复用调用方缓冲。
+
+`RefereeReadUIRobotId()` 在短 PRIMASK 临界区复制身份与时效，仅合法且固定长度匹配的
+`0x0201` 更新；其他合法帧不能续期身份，age < 500 ms，首版支持红蓝步兵 3/4/5。
+失败保持输出不变。它不是整个 `referee_info_t` 的一致业务快照。
+`RefereeUIIsReady()` 仅表示已绑定且有 TX DMA，不等于裁判在线或客户端收到。
+
 ## Known Issues
 
 - `referee_info_t` 仍由中断更新，任务直接读取多个字段可能跨帧；消费前需增加业务快照。
-- 数据尚未进入本地 Topic、Chassis 或 Shoot；没有当前固件的 `refereeUItask`。
-- UI 发送的 115 ms 延时需要单独的低优先级调度和实机速率验证。
+- 裁判业务数据尚未进入控制 Topic、Chassis 或 Shoot；ClientUI 有独立显示 Topic，无独立 UI 任务。
+- 旧 UI 发送接口仍有 115 ms 延时；新 HUD 仅走非阻塞接口，实际 UART/客户端行为仍须实机验证。
 
 ## 历史 UI 示例
 

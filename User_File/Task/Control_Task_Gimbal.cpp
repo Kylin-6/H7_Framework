@@ -16,6 +16,10 @@
 #include "remote_publisher.h"
 #include "cmsis_os2.h"
 
+#if H7_CLIENT_UI
+#include "ClientUI.h"
+#endif
+
 extern "C" void Control_Task(void *)
 {
     osThreadSetPriority(osThreadGetId(), osPriorityHigh1);
@@ -44,5 +48,8 @@ extern "C" void Control_Task(void *)
         RobotCmd_Update();
         Gimbal_Update();
         Shoot_Update();
+#if H7_CLIENT_UI
+        ClientUI_Capture();
+#endif
     }
 }

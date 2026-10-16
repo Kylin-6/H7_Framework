@@ -24,7 +24,7 @@ Application 使用 Device 接口，不直接解析 CAN/UART 或管理 DMA。
 | DJI 电机 | [dji_motor.h](Peripheral/Motor/DJImotor/dji_motor.h) | Chassis/Shoot 初始化电机与发送组；StatusTask 维护设备 ServiceAll |
 | 瓴控 LK 电机 | [lk_motor.h](Peripheral/Motor/LKmotor/lk_motor.h) | 单机/广播与本地 PID；StatusTask 维护安全服务，未绑定实际机构 |
 | S.BUS / DJI 遥控 | [sbus.h](Peripheral/Remote/sbus.h)、[remote_control.h](Peripheral/Remote/remote_control.h) | 当前 Input 绑定 UART5 S.BUS |
-| 裁判 / VTM / UI | [Referee 指南](Peripheral/Referee/README.md) | 当前 System_Init 不自动绑定，业务数据尚未接入 Shoot/Chassis |
+| 裁判 / VTM / UI | [Referee 指南](Peripheral/Referee/README.md) | 启用 H7_APP_CLIENT_UI 时 System_Init 绑定 Referee；控制业务尚未接入 Shoot/Chassis |
 | EricTool | [dvc_erictool.h](Peripheral/EricTool/dvc_erictool.h) | UART/USB 调试与遥测 |
 | BMI088 | [bsp_bmi088.h](Onboard/BMI088/bsp_bmi088.h) | System 初始化、BMI088_Task 解算，应用读取 INS Topic |
 | W25Q64JV | [bsp_w25q64jv.h](Onboard/W25Q64JV/bsp_w25q64jv.h) | OSPI2 外部 Flash 与存储任务 |
@@ -164,6 +164,8 @@ DJI 遥控反馈指针不是本工程 InputState 的同步快照，接入时须�
 | RefereeInit / VTMInit | 显式绑定已配置 RX DMA 的 UART，返回静态数据指针；失败返回 NULL |
 | RefereeReceiveData / VTMReceiveData | 数据解析入口；Referee 支持跨 chunk 半帧，VTM 当前不提供相同重组保证 |
 | RefereeSend / VTMSend | 发送交互数据，成功提交后均等待 115 ms，不能放入 ISR 或 1 kHz 控制路径 |
+| RefereeTrySend / RefereeUITryDraw / RefereeUITryText / RefereeUITryDeleteLayer | DMA 非阻塞提交；失败由调用方重试，调用方限频，见 [ClientUI](../Application/ClientUI/README.md) |
+| RefereeReadUIRobotId | 仅合法 0x0201 更新身份，age < 500 ms；支持红蓝步兵 3/4/5 |
 | RefereeIs* / VTMIs* | Enabled 为绑定；Online 由合法帧维护，DataValid 不保证每个字段都新鲜 |
 | UILineDraw / UIRectangleDraw / UICircleDraw / UIOvalDraw / UIArcDraw | 填写图元，名称是固定 3 字节，坐标/层/颜色按协议范围 |
 | UIFloatDraw / UIIntDraw / UICharDraw | 填写数值或文字图元，参数布局见 referee_UI_26.h |

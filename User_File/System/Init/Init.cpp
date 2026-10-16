@@ -19,6 +19,9 @@
 #include "sys_imu.h"
 #include "sys_timestamp.h"
 #include "usart.h"
+#if H7_CLIENT_UI
+#include "referee_26.h"
+#endif
 
 // 兼容既有任务的“初始化流程已结束”标志；不等同于 SYSTEM_INIT_READY。
 volatile bool init_finished = false;
@@ -60,16 +63,23 @@ extern "C" void System_Init(void)
     HAL_NVIC_SetPriority(EXTI15_10_IRQn, 5, 0);
   
 
-    UART_Init(&huart1, nullptr);
-    UART_Init(&huart2, nullptr);
-    UART_Init(&huart3, nullptr);
-    UART_Init(&huart4, nullptr);
-    UART_Init(&huart5, nullptr);
-    UART_Init(&huart6, nullptr);
-    UART_Init(&huart7, nullptr);
-    UART_Init(&huart8, nullptr);
-    UART_Init(&huart9, nullptr);
-    UART_Init(&huart10, nullptr);
+    UART_HandleTypeDef* const uarts[] = {
+        &huart1, &huart2, &huart3, &huart4, &huart5,
+        &huart6, &huart7, &huart8, &huart9, &huart10};
+    for (auto* uart : uarts)
+    {
+#if H7_CLIENT_UI
+        if (uart == hardware.referee_uart)
+        {
+            // RefereeInit 自行注册接收；不先用 nullptr 回调重复启动同一 DMA。
+            // 配置/注册失败仅停用 UI，StatusTask 的 ClientUI_Init 会返回 false。
+            if (uart->hdmarx != nullptr && uart->hdmatx != nullptr)
+                (void)RefereeInit(uart);
+            continue;
+        }
+#endif
+        UART_Init(uart, nullptr);
+    }
 
     if (hardware.imu)
     {

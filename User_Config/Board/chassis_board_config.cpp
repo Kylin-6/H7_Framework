@@ -4,6 +4,6 @@ const BoardHardware &BoardConfig_Get(void)
 {
     static const BoardHardware hardware{
         nullptr, nullptr, &hfdcan1, &hfdcan2, nullptr,
-        false, false, true, true, false, false};
+        false, false, true, true, false, false, &huart10};
     return hardware;
 }

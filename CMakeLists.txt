@@ -173,6 +173,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
 option(H7_APP_GIMBAL "Build the Gimbal application" OFF)
 option(H7_APP_CHASSIS "Build the Chassis application" OFF)
 option(H7_APP_SHOOT "Build the Shoot application" OFF)
+option(H7_APP_CLIENT_UI "Build the referee HUD example" OFF)
 if(H7_BOARD STREQUAL "GimbalBoard")
     set(H7_APP_GIMBAL ON)
     set(H7_APP_CHASSIS OFF)
@@ -196,6 +197,7 @@ set(H7_CHASSIS_DEVICE_SOURCES
     User_File/Device/Peripheral/Referee/crc_ref.c
     User_File/Device/Peripheral/Referee/referee_26.c
     User_File/Device/Peripheral/Referee/referee_UI_26.c
+    User_File/Device/Peripheral/Referee/referee_ui_sender.c
     User_File/Device/Peripheral/Referee/vtm_26.c)
 
 if(H7_BOARD STREQUAL "SingleBoard")
@@ -228,6 +230,15 @@ else()
         ${H7_CHASSIS_DEVICE_SOURCES}
         User_File/System/Transport/transport_chassis.cpp
         User_File/Task/Control_Task_Chassis.cpp)
+endif()
+
+if(H7_APP_CLIENT_UI)
+    target_sources(${CMAKE_PROJECT_NAME} PRIVATE
+        User_File/Application/ClientUI/ClientUI.cpp
+        User_File/Application/ClientUI/ClientUI_Capture.cpp)
+    if(H7_BOARD STREQUAL "GimbalBoard")
+        target_sources(${CMAKE_PROJECT_NAME} PRIVATE ${H7_CHASSIS_DEVICE_SOURCES})
+    endif()
 endif()
 
 if(H7_APP_GIMBAL)
@@ -306,6 +317,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
         User_File/Application/Shoot/
         User_File/Application/Input/
         User_File/Application/PowerControl/
+        User_File/Application/ClientUI/
         User_File/Application/Balance/
 )
 
@@ -316,6 +328,7 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     GIMBAL=$<BOOL:${H7_APP_GIMBAL}>
     CHASSIS=$<BOOL:${H7_APP_CHASSIS}>
     SHOOT=$<BOOL:${H7_APP_SHOOT}>
+    H7_CLIENT_UI=$<BOOL:${H7_APP_CLIENT_UI}>
     H7_HAS_DM_MOTOR=$<NOT:$<STREQUAL:${H7_BOARD},ChassisBoard>>
 )
 

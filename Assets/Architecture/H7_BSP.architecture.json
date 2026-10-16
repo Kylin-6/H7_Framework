@@ -6,10 +6,10 @@
     "locale": "zh-CN",
     "quality_profile": "showcase",
     "repository": {
-      "url": "https://github.com/Kylin-6/H7_RM.git",
+      "url": "https://github.com/Kylin-6/H7_Framework.git",
       "provider": "github",
       "link_mode": "web",
-      "revision": "3555075a86f04b010710deb53508b8c9b9087012"
+      "revision": "7bc81566138e99c0186d4844fae6113057201538"
     },
     "viewBox": [1390, 760],
     "views": [
@@ -35,7 +35,7 @@
     { "id": "hal", "type": "backend", "label": "STM32 HAL / CMSIS", "sublabel": "CubeMX 生成层", "pos": [245, 330], "size": [165, 82], "sources": [{ "path": "Core/Src/main.c" }, { "path": "H7_BSP.ioc" }] },
     { "id": "bsp", "type": "backend", "label": "Middleware / BSP", "sublabel": "总线、缓冲与回调", "tag": "资源管理与 DMA", "pos": [455, 330], "size": [195, 82], "sources": [{ "path": "User_File/Middleware/BSP/CAN/bsp_can.h" }, { "path": "User_File/Middleware/BSP/UART/bsp_uart.h" }] },
     { "id": "device", "type": "backend", "label": "Device", "sublabel": "电机 · BMI088 · Flash", "pos": [710, 330], "size": [205, 82], "sources": [{ "path": "User_File/Device/Onboard/BMI088/bsp_bmi088.h" }] },
-    { "id": "application", "type": "frontend", "label": "Application", "sublabel": "RobotCmd 与控制应用", "tag": "1 kHz 控制", "pos": [1040, 330], "size": [215, 82], "sources": [{ "path": "User_File/Application/RobotCmd/RobotCmd.cpp" }, { "path": "User_File/Task/Control_Task.cpp" }] },
+    { "id": "application", "type": "frontend", "label": "Application", "sublabel": "控制应用 · 可选 HUD", "tag": "Control 1 kHz · UI 100 Hz", "pos": [1040, 330], "size": [215, 82], "sources": [{ "path": "User_File/Application/RobotCmd/RobotCmd.cpp" }, { "path": "User_File/Task/Control_Task.cpp" }] },
     { "id": "callbacks", "type": "backend", "label": "Callback 分发", "sublabel": "HAL ISR → BSP / Device", "pos": [455, 105], "size": [195, 72], "sources": [{ "path": "User_File/System/callback/callback.cpp" }] },
     { "id": "tasks", "type": "cloud", "label": "FreeRTOS Tasks", "sublabel": "BMI088 Event · Control / CAN Tx 1 kHz · Status 100 Hz", "pos": [735, 95], "size": [350, 96], "sources": [{ "path": "User_File/Task/BMI088_Task.cpp" }, { "path": "User_File/Task/Control_Task.cpp" }, { "path": "User_File/Task/StatusTask.cpp" }] },
     { "id": "system", "type": "backend", "label": "System Services", "sublabel": "Init · IMU · Daemon · Transport · Debug", "pos": [675, 555], "size": [310, 76], "sources": [{ "path": "User_File/System/Init/Init.cpp" }, { "path": "User_File/System/Daemon/daemon.cpp" }, { "path": "User_File/System/Transport/board_transport.h" }] },
@@ -55,7 +55,7 @@
     { "id": "callback_bsp", "from": "callbacks", "to": "bsp", "fromSide": "bottom", "toSide": "top" },
     { "id": "callback_tasks", "from": "callbacks", "to": "tasks", "label": "线程标志", "labelAt": [670, 91] },
     { "id": "tasks_device", "from": "tasks", "to": "device", "label": "采样 / 服务 / 状态检查", "fromSide": "bottom", "toSide": "top", "labelAt": [813, 245] },
-    { "id": "tasks_app", "from": "tasks", "to": "application", "label": "1 kHz 调度", "fromSide": "right", "toSide": "top", "variant": "emphasis" },
+    { "id": "tasks_app", "from": "tasks", "to": "application", "label": "控制 / UI 调度", "fromSide": "right", "toSide": "top", "variant": "emphasis" },
     { "id": "alg_device", "from": "algorithms", "to": "device", "label": "估计与信号处理", "fromSide": "top", "toSide": "bottom" },
     { "id": "alg_app", "from": "algorithms", "to": "application", "label": "控制与轨迹", "fromSide": "bottom", "toSide": "right", "via": [[552.5, 700], [1370, 700], [1370, 371]], "labelSegment": 1 },
     { "id": "system_device", "from": "system", "to": "device", "label": "初始化、时间与在线状态", "fromSide": "top", "toSide": "bottom" },
@@ -68,7 +68,7 @@
   ],
   "cards": [
     { "dot": "cyan", "title": "数据语义", "items": ["连续状态与控制目标 → Topic<T>", "离散且不可覆盖的动作 → EventQueue<T,N>"] },
-    { "dot": "emerald", "title": "实时边界", "items": ["BMI088 High2 事件驱动，清空约 2 kHz gyro FIFO", "Control High1 1 kHz；Status Low 100 Hz"] },
+    { "dot": "emerald", "title": "实时边界", "items": ["BMI088 High2 事件驱动，清空约 2 kHz gyro FIFO", "Control High1 1 kHz；Status / UI Low 100 Hz"] },
     { "dot": "amber", "title": "分层约束", "items": ["BSP 管资源，Device 管协议", "Application 组织机器人行为"] }
   ]
 }

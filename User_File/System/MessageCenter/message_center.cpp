@@ -10,4 +10,5 @@ Topic<GimbalFeedback> Gimbal_Feedback_Topic;
 Topic<ChassisFeedback> Chassis_Feedback_Topic;
 Topic<ShootFeedback> Shoot_Feedback_Topic;
 EventQueue<ShootEvent, 8U> Shoot_Event_Queue;
+Topic<Struct_Client_UI_State> Client_UI_State_Topic;
 }

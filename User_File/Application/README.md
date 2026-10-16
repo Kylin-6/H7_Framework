@@ -45,6 +45,7 @@ App 决定功能许可、目标和恢复策略。StatusTask 在 CheckAll 后调�
 | `Gimbal` | 云台模式、目标角/速度、达妙控制和反馈 | 两轴 Class_DMMotor、Yaw PID、INS Topic |
 | `Chassis` | 四舵轮运动学、最短转向和电机目标 | 8 个 DJI 电机及电机组 |
 | `Shoot` | 摩擦轮、拨弹连续模式和离散射击动作 | 3 个 DJI 电机、ShootEvent FIFO |
+| `ClientUI` | 可选 HUD、本板显示快照与非阻塞刷新；默认关闭 | Client_UI_State_Topic、Referee 非阻塞绘图接口 |
 | `Input` | UART5 S.BUS 适配、固定来源输入状态与仲裁 | RemoteInput、InputState |
 | `PowerControl` | 1～4 个电机的功率预测、统一力矩限幅和可选在线辨识；当前为可调用模块 | Class_RLS，不拥有 Device |
 
@@ -247,6 +248,10 @@ STOP 模式每周期最多消费一个事件：首次事件从当前反馈角建
 | 在线状态 | Daemon | 电机反馈 Feed / StatusTask CheckAll |
 
 完整接口、并发和通道所有权见 [Message Center 文档](../System/MessageCenter/README.md)。
+
+ClientUI 的接口、数据来源、身份配置与客户端避让限制见 [HUD 示例](ClientUI/README.md)。
+ControlTask 在机构更新后每 10 ms 采集显示快照，StatusTask 在设备服务后刷新，
+不新增任务、不发布控制命令。`H7_APP_CLIENT_UI` 独立于机构开关，默认关闭。
 
 ## 9. 添加新的 Application
 
